@@ -1,0 +1,36 @@
+{
+  "name": "@runtime-inspector/client-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets an AI agent tune a running app through the Runtime Inspector broker.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "runtime-inspector-mcp": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@runtime-inspector/protocol": "workspace:*",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@runtime-inspector/transport-ws": "workspace:*",
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
+    "vitest": "^4.1.9"
+  }
+}

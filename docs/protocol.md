@@ -83,3 +83,5 @@ Presets are also the basis for two planned features:
 ## Clients
 
 Any client may take the `panel` role: the web panel, a future Rozenite/DevTools plugin, a CLI, or an AI agent (e.g. via an MCP server). The protocol assumes nothing about who is on the other side; a machine-driven tuning loop (patch → observe → repeat) is a first-class use case.
+
+`packages/client-mcp` proves this thesis: it is a stdio MCP server that connects to the broker as an ordinary `panel`-role client (same handshake, same `control.patch`/`control.batchPatch` messages as the web panel) and exposes `get_schema`, `set_control_value`, `batch_set`, and `trigger` as MCP tools, so an AI agent can read a runtime's schema and tune it exactly the way a human would from the web panel.

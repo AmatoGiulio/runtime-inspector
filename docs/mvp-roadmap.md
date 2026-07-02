@@ -38,7 +38,7 @@ Ordered by impact:
 ## Phase 4: distribution (August)
 
 - **Rozenite client**: a React Native DevTools plugin speaking the same protocol. Distribution inside the official DevTools ecosystem, and the concrete proof of the "protocol-first, interchangeable panels" thesis.
-- **AI agent client**: an MCP server that connects to the broker as a panel-role client, letting an agent tune animations iteratively (patch → observe → repeat). No competitor does this; the architecture already allows it. At minimum, a demo for the launch post.
+- **AI agent client**: an MCP server that connects to the broker as a panel-role client, letting an agent tune animations iteratively (patch → observe → repeat). No competitor does this; the architecture already allows it. At minimum, a demo for the launch post. First pass implemented: `packages/client-mcp` ships a stdio MCP server (`runtime-inspector-mcp`) with `get_schema`, `set_control_value`, `batch_set`, and `trigger` tools over the broker.
 - Launch: 45-second demo video (spring tuning + copy-as-code + agent tuning), posts on r/reactnative, X, SWM/Expo communities.
 
 ## Later

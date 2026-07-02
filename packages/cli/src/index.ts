@@ -46,6 +46,7 @@ if (lanPanelUrl) {
   console.log(`Override if needed:            EXPO_PUBLIC_RI_BROKER_URL=${lanBrokerUrl}`);
   qrcode.generate(lanPanelUrl, { small: true });
 }
+console.log(`MCP agent client:              RI_BROKER_URL=${localBrokerUrl} RI_TOKEN=${token} runtime-inspector-mcp`);
 
 const panel = execa("pnpm", ["dev"], {
   cwd: panelDir,
