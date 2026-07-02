@@ -99,8 +99,27 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@22.20.0)(vite@6.4.3(@types/node@22.20.0)(lightningcss@1.27.0)(terser@5.48.0)(tsx@4.22.4))
 
+  packages/panel-core:
+    dependencies:
+      '@runtime-inspector/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(postcss@8.5.16)(tsx@4.22.4)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@22.20.0)(vite@6.4.3(@types/node@22.20.0)(lightningcss@1.27.0)(terser@5.48.0)(tsx@4.22.4))
+
   packages/panel-web:
     dependencies:
+      '@runtime-inspector/panel-core':
+        specifier: workspace:*
+        version: link:../panel-core
       '@runtime-inspector/protocol':
         specifier: workspace:*
         version: link:../protocol

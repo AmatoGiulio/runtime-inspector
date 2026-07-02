@@ -1,0 +1,30 @@
+{
+  "name": "@runtime-inspector/panel-core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic panel session logic for Runtime Inspector (connection, schema store, patch throttling, A/B compare, TypeScript export).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@runtime-inspector/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.9"
+  }
+}

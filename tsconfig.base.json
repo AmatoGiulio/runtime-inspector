@@ -7,6 +7,7 @@
     "baseUrl": ".",
     "paths": {
       "@runtime-inspector/protocol": ["packages/protocol/src/index.ts"],
+      "@runtime-inspector/panel-core": ["packages/panel-core/src/index.ts"],
       "@runtime-inspector/transport-ws": ["packages/transport-ws/src/index.ts"],
       "@runtime-inspector/react-native": ["packages/runtime-react-native/src/index.ts"],
       "@runtime-inspector/client-mcp": ["packages/client-mcp/src/index.ts"]

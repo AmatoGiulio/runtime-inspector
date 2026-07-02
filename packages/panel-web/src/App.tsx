@@ -1,15 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { createPanelSession } from "@runtime-inspector/panel-core";
 import {
-  RIP_VERSION,
-  createPatch,
-  isValidControlValue,
-  isValueControl,
-  safeParseRIPMessage,
   type BezierControl,
   type ColorControl,
   type CubicBezier,
   type InspectorControl,
-  type PanelSchema,
   type SliderControl,
   type SpringControl,
   type SpringValue,
@@ -19,122 +14,25 @@ import {
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-type ConnectionState = "connecting" | "connected" | "disconnected";
-type PendingPatch = {
-  controlId: string;
-  value: unknown;
-  timer: number | undefined;
-  lastSentAt: number;
-};
 type CompareSlot = "A" | "B";
-type LastPatch = {
-  controlId: string;
-  label: string;
-  at: string;
-};
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 const panelToken =
   new URLSearchParams(window.location.search).get("token") ?? import.meta.env.VITE_RI_TOKEN;
-const sliderThrottleMs = 50;
+
+const session = createPanelSession({
+  url: brokerUrl,
+  token: panelToken,
+  clientId: "panel-web"
+});
+session.connect();
 
 function App() {
-  const [status, setStatus] = useState<ConnectionState>("connecting");
-  const [schema, setSchema] = useState<PanelSchema>();
-  const [values, setValues] = useState<Record<string, unknown>>({});
-  const [compare, setCompare] = useState<Partial<Record<CompareSlot, Record<string, unknown>>>>({});
+  const state = useSyncExternalStore(session.subscribe, session.getState);
   const [copied, setCopied] = useState(false);
-  const [notice, setNotice] = useState<string>();
-  const [lastPatch, setLastPatch] = useState<LastPatch>();
-  const socketRef = useRef<WebSocket | null>(null);
-  const pendingPatchesRef = useRef(new Map<string, PendingPatch>());
 
-  useEffect(() => {
-    let reconnectTimer: number | undefined;
-    let closedByReact = false;
-    let stopReconnecting = false;
-
-    const connect = () => {
-      setStatus("connecting");
-      const socket = new WebSocket(brokerUrl);
-      socketRef.current = socket;
-
-      socket.onopen = () => {
-        setStatus("connected");
-        setNotice(undefined);
-        socket.send(
-          JSON.stringify({
-            type: "handshake.hello",
-            protocolVersion: RIP_VERSION,
-            role: "panel",
-            clientId: "panel-web",
-            clientName: "Runtime Inspector Web Panel",
-            token: panelToken
-          })
-        );
-      };
-
-      socket.onclose = () => {
-        if (socketRef.current === socket) {
-          socketRef.current = null;
-        }
-        setStatus("disconnected");
-        if (!stopReconnecting) {
-          setNotice("Broker disconnected. Reconnecting...");
-        }
-        if (!closedByReact && !stopReconnecting) {
-          reconnectTimer = window.setTimeout(connect, 1000);
-        }
-      };
-
-      socket.onerror = () => {
-        setNotice("WebSocket connection error.");
-        socket.close();
-      };
-
-      socket.onmessage = (event) => {
-        const message = parsePanelMessage(event.data);
-        if (!message) {
-          setNotice("Ignored invalid protocol message from broker.");
-          return;
-        }
-
-        if (message.type === "schema.publish") {
-          setSchema(message.schema);
-          setValues(collectInitialValues(message.schema));
-          setNotice(undefined);
-        }
-        if (message.type === "control.patch") {
-          const controlId = message.controlId;
-          setValues((current) => ({ ...current, [controlId]: message.value }));
-        }
-        if (message.type === "control.batchPatch") {
-          setValues((current) => ({
-            ...current,
-            ...Object.fromEntries(
-              message.patches.map((patch) => [patch.controlId, patch.value])
-            )
-          }));
-        }
-        if (message.type === "error" && message.code === "UNAUTHORIZED") {
-          stopReconnecting = true;
-          setNotice("Broker rejected this panel: missing or wrong token.");
-          socket.close();
-        }
-      };
-    };
-
-    connect();
-
-    return () => {
-      closedByReact = true;
-      if (reconnectTimer) {
-        window.clearTimeout(reconnectTimer);
-      }
-      clearPendingPatches(pendingPatchesRef.current);
-      socketRef.current?.close();
-    };
-  }, []);
+  const schema = state.schemas[0];
+  const values = schema ? state.values[schema.id] ?? {} : {};
 
   const preset = useMemo(() => {
     if (!schema) return "";
@@ -153,7 +51,7 @@ function App() {
 
   const codeExport = useMemo(() => {
     if (!schema) return "";
-    return createTypeScriptPreset(schema, values);
+    return session.exportTypeScript(schema.id);
   }, [schema, values]);
 
   const controlStats = useMemo(() => {
@@ -170,46 +68,23 @@ function App() {
     );
   }, [schema]);
 
-  const controlsById = useMemo(() => {
-    if (!schema) return new Map<string, InspectorControl>();
-    return new Map(
-      schema.groups.flatMap((controlGroup) =>
-        controlGroup.controls.map((control) => [control.id, control] as const)
-      )
-    );
-  }, [schema]);
-
   function updateValue(control: InspectorControl, value: unknown) {
     if (!schema) return;
-    if (!isValidControlValue(control, value)) {
-      setNotice(`Invalid value for ${control.label}.`);
+    if (control.kind === "trigger") {
+      session.fireTrigger(schema.id, control.id);
       return;
     }
-
-    if (isValueControl(control)) {
-      setValues((current) => ({ ...current, [control.id]: value }));
-    }
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify(createPatch(schema.id, control.id, value)));
-    }
-    markPatch(control);
+    session.setValue(schema.id, control.id, value);
   }
 
   function updateSliderValue(control: SliderControl, value: number) {
     if (!schema) return;
-    if (!isValidControlValue(control, value)) {
-      setNotice(`Invalid value for ${control.label}.`);
-      return;
-    }
-
-    setValues((current) => ({ ...current, [control.id]: value }));
-    sendPatchThrottled(schema.id, control.id, value, socketRef, pendingPatchesRef);
-    markPatch(control);
+    session.setValue(schema.id, control.id, value);
   }
 
   function flushControl(controlId: string) {
     if (!schema) return;
-    flushPendingPatch(schema.id, controlId, socketRef, pendingPatchesRef);
+    session.commitValue(schema.id, controlId);
   }
 
   async function copyCode() {
@@ -220,38 +95,13 @@ function App() {
   }
 
   function saveCompareSlot(slot: CompareSlot) {
-    setCompare((current) => ({
-      ...current,
-      [slot]: structuredClone(values)
-    }));
+    if (!schema) return;
+    session.saveCompareSlot(slot, schema.id);
   }
 
   function applyCompareSlot(slot: CompareSlot) {
-    const snapshot = compare[slot];
-    if (!schema || !snapshot) return;
-
-    const validSnapshot = filterValidSnapshot(snapshot, controlsById);
-    setValues(validSnapshot);
-    sendBatchPatch(schema.id, validSnapshot, socketRef);
-    const replayTrigger = findReplayTrigger(schema);
-    if (replayTrigger) {
-      window.setTimeout(() => {
-        sendPatch(schema.id, replayTrigger.id, Date.now(), socketRef);
-      }, 80);
-    }
-    setLastPatch({
-      controlId: `compare-${slot}`,
-      label: `Applied ${slot}`,
-      at: formatTime(new Date())
-    });
-  }
-
-  function markPatch(control: InspectorControl) {
-    setLastPatch({
-      controlId: control.id,
-      label: control.label,
-      at: formatTime(new Date())
-    });
+    if (!schema) return;
+    session.applyCompareSlot(slot, schema.id);
   }
 
   return (
@@ -259,7 +109,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Runtime Inspector</h1>
-          <p>{notice ?? (schema ? schema.title : "Waiting for runtime schema")}</p>
+          <p>{state.notice ?? (schema ? schema.title : "Waiting for runtime schema")}</p>
         </div>
         <div className="topbarMeta">
           {schema ? (
@@ -267,10 +117,12 @@ function App() {
               {controlStats.live} live / {controlStats.advanced} replay
             </span>
           ) : null}
-          {lastPatch ? (
-            <span className="metaText">Last patch: {lastPatch.label} {lastPatch.at}</span>
+          {state.lastPatch ? (
+            <span className="metaText">
+              Last patch: {state.lastPatch.label} {state.lastPatch.at}
+            </span>
           ) : null}
-          <span className={`status ${status}`}>{status}</span>
+          <span className={`status ${state.status}`}>{state.status}</span>
         </div>
       </header>
 
@@ -313,13 +165,13 @@ function App() {
               <h2>A/B Compare</h2>
               <div className="compareGrid">
                 <CompareSlotControls
-                  hasSnapshot={Boolean(compare.A)}
+                  hasSnapshot={Boolean(state.compareSlots.A)}
                   label="A"
                   onApply={() => applyCompareSlot("A")}
                   onSave={() => saveCompareSlot("A")}
                 />
                 <CompareSlotControls
-                  hasSnapshot={Boolean(compare.B)}
+                  hasSnapshot={Boolean(state.compareSlots.B)}
                   label="B"
                   onApply={() => applyCompareSlot("B")}
                   onSave={() => saveCompareSlot("B")}
@@ -346,18 +198,6 @@ function App() {
   );
 }
 
-function filterValidSnapshot(
-  snapshot: Record<string, unknown>,
-  controlsById: Map<string, InspectorControl>
-) {
-  return Object.fromEntries(
-    Object.entries(snapshot).filter(([controlId, value]) => {
-      const control = controlsById.get(controlId);
-      return control ? isValidControlValue(control, value) : false;
-    })
-  );
-}
-
 function CompareSlotControls({
   hasSnapshot,
   label,
@@ -380,10 +220,6 @@ function CompareSlotControls({
       </button>
     </div>
   );
-}
-
-function parsePanelMessage(data: unknown) {
-  return safeParseRIPMessage(data);
 }
 
 function ControlRow({
@@ -672,18 +508,8 @@ function SpringParameter({
   );
 }
 
-function collectInitialValues(schema: PanelSchema) {
-  return Object.fromEntries(
-    schema.groups.flatMap((controlGroup) =>
-      controlGroup.controls
-        .filter(isValueControl)
-        .map((control) => [control.id, control.value ?? control.defaultValue])
-    )
-  );
-}
-
 function getControlValue(control: InspectorControl, values: Record<string, unknown>) {
-  if (!isValueControl(control)) return undefined;
+  if (control.kind === "trigger") return undefined;
   return values[control.id] ?? control.defaultValue;
 }
 
@@ -710,187 +536,6 @@ function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function formatTime(date: Date) {
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  });
-}
-
-function sendPatchThrottled(
-  schemaId: string,
-  controlId: string,
-  value: unknown,
-  socketRef: RefObject<WebSocket | null>,
-  pendingPatchesRef: RefObject<Map<string, PendingPatch>>
-) {
-  const pendingPatches = pendingPatchesRef.current;
-  const existing = pendingPatches.get(controlId);
-  const now = performance.now();
-
-  if (!existing || now - existing.lastSentAt >= sliderThrottleMs) {
-    existing?.timer && window.clearTimeout(existing.timer);
-    sendPatch(schemaId, controlId, value, socketRef);
-    pendingPatches.set(controlId, {
-      controlId,
-      value,
-      timer: undefined,
-      lastSentAt: now
-    });
-    return;
-  }
-
-  if (existing.timer) {
-    window.clearTimeout(existing.timer);
-  }
-
-  existing.value = value;
-  existing.timer = window.setTimeout(() => {
-    sendPatch(schemaId, controlId, existing.value, socketRef);
-    pendingPatches.set(controlId, {
-      controlId,
-      value: existing.value,
-      timer: undefined,
-      lastSentAt: performance.now()
-    });
-  }, sliderThrottleMs - (now - existing.lastSentAt));
-}
-
-function flushPendingPatch(
-  schemaId: string,
-  controlId: string,
-  socketRef: RefObject<WebSocket | null>,
-  pendingPatchesRef: RefObject<Map<string, PendingPatch>>
-) {
-  const pendingPatches = pendingPatchesRef.current;
-  const pending = pendingPatches.get(controlId);
-  if (!pending) return;
-
-  if (pending.timer) {
-    window.clearTimeout(pending.timer);
-  }
-
-  sendPatch(schemaId, controlId, pending.value, socketRef);
-  pendingPatches.delete(controlId);
-}
-
-function clearPendingPatches(pendingPatches: Map<string, PendingPatch>) {
-  for (const pending of pendingPatches.values()) {
-    if (pending.timer) {
-      window.clearTimeout(pending.timer);
-    }
-  }
-  pendingPatches.clear();
-}
-
-function sendPatch(
-  schemaId: string,
-  controlId: string,
-  value: unknown,
-  socketRef: RefObject<WebSocket | null>
-) {
-  if (socketRef.current?.readyState === WebSocket.OPEN) {
-    socketRef.current.send(JSON.stringify(createPatch(schemaId, controlId, value)));
-  }
-}
-
-function sendBatchPatch(
-  schemaId: string,
-  snapshot: Record<string, unknown>,
-  socketRef: RefObject<WebSocket | null>
-) {
-  if (socketRef.current?.readyState !== WebSocket.OPEN) return;
-
-  socketRef.current.send(
-    JSON.stringify({
-      type: "control.batchPatch",
-      schemaId,
-      source: "preset",
-      timestamp: Date.now(),
-      patches: Object.entries(snapshot).map(([controlId, value]) => ({
-        controlId,
-        value
-      }))
-    })
-  );
-}
-
-function findReplayTrigger(schema: PanelSchema) {
-  return schema.groups
-    .flatMap((controlGroup) => controlGroup.controls)
-    .find(
-      (control): control is TriggerControl =>
-        control.kind === "trigger" &&
-        (control.id.toLowerCase().includes("replay") ||
-          Boolean(control.binding?.toLowerCase().includes("replay")))
-    );
-}
-
-function createTypeScriptPreset(schema: PanelSchema, values: Record<string, unknown>) {
-  const variableName = toCamelCase(`${schema.id}Preset`);
-  const lines = [
-    `export const ${variableName} = ${JSON.stringify(values, null, 2)} as const;`
-  ];
-
-  const spring = coerceOptionalSpringValue(values.spring);
-  if (spring) {
-    lines.push(
-      "",
-      `export const ${variableName}Spring = ${JSON.stringify(spring, null, 2)} as const;`,
-      `// withSpring(targetValue, ${variableName}Spring)`
-    );
-  }
-
-  const easing = coerceOptionalBezierValue(values.easing);
-  if (easing) {
-    lines.push(
-      "",
-      `export const ${variableName}Easing = Easing.bezier(${easing
-        .map((part) => formatNumber(part))
-        .join(", ")});`
-    );
-  }
-
-  if (spring || easing) {
-    lines.push("", `// import { Easing, withSpring } from "react-native-reanimated";`);
-  }
-
-  return lines.join("\n");
-}
-
-function coerceOptionalSpringValue(value: unknown) {
-  if (!value || typeof value !== "object") return undefined;
-  const candidate = value as Partial<SpringValue>;
-  if (typeof candidate.damping !== "number") return undefined;
-  if (typeof candidate.stiffness !== "number") return undefined;
-  return {
-    damping: candidate.damping,
-    stiffness: candidate.stiffness,
-    ...(typeof candidate.mass === "number" ? { mass: candidate.mass } : {})
-  };
-}
-
-function coerceOptionalBezierValue(value: unknown) {
-  if (!Array.isArray(value) || value.length !== 4) return undefined;
-  if (!value.every((part) => typeof part === "number")) return undefined;
-  return value as CubicBezier;
-}
-
-function toCamelCase(input: string) {
-  const parts = input
-    .replace(/[^a-zA-Z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/);
-
-  return parts
-    .map((part, index) => {
-      const lower = part.toLowerCase();
-      return index === 0 ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join("");
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
