@@ -11,6 +11,7 @@ import {
   bezier,
   bindValue,
   bindTrigger,
+  color,
   definePanel,
   group,
   slider,
@@ -32,13 +33,15 @@ export default function App() {
   const scale = useSharedValue(1);
   const glow = useSharedValue(10);
   const opacity = useSharedValue(1);
+  const cardColor = useSharedValue("#f5f7fb");
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const targetRef = useRef({
     moveX: 0,
     rotate: 0,
     scale: 1,
     glow: 10,
-    opacity: 1
+    opacity: 1,
+    color: "#f5f7fb"
   });
   const springConfigRef = useRef<SpringConfig>({
     damping: 14,
@@ -62,6 +65,7 @@ export default function App() {
         scale.value = withSpring(targetRef.current.scale, springConfigRef.current);
         opacity.value = withSpring(targetRef.current.opacity, springConfigRef.current);
         glow.value = withSpring(targetRef.current.glow, springConfigRef.current);
+        cardColor.value = targetRef.current.color;
       }, 220);
     };
 
@@ -84,6 +88,10 @@ export default function App() {
     bindValue("card.opacity", (value) => {
       targetRef.current.opacity = value as number;
       opacity.value = value as number;
+    });
+    bindValue("card.color", (value) => {
+      targetRef.current.color = value as string;
+      cardColor.value = value as string;
     });
     bindValue("card.spring", (value) => {
       springConfigRef.current = value as SpringConfig;
@@ -155,6 +163,13 @@ export default function App() {
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.opacity"
+              }),
+              color({
+                id: "color",
+                label: "Card color",
+                defaultValue: "#f5f7fb",
+                format: "hex",
+                binding: "card.color"
               })
             ]
           }),
@@ -206,9 +221,10 @@ export default function App() {
       }
       panel.disconnect();
     };
-  }, [glow, moveX, opacity, rotate, scale]);
+  }, [cardColor, glow, moveX, opacity, rotate, scale]);
 
   const cardStyle = useAnimatedStyle(() => ({
+    backgroundColor: cardColor.value,
     opacity: opacity.value,
     transform: [
       { translateX: moveX.value },
@@ -272,7 +288,6 @@ const styles = StyleSheet.create({
     top: -12
   },
   card: {
-    backgroundColor: "#f5f7fb",
     borderRadius: 28,
     minHeight: 220,
     overflow: "hidden",
