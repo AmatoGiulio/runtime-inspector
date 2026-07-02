@@ -38,12 +38,18 @@ type TriggerHandler = () => void;
 
 const bindingRegistry = new Map<string, BindingTarget>();
 const triggerRegistry = new Map<string, TriggerHandler>();
-let socket: WebSocket | undefined;
-let activeSchema: PanelSchema | undefined;
-let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-let shouldReconnect = false;
-let candidateIndex = 0;
-let lockedUrl: string | undefined;
+
+interface Session {
+  schema: PanelSchema;
+  options: RuntimeInspectorOptions;
+  socket: WebSocket | undefined;
+  reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  shouldReconnect: boolean;
+  candidateIndex: number;
+  lockedUrl: string | undefined;
+}
+
+const sessions = new Map<string, Session>();
 
 interface MinimalNativeModules {
   SourceCode?: {
@@ -111,7 +117,10 @@ export function group(config: {
 }
 
 export function definePanel(schema: PanelSchema, options: RuntimeInspectorOptions = {}) {
-  activeSchema = schema;
+  const existing = sessions.get(schema.id);
+  if (existing) {
+    teardownSession(existing);
+  }
 
   for (const controlGroup of schema.groups) {
     for (const control of controlGroup.controls) {
@@ -125,10 +134,21 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
     return { schema, connect: noop, disconnect: noop };
   }
 
+  const session: Session = {
+    schema,
+    options,
+    socket: undefined,
+    reconnectTimer: undefined,
+    shouldReconnect: false,
+    candidateIndex: 0,
+    lockedUrl: undefined
+  };
+  sessions.set(schema.id, session);
+
   return {
     schema,
-    connect: () => connectRuntime(schema, options),
-    disconnect: () => disconnectRuntime()
+    connect: () => connectRuntime(session),
+    disconnect: () => disconnectRuntime(session)
   };
 }
 
@@ -149,9 +169,10 @@ export function bindTrigger(binding: string, handler: TriggerHandler) {
 }
 
 export function applyControlPatch(patch: ControlPatch) {
-  if (!activeSchema || patch.schemaId !== activeSchema.id) return;
+  const session = sessions.get(patch.schemaId);
+  if (!session) return;
 
-  const control = findControl(activeSchema, patch.controlId);
+  const control = findControl(session.schema, patch.controlId);
   if (!control) return;
 
   if (control.kind === "trigger") {
@@ -195,12 +216,16 @@ export function applyBatchPatch(batch: BatchPatch) {
 
 export type { CubicBezier, PanelSchema, SpringValue };
 
-function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
-  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+function connectRuntime(session: Session) {
+  if (
+    session.socket?.readyState === WebSocket.OPEN ||
+    session.socket?.readyState === WebSocket.CONNECTING
+  ) {
     return;
   }
 
-  shouldReconnect = options.reconnect ?? true;
+  const { schema, options } = session;
+  session.shouldReconnect = options.reconnect ?? true;
   const candidates = options.brokerUrl
     ? [options.brokerUrl]
     : getBrokerCandidates({
@@ -208,15 +233,16 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
         platform: getPlatformOs(),
         defaultPort: 4577
       });
-  const brokerUrl = lockedUrl ?? candidates[candidateIndex % candidates.length];
+  const brokerUrl = session.lockedUrl ?? candidates[session.candidateIndex % candidates.length];
   const clientId = options.clientId ?? `runtime-${schema.id}`;
-  socket = new WebSocket(brokerUrl);
+  const socket = new WebSocket(brokerUrl);
+  session.socket = socket;
   let didOpen = false;
 
   socket.onopen = () => {
     didOpen = true;
-    lockedUrl = brokerUrl;
-    socket?.send(
+    session.lockedUrl = brokerUrl;
+    socket.send(
       JSON.stringify({
         type: "handshake.hello",
         protocolVersion: RIP_VERSION,
@@ -225,7 +251,7 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
         clientName: options.clientName ?? "React Native Runtime"
       })
     );
-    socket?.send(JSON.stringify({ type: "schema.publish", schema }));
+    socket.send(JSON.stringify({ type: "schema.publish", schema }));
   };
 
   socket.onmessage = (event) => {
@@ -241,15 +267,15 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
   };
 
   socket.onclose = () => {
-    socket = undefined;
-    if (!didOpen && !lockedUrl) {
-      candidateIndex += 1;
+    session.socket = undefined;
+    if (!didOpen && !session.lockedUrl) {
+      session.candidateIndex += 1;
     }
-    scheduleReconnect(schema, options);
+    scheduleReconnect(session);
   };
 
   socket.onerror = () => {
-    socket?.close();
+    socket.close();
   };
 }
 
@@ -261,28 +287,39 @@ function parseRuntimeMessage(data: unknown) {
   return message;
 }
 
-function disconnectRuntime() {
-  shouldReconnect = false;
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = undefined;
+function disconnectRuntime(session: Session) {
+  session.shouldReconnect = false;
+  if (session.reconnectTimer) {
+    clearTimeout(session.reconnectTimer);
+    session.reconnectTimer = undefined;
   }
-  socket?.close();
-  socket = undefined;
-  candidateIndex = 0;
-  lockedUrl = undefined;
+  session.socket?.close();
+  session.socket = undefined;
+  session.candidateIndex = 0;
+  session.lockedUrl = undefined;
 }
 
-function scheduleReconnect(schema: PanelSchema, options: RuntimeInspectorOptions) {
-  if (!shouldReconnect || reconnectTimer) return;
+function teardownSession(session: Session) {
+  session.shouldReconnect = false;
+  if (session.reconnectTimer) {
+    clearTimeout(session.reconnectTimer);
+    session.reconnectTimer = undefined;
+  }
+  session.socket?.close();
+  session.socket = undefined;
+}
 
-  const delay = lockedUrl
+function scheduleReconnect(session: Session) {
+  if (!session.shouldReconnect || session.reconnectTimer) return;
+
+  const { options } = session;
+  const delay = session.lockedUrl
     ? options.reconnectDelayMs ?? 1000
     : Math.min(options.reconnectDelayMs ?? 1000, 250);
 
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = undefined;
-    connectRuntime(schema, options);
+  session.reconnectTimer = setTimeout(() => {
+    session.reconnectTimer = undefined;
+    connectRuntime(session);
   }, delay);
 }
 
