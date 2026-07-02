@@ -1,0 +1,47 @@
+{
+  "id": "card-transition",
+  "title": "Card Transition",
+  "version": "0.1.0",
+  "groups": [
+    {
+      "id": "motion",
+      "label": "Motion",
+      "controls": [
+        {
+          "id": "scale",
+          "kind": "slider",
+          "label": "Scale",
+          "defaultValue": 1,
+          "value": 1,
+          "min": 0.8,
+          "max": 1.2,
+          "step": 0.01,
+          "binding": "card.scale"
+        },
+        {
+          "id": "blur",
+          "kind": "slider",
+          "label": "Blur",
+          "defaultValue": 0,
+          "value": 0,
+          "min": 0,
+          "max": 32,
+          "step": 1,
+          "unit": "px",
+          "binding": "card.blur"
+        },
+        {
+          "id": "opacity",
+          "kind": "slider",
+          "label": "Opacity",
+          "defaultValue": 1,
+          "value": 1,
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "binding": "card.opacity"
+        }
+      ]
+    }
+  ]
+}

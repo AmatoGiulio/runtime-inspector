@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Runtime Inspector Reanimated",
+    "slug": "runtime-inspector-reanimated",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "newArchEnabled": true
+  }
+}

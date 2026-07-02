@@ -1,0 +1,9 @@
+node_modules
+dist
+.turbo
+.expo
+web-build
+coverage
+.DS_Store
+*.log
+*.tsbuildinfo

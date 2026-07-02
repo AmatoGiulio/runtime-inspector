@@ -1,0 +1,21 @@
+{
+  "name": "runtime-inspector",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Protocol-first runtime controls for React Native and external inspector panels.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @runtime-inspector/cli dev",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

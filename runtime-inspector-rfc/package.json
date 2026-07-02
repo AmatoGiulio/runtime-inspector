@@ -1,0 +1,10 @@
+{
+  "name": "runtime-inspector-rfc",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Documentation-first RFC pack for Runtime Inspector.",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ]
+}

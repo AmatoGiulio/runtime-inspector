@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#0b0d10"/>
+  <text x="60" y="70" fill="#f5f7fa" font-size="34" font-family="Arial">Runtime Inspector Architecture</text>
+  <rect x="70" y="140" width="260" height="120" rx="18" fill="#151922" stroke="#3b82f6"/>
+  <text x="110" y="195" fill="#ffffff" font-size="24" font-family="Arial">React Native App</text>
+  <text x="110" y="228" fill="#9ca3af" font-size="16" font-family="Arial">Runtime SDK</text>
+  <rect x="470" y="140" width="260" height="120" rx="18" fill="#151922" stroke="#8b5cf6"/>
+  <text x="525" y="195" fill="#ffffff" font-size="24" font-family="Arial">Local Broker</text>
+  <text x="535" y="228" fill="#9ca3af" font-size="16" font-family="Arial">WebSocket</text>
+  <rect x="870" y="140" width="260" height="120" rx="18" fill="#151922" stroke="#10b981"/>
+  <text x="930" y="195" fill="#ffffff" font-size="24" font-family="Arial">Web Panel</text>
+  <text x="920" y="228" fill="#9ca3af" font-size="16" font-family="Arial">Dynamic Renderer</text>
+  <line x1="330" y1="200" x2="470" y2="200" stroke="#64748b" stroke-width="3"/>
+  <line x1="730" y1="200" x2="870" y2="200" stroke="#64748b" stroke-width="3"/>
+  <text x="368" y="180" fill="#cbd5e1" font-size="16" font-family="Arial">RIP</text>
+  <text x="770" y="180" fill="#cbd5e1" font-size="16" font-family="Arial">RIP</text>
+  <rect x="260" y="390" width="680" height="120" rx="22" fill="#111827" stroke="#f59e0b"/>
+  <text x="430" y="445" fill="#ffffff" font-size="28" font-family="Arial">Runtime Inspector Protocol</text>
+  <text x="420" y="480" fill="#9ca3af" font-size="18" font-family="Arial">Schema • Values • Patches • Events • Presets</text>
+</svg>

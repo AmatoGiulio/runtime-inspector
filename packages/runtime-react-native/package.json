@@ -1,0 +1,36 @@
+{
+  "name": "@runtime-inspector/react-native",
+  "version": "0.1.0",
+  "description": "React Native runtime SDK for Runtime Inspector.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "react-native": ">=0.74",
+    "react-native-reanimated": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react-native-reanimated": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@runtime-inspector/protocol": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --external react-native --external react-native-reanimated",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "tsup": "^8.3.5"
+  }
+}

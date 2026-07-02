@@ -1,0 +1,23 @@
+{
+  "name": "@runtime-inspector/cli",
+  "version": "0.1.0",
+  "description": "Runtime Inspector command line tools.",
+  "type": "module",
+  "bin": {
+    "runtime-inspector": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "dev": "tsx src/index.ts dev",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@runtime-inspector/transport-ws": "workspace:*",
+    "execa": "^9.5.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5"
+  }
+}

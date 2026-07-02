@@ -1,0 +1,179 @@
+import {
+  RIP_VERSION,
+  type BatchPatch,
+  type BezierControl,
+  type ColorControl,
+  type ControlGroup,
+  type ControlPatch,
+  type CubicBezier,
+  type InspectorControl,
+  type PanelSchema,
+  type SliderControl,
+  type SpringControl,
+  type SpringValue,
+  type ToggleControl
+} from "@runtime-inspector/protocol";
+
+declare const __DEV__: boolean | undefined;
+
+export interface RuntimeInspectorOptions {
+  brokerUrl?: string;
+  clientId?: string;
+  clientName?: string;
+}
+
+export interface SharedValueLike<T> {
+  value: T;
+}
+
+type BindingTarget = SharedValueLike<unknown> | ((value: unknown) => void);
+
+const bindingRegistry = new Map<string, BindingTarget>();
+let socket: WebSocket | undefined;
+let activeSchema: PanelSchema | undefined;
+
+export function slider(config: Omit<SliderControl, "kind">): SliderControl {
+  return { ...config, kind: "slider" };
+}
+
+export function toggle(config: Omit<ToggleControl, "kind">): ToggleControl {
+  return { ...config, kind: "toggle" };
+}
+
+export function color(config: Omit<ColorControl, "kind">): ColorControl {
+  return { ...config, kind: "color" };
+}
+
+export function bezier(config: Omit<BezierControl, "kind">): BezierControl {
+  return { ...config, kind: "bezier" };
+}
+
+export function spring(config: Omit<SpringControl, "kind">): SpringControl {
+  return { ...config, kind: "spring" };
+}
+
+export function group(config: {
+  id: string;
+  label: string;
+  description?: string;
+  controls: InspectorControl[];
+}): ControlGroup {
+  return config;
+}
+
+export function definePanel(schema: PanelSchema, options: RuntimeInspectorOptions = {}) {
+  activeSchema = schema;
+
+  for (const controlGroup of schema.groups) {
+    for (const control of controlGroup.controls) {
+      if (control.binding && control.value === undefined) {
+        control.value = control.defaultValue as never;
+      }
+    }
+  }
+
+  if (!isDev()) {
+    return { schema, connect: noop, disconnect: noop };
+  }
+
+  return {
+    schema,
+    connect: () => connectRuntime(schema, options),
+    disconnect: () => disconnectRuntime()
+  };
+}
+
+export function bindSharedValue<T>(
+  binding: string,
+  sharedValue: SharedValueLike<T>
+): SharedValueLike<T> {
+  bindingRegistry.set(binding, sharedValue as SharedValueLike<unknown>);
+  return sharedValue;
+}
+
+export function bindValue(binding: string, setter: (value: unknown) => void) {
+  bindingRegistry.set(binding, setter);
+}
+
+export function applyControlPatch(patch: ControlPatch) {
+  if (!activeSchema || patch.schemaId !== activeSchema.id) return;
+
+  const control = findControl(activeSchema, patch.controlId);
+  if (!control) return;
+
+  control.value = patch.value as never;
+  const bindingId = control.binding ?? control.id;
+  const target = bindingRegistry.get(bindingId);
+
+  if (!target) return;
+  if (typeof target === "function") {
+    target(patch.value);
+  } else {
+    target.value = patch.value;
+  }
+}
+
+export function applyBatchPatch(batch: BatchPatch) {
+  for (const patch of batch.patches) {
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: batch.schemaId,
+      source: patch.source ?? batch.source,
+      timestamp: patch.timestamp ?? batch.timestamp,
+      controlId: patch.controlId,
+      value: patch.value
+    });
+  }
+}
+
+export type { CubicBezier, PanelSchema, SpringValue };
+
+function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
+  if (socket?.readyState === WebSocket.OPEN) return;
+
+  const brokerUrl = options.brokerUrl ?? "ws://127.0.0.1:4577";
+  const clientId = options.clientId ?? `runtime-${schema.id}`;
+  socket = new WebSocket(brokerUrl);
+
+  socket.onopen = () => {
+    socket?.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: RIP_VERSION,
+        role: "runtime",
+        clientId,
+        clientName: options.clientName ?? "React Native Runtime"
+      })
+    );
+    socket?.send(JSON.stringify({ type: "schema.publish", schema }));
+  };
+
+  socket.onmessage = (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.type === "control.patch") {
+      applyControlPatch(message);
+    }
+    if (message.type === "control.batchPatch") {
+      applyBatchPatch(message);
+    }
+  };
+}
+
+function disconnectRuntime() {
+  socket?.close();
+  socket = undefined;
+}
+
+function findControl(schema: PanelSchema, controlId: string): InspectorControl | undefined {
+  for (const controlGroup of schema.groups) {
+    const control = controlGroup.controls.find((item) => item.id === controlId);
+    if (control) return control;
+  }
+  return undefined;
+}
+
+function isDev() {
+  return typeof __DEV__ === "undefined" ? process.env.NODE_ENV !== "production" : __DEV__;
+}
+
+function noop() {}

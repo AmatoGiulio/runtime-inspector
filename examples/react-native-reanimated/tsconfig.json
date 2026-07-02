@@ -1,0 +1,16 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@runtime-inspector/react-native": [
+        "packages/runtime-react-native/src/index.ts"
+      ],
+      "@runtime-inspector/protocol": [
+        "packages/protocol/src/index.ts"
+      ]
+    }
+  },
+  "include": ["App.tsx", "src/**/*.ts", "src/**/*.tsx"]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@runtime-inspector/example-react-native-reanimated",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "clean": "rm -rf .expo"
+  },
+  "dependencies": {
+    "@runtime-inspector/react-native": "workspace:*",
+    "expo": "^52.0.0",
+    "expo-blur": "~14.0.1",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-reanimated": "~3.16.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "typescript": "^5.7.2"
+  }
+}

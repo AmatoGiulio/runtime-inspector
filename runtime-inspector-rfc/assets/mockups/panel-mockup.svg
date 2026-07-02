@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#0f1115"/>
+  <rect x="40" y="40" width="900" height="820" rx="24" fill="#111318" stroke="#2a2f3a"/>
+  <text x="80" y="96" fill="#ffffff" font-size="30" font-family="Arial">Device Preview</text>
+  <rect x="325" y="150" width="330" height="620" rx="42" fill="#050505" stroke="#333946" stroke-width="4"/>
+  <rect x="355" y="200" width="270" height="480" rx="28" fill="#181c24"/>
+  <circle cx="490" cy="440" r="95" fill="#334155"/>
+  <rect x="980" y="40" width="420" height="820" rx="24" fill="#f4f4f5"/>
+  <text x="1020" y="96" fill="#111827" font-size="28" font-family="Arial">Runtime Inspector</text>
+  <text x="1020" y="132" fill="#6b7280" font-size="16" font-family="Arial">Gallery Transition</text>
+  <text x="1020" y="190" fill="#111827" font-size="18" font-family="Arial">Motion</text>
+  <text x="1020" y="238" fill="#374151" font-size="14" font-family="Arial">Scale</text>
+  <rect x="1020" y="255" width="310" height="8" rx="4" fill="#d1d5db"/>
+  <circle cx="1210" cy="259" r="11" fill="#111827"/>
+  <text x="1020" y="308" fill="#374151" font-size="14" font-family="Arial">Blur</text>
+  <rect x="1020" y="325" width="310" height="8" rx="4" fill="#d1d5db"/>
+  <circle cx="1190" cy="329" r="11" fill="#111827"/>
+  <text x="1020" y="378" fill="#374151" font-size="14" font-family="Arial">Opacity</text>
+  <rect x="1020" y="395" width="310" height="8" rx="4" fill="#d1d5db"/>
+  <circle cx="1110" cy="399" r="11" fill="#111827"/>
+  <text x="1020" y="462" fill="#111827" font-size="18" font-family="Arial">Easing</text>
+  <rect x="1020" y="485" width="310" height="160" rx="16" fill="#ffffff" stroke="#d4d4d8"/>
+  <path d="M1050 615 C1100 500, 1240 610, 1300 515" stroke="#2563eb" stroke-width="4" fill="none"/>
+  <rect x="1020" y="700" width="145" height="44" rx="12" fill="#111827"/>
+  <text x="1052" y="728" fill="#ffffff" font-size="15" font-family="Arial">Export</text>
+  <rect x="1185" y="700" width="145" height="44" rx="12" fill="#ffffff" stroke="#d4d4d8"/>
+  <text x="1216" y="728" fill="#111827" font-size="15" font-family="Arial">Record</text>
+</svg>
