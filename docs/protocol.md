@@ -28,16 +28,13 @@ Supported MVP controls:
 - `color`
 - `bezier`
 - `spring`
+- `trigger`: invokes a callback registered in the runtime (e.g. "replay transition"), so tuning sessions can re-run an animation from the panel.
 
 The web panel currently renders `slider`, `toggle`, and `color`. Other controls are typed in the protocol and reserved for the next implementation pass.
 
-Planned control kinds (not yet in the protocol):
+## Schema replay
 
-- `trigger`: invokes a callback registered in the runtime (e.g. "replay transition"), so tuning sessions can re-run an animation from the panel.
-
-## Schema replay (planned, Phase 2)
-
-The broker will cache the last `schema.publish` per runtime and replay it to `panel`-role clients that connect later. Connection order and panel refreshes must never strand a panel without a schema.
+The broker caches the last `schema.publish` per runtime and replays it to `panel`-role clients that connect later. Connection order and panel refreshes never strand a panel without a schema.
 
 ## Patches
 

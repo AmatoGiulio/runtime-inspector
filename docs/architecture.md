@@ -28,7 +28,7 @@ The protocol is the stable core. Everything else is a replaceable client or tran
 6. Broker forwards the patch to runtime clients.
 7. Runtime SDK applies the value to the registered binding.
 
-Planned (Phase 2): the broker caches the last published schema per runtime and replays it to panels that connect or reconnect later, so connection order and browser refreshes never strand a panel without a schema.
+The broker caches the last published schema per runtime and replays it to panels that connect or reconnect later, so connection order and browser refreshes never strand a panel without a schema.
 
 ## Binding model
 
@@ -39,8 +39,8 @@ Controls may include a `binding` string. The React Native SDK maps that binding 
 
 This keeps the high-frequency update path outside React renders.
 
-Planned (Phase 2): a `trigger` control kind maps a binding to a runtime callback (e.g. "replay transition"), so tuning sessions can re-run an animation from the panel without touching the device.
+A `trigger` control kind maps a binding to a runtime callback (e.g. "replay transition"), so tuning sessions can re-run an animation from the panel without touching the device.
 
 ## Device reality
 
-The default broker URL is local, but motion is judged by feel on a physical device. Phase 2 makes the CLI print a LAN URL + QR code and removes the hardcoded loopback assumption from the runtime SDK (`adb reverse` documented for Android USB).
+The default broker URL is local, but motion is judged by feel on a physical device. The CLI prints a LAN URL + QR code, and the runtime SDK auto-discovers the broker: it derives the dev machine's host from Metro's `scriptURL` (the same trick Reactotron uses), probes broker ports 4577-4581 on that host, and falls back to the emulator loopback (`10.0.2.2` on Android, `127.0.0.1` otherwise) if nothing answers. `EXPO_PUBLIC_RI_BROKER_URL` remains available as an override for unusual networks.

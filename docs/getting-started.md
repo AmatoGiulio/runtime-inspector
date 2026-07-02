@@ -12,16 +12,16 @@ Start Runtime Inspector:
 pnpm dev
 ```
 
-The CLI prints local and LAN URLs. For a physical device, copy the printed `EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577` value and use it when starting Expo:
-
-```bash
-EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577 pnpm --filter @runtime-inspector/example-react-native-reanimated start
-```
-
-Start the example app:
+The CLI prints local and LAN URLs. Physical devices auto-discover the broker via Metro, so no configuration is needed:
 
 ```bash
 pnpm --filter @runtime-inspector/example-react-native-reanimated start
+```
+
+If discovery fails on an unusual network, copy the printed `EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577` value to override it explicitly:
+
+```bash
+EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577 pnpm --filter @runtime-inspector/example-react-native-reanimated start
 ```
 
 Open `http://127.0.0.1:4578`.
