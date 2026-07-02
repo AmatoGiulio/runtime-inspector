@@ -1,5 +1,6 @@
 import {
   RIP_VERSION,
+  parseRIPMessage,
   type BatchPatch,
   type BezierControl,
   type ColorControl,
@@ -176,7 +177,9 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
   };
 
   socket.onmessage = (event) => {
-    const message = JSON.parse(String(event.data));
+    const message = parseRuntimeMessage(event.data);
+    if (!message) return;
+
     if (message.type === "control.patch") {
       applyControlPatch(message);
     }
@@ -193,6 +196,21 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
   socket.onerror = () => {
     socket?.close();
   };
+}
+
+function parseRuntimeMessage(data: unknown) {
+  try {
+    const raw = typeof data === "string" ? data : String(data);
+    return parseRIPMessage(JSON.parse(raw));
+  } catch (error) {
+    if (isDev()) {
+      console.warn(
+        "[Runtime Inspector] Ignoring invalid protocol message",
+        error instanceof Error ? error.message : error
+      );
+    }
+    return undefined;
+  }
 }
 
 function disconnectRuntime() {
