@@ -27,6 +27,7 @@ Ordered by impact:
 
 ## Phase 3: richer tuning (July/August)
 
+- Demo clarity pass: the example now starts with obvious direct controls (`Move X`, `Rotate`, `Scale`, `Glow`, `Opacity`) before advanced spring/bezier tuning.
 - Spring editor UI first pass: render damping/stiffness/mass and bind it to the example replay transition. Changing spring values now auto-replays the return motion; next pass is a curve preview.
 - Bezier editor UI first pass: render four control-point sliders with a curve preview and bind it to the example replay easing.
 - **A/B compare** first pass: the panel can save and apply two value snapshots through `control.batchPatch`, then auto-trigger a replay control when one exists.

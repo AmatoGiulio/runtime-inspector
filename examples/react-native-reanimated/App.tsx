@@ -11,7 +11,6 @@ import {
   bezier,
   bindValue,
   bindTrigger,
-  bindSharedValue,
   definePanel,
   group,
   slider,
@@ -28,10 +27,19 @@ type SpringConfig = {
 type CubicBezier = [number, number, number, number];
 
 export default function App() {
+  const moveX = useSharedValue(0);
+  const rotate = useSharedValue(0);
   const scale = useSharedValue(1);
-  const blur = useSharedValue(0);
+  const glow = useSharedValue(10);
   const opacity = useSharedValue(1);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const targetRef = useRef({
+    moveX: 0,
+    rotate: 0,
+    scale: 1,
+    glow: 10,
+    opacity: 1
+  });
   const springConfigRef = useRef<SpringConfig>({
     damping: 14,
     stiffness: 180,
@@ -42,20 +50,41 @@ export default function App() {
   useEffect(() => {
     const replayTransition = () => {
       const easing = Easing.bezier(...easingRef.current);
-      scale.value = withTiming(0.92, { duration: 260, easing });
-      opacity.value = withTiming(0.72, { duration: 260, easing });
-      blur.value = withTiming(20, { duration: 260, easing });
+      moveX.value = withTiming(-110, { duration: 260, easing });
+      rotate.value = withTiming(-14, { duration: 260, easing });
+      scale.value = withTiming(0.82, { duration: 260, easing });
+      opacity.value = withTiming(0.62, { duration: 260, easing });
+      glow.value = withTiming(36, { duration: 260, easing });
 
       setTimeout(() => {
-        scale.value = withSpring(1, springConfigRef.current);
-        opacity.value = withSpring(1, springConfigRef.current);
-        blur.value = withSpring(0, springConfigRef.current);
+        moveX.value = withSpring(targetRef.current.moveX, springConfigRef.current);
+        rotate.value = withSpring(targetRef.current.rotate, springConfigRef.current);
+        scale.value = withSpring(targetRef.current.scale, springConfigRef.current);
+        opacity.value = withSpring(targetRef.current.opacity, springConfigRef.current);
+        glow.value = withSpring(targetRef.current.glow, springConfigRef.current);
       }, 220);
     };
 
-    bindSharedValue("card.scale", scale);
-    bindSharedValue("card.blur", blur);
-    bindSharedValue("card.opacity", opacity);
+    bindValue("card.moveX", (value) => {
+      targetRef.current.moveX = value as number;
+      moveX.value = value as number;
+    });
+    bindValue("card.rotate", (value) => {
+      targetRef.current.rotate = value as number;
+      rotate.value = value as number;
+    });
+    bindValue("card.scale", (value) => {
+      targetRef.current.scale = value as number;
+      scale.value = value as number;
+    });
+    bindValue("card.glow", (value) => {
+      targetRef.current.glow = value as number;
+      glow.value = value as number;
+    });
+    bindValue("card.opacity", (value) => {
+      targetRef.current.opacity = value as number;
+      opacity.value = value as number;
+    });
     bindValue("card.spring", (value) => {
       springConfigRef.current = value as SpringConfig;
 
@@ -76,27 +105,47 @@ export default function App() {
         version: "0.1.0",
         groups: [
           group({
-            id: "motion",
-            label: "Motion",
+            id: "direct-controls",
+            label: "Live card controls",
             controls: [
+              slider({
+                id: "moveX",
+                label: "Move X",
+                min: -120,
+                max: 120,
+                step: 1,
+                defaultValue: 0,
+                unit: "px",
+                binding: "card.moveX"
+              }),
+              slider({
+                id: "rotate",
+                label: "Rotate",
+                min: -18,
+                max: 18,
+                step: 1,
+                defaultValue: 0,
+                unit: "deg",
+                binding: "card.rotate"
+              }),
               slider({
                 id: "scale",
                 label: "Scale",
-                min: 0.8,
-                max: 1.2,
+                min: 0.7,
+                max: 1.35,
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.scale"
               }),
               slider({
-                id: "blur",
-                label: "Blur",
+                id: "glow",
+                label: "Glow",
                 min: 0,
-                max: 32,
+                max: 48,
                 step: 1,
-                defaultValue: 0,
+                defaultValue: 10,
                 unit: "px",
-                binding: "card.blur"
+                binding: "card.glow"
               }),
               slider({
                 id: "opacity",
@@ -106,7 +155,14 @@ export default function App() {
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.opacity"
-              }),
+              })
+            ]
+          }),
+          group({
+            id: "replay-tuning",
+            label: "Replay tuning",
+            description: "These controls change how the replay animation feels.",
+            controls: [
               spring({
                 id: "spring",
                 label: "Replay return spring",
@@ -150,16 +206,24 @@ export default function App() {
       }
       panel.disconnect();
     };
-  }, [blur, opacity, scale]);
+  }, [glow, moveX, opacity, rotate, scale]);
 
   const cardStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ scale: scale.value }]
+    transform: [
+      { translateX: moveX.value },
+      { rotate: `${rotate.value}deg` },
+      { scale: scale.value }
+    ]
   }));
 
   const glowStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(0.85, blur.value / 38),
-    transform: [{ scale: 1 + blur.value / 180 }]
+    opacity: Math.min(0.9, glow.value / 48),
+    transform: [
+      { translateX: moveX.value },
+      { rotate: `${rotate.value}deg` },
+      { scale: 1 + glow.value / 160 }
+    ]
   }));
 
   return (
@@ -168,9 +232,10 @@ export default function App() {
       <View style={styles.cardStage}>
         <Animated.View pointerEvents="none" style={[styles.glowLayer, glowStyle]} />
         <Animated.View style={[styles.card, cardStyle]}>
-          <Text style={styles.title}>Card Transition</Text>
+          <Text style={styles.liveBadge}>LIVE</Text>
+          <Text style={styles.title}>Obvious Card</Text>
           <Text style={styles.body}>
-            Move the panel sliders to update Reanimated SharedValues live.
+            Move X and Rotate should be instantly visible from the panel.
           </Text>
         </Animated.View>
       </View>
@@ -213,6 +278,17 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: 28,
     width: "100%"
+  },
+  liveBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#111318",
+    borderRadius: 999,
+    color: "#f5f7fb",
+    fontSize: 12,
+    fontWeight: "800",
+    marginBottom: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5
   },
   title: {
     color: "#111318",
