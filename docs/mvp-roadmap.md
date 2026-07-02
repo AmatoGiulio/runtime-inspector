@@ -19,7 +19,7 @@ Ordered by impact:
 1. **Schema cache in the broker.** Done: the broker stores the last `schema.publish` per runtime and replays it to panels that connect or refresh later.
 2. **Reconnect behavior** on both runtime and panel. Basic reconnect is implemented; next pass should add visible retry diagnostics and configurable backoff.
 3. **Physical device support.** First pass implemented: CLI exposes broker/panel on LAN, prints local/LAN URLs, emits a QR for the panel, and the example reads `EXPO_PUBLIC_RI_BROKER_URL` for real devices. Next pass should make this zero-config for common Expo workflows.
-4. **Copy as code.** First pass implemented: the panel exports current values as paste-ready TypeScript. Next pass should generate control-aware snippets such as `withSpring(x, { damping: 14, stiffness: 180 })` and `Easing.bezier(...)`.
+4. **Copy as code.** Implemented: the panel exports current values as paste-ready TypeScript and emits Reanimated-oriented snippets for spring and bezier controls.
 5. **Trigger control.** First pass implemented: a `trigger` control kind invokes a callback registered in the runtime, so a full tuning session can happen from the desktop without touching the device.
 6. **Patch throttling** on high-frequency controls. First pass implemented for sliders in the web panel; values update immediately in UI while WebSocket patches are capped during drag and flushed on release.
 7. Runtime-side Zod validation of incoming messages. Done: the runtime SDK parses incoming broker messages with the shared protocol validator and ignores invalid payloads instead of crashing the app.

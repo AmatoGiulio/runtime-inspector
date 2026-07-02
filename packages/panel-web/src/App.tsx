@@ -782,7 +782,52 @@ function findReplayTrigger(schema: PanelSchema) {
 
 function createTypeScriptPreset(schema: PanelSchema, values: Record<string, unknown>) {
   const variableName = toCamelCase(`${schema.id}Preset`);
-  return `export const ${variableName} = ${JSON.stringify(values, null, 2)} as const;`;
+  const lines = [
+    `export const ${variableName} = ${JSON.stringify(values, null, 2)} as const;`
+  ];
+
+  const spring = coerceOptionalSpringValue(values.spring);
+  if (spring) {
+    lines.push(
+      "",
+      `export const ${variableName}Spring = ${JSON.stringify(spring, null, 2)} as const;`,
+      `// withSpring(targetValue, ${variableName}Spring)`
+    );
+  }
+
+  const easing = coerceOptionalBezierValue(values.easing);
+  if (easing) {
+    lines.push(
+      "",
+      `export const ${variableName}Easing = Easing.bezier(${easing
+        .map((part) => formatNumber(part))
+        .join(", ")});`
+    );
+  }
+
+  if (spring || easing) {
+    lines.push("", `// import { Easing, withSpring } from "react-native-reanimated";`);
+  }
+
+  return lines.join("\n");
+}
+
+function coerceOptionalSpringValue(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<SpringValue>;
+  if (typeof candidate.damping !== "number") return undefined;
+  if (typeof candidate.stiffness !== "number") return undefined;
+  return {
+    damping: candidate.damping,
+    stiffness: candidate.stiffness,
+    ...(typeof candidate.mass === "number" ? { mass: candidate.mass } : {})
+  };
+}
+
+function coerceOptionalBezierValue(value: unknown) {
+  if (!Array.isArray(value) || value.length !== 4) return undefined;
+  if (!value.every((part) => typeof part === "number")) return undefined;
+  return value as CubicBezier;
 }
 
 function toCamelCase(input: string) {
