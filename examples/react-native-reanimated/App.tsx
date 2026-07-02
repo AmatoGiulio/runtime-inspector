@@ -27,6 +27,7 @@ export default function App() {
   const scale = useSharedValue(1);
   const blur = useSharedValue(0);
   const opacity = useSharedValue(1);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const springConfigRef = useRef<SpringConfig>({
     damping: 14,
     stiffness: 180,
@@ -34,13 +35,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    bindSharedValue("card.scale", scale);
-    bindSharedValue("card.blur", blur);
-    bindSharedValue("card.opacity", opacity);
-    bindValue("card.spring", (value) => {
-      springConfigRef.current = value as SpringConfig;
-    });
-    bindTrigger("card.replay", () => {
+    const replayTransition = () => {
       scale.value = withTiming(0.92, { duration: 160 });
       opacity.value = withTiming(0.72, { duration: 160 });
       blur.value = withTiming(20, { duration: 160 });
@@ -50,7 +45,21 @@ export default function App() {
         opacity.value = withSpring(1, springConfigRef.current);
         blur.value = withSpring(0, springConfigRef.current);
       }, 220);
+    };
+
+    bindSharedValue("card.scale", scale);
+    bindSharedValue("card.blur", blur);
+    bindSharedValue("card.opacity", opacity);
+    bindValue("card.spring", (value) => {
+      springConfigRef.current = value as SpringConfig;
+
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+      }
+
+      previewTimerRef.current = setTimeout(replayTransition, 120);
     });
+    bindTrigger("card.replay", replayTransition);
 
     const brokerUrl = getBrokerUrl();
 
@@ -94,7 +103,8 @@ export default function App() {
               }),
               spring({
                 id: "spring",
-                label: "Return spring",
+                label: "Replay return spring",
+                description: "Changing these values automatically replays the return motion.",
                 defaultValue: springConfigRef.current,
                 ranges: {
                   damping: [4, 32],
@@ -117,7 +127,12 @@ export default function App() {
     );
 
     panel.connect();
-    return panel.disconnect;
+    return () => {
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+      }
+      panel.disconnect();
+    };
   }, [blur, opacity, scale]);
 
   const cardStyle = useAnimatedStyle(() => ({

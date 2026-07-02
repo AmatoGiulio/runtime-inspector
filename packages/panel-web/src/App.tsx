@@ -386,6 +386,7 @@ function SpringRow({
   return (
     <div className="controlRow springControl">
       <label>{control.label}</label>
+      {control.description ? <p className="controlDescription">{control.description}</p> : null}
       <SpringParameter
         label="Damping"
         max={ranges.damping[1]}
