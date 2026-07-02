@@ -82,6 +82,18 @@ describe("createBrokerClient", () => {
     expect(() => client!.setValue("test-schema", "speed", "not-a-number")).toThrow();
   });
 
+  it("rejects setValue with an out-of-range slider value and reports the valid range", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    await client.connect();
+    await wait(50);
+
+    expect(() => client!.setValue("test-schema", "speed", 9999)).toThrow(/between 0 and 10/);
+  });
+
   it("rejects connect() with UNAUTHORIZED when broker requires a token and none is given", async () => {
     broker = startBroker({ port: 0, token: "secret" });
     await waitForBrokerPort(broker);

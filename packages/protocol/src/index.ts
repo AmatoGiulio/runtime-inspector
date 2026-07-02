@@ -420,8 +420,12 @@ export function safeParseRIPMessage(data: unknown): RIPMessage | undefined {
 
 export function isValidControlValue(control: InspectorControl, value: unknown): boolean {
   switch (control.kind) {
-    case "slider":
-      return typeof value === "number" && Number.isFinite(value);
+    case "slider": {
+      if (typeof value !== "number" || !Number.isFinite(value)) return false;
+      if (typeof control.min === "number" && value < control.min) return false;
+      if (typeof control.max === "number" && value > control.max) return false;
+      return true;
+    }
     case "toggle":
       return typeof value === "boolean";
     case "color":
@@ -446,6 +450,26 @@ export function isValidControlValue(control: InspectorControl, value: unknown): 
       return true;
     default:
       return false;
+  }
+}
+
+export function describeInvalidValue(control: InspectorControl, value: unknown): string {
+  const got = typeof value === "string" ? `string` : typeof value;
+  switch (control.kind) {
+    case "slider":
+      return `slider "${control.id}" expects a finite number between ${control.min} and ${control.max}, got ${JSON.stringify(value)}`;
+    case "toggle":
+      return `toggle "${control.id}" expects a boolean, got ${got}`;
+    case "color":
+      return `color "${control.id}" expects a string, got ${got}`;
+    case "bezier":
+      return `bezier "${control.id}" expects a 4-tuple of finite numbers, got ${JSON.stringify(value)}`;
+    case "spring":
+      return `spring "${control.id}" expects an object with finite damping/stiffness (and optional finite mass), got ${JSON.stringify(value)}`;
+    case "trigger":
+      return `trigger "${control.id}" accepts any value`;
+    default:
+      return `control "${(control as { id: string }).id}" has an unknown kind and cannot be validated`;
   }
 }
 

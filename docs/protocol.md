@@ -138,6 +138,8 @@ Sent by a `panel` (or occasionally `runtime`) client to update a single control'
 
 `value` is untyped at the message-schema level (`unknown`) — its shape is validated against the target control's `kind` at the application layer via `isValidControlValue`, not by `ControlPatchSchema`. `source` is one of `"panel" | "runtime" | "preset"`.
 
+For `slider` controls, `isValidControlValue` also enforces the control's declared `min`/`max` bounds: a finite number outside `[min, max]` is invalid, the same as a wrong-shape value. `step` is not enforced here — rounding to a step is a UI concern, not a validity concern.
+
 Since 0.3, a `control.patch` targeting a `trigger` control is invalid at the application layer: the runtime SDK ignores it and logs a dev warning. Use `control.trigger` instead.
 
 ### `control.trigger`
@@ -256,6 +258,7 @@ Additional broker behavior:
 - **Ordering:** guaranteed only per-connection (messages from a single client arrive at the broker, and are forwarded, in the order sent). No cross-connection ordering guarantee exists.
 - **Commands are at-most-once.** `control.trigger` may be lost if a client disconnects mid-send during reconnect — that is acceptable. A command must never be delivered twice by the broker.
 - **Drag patches are sacrificable; committed values are not.** Rapid `control.patch` messages during a drag gesture may be coalesced or dropped by any layer (client, broker, runtime) without correctness impact. A final, committed value must always arrive as `control.commit` (or a `control.batchPatch` with `committed: true`), which is never coalesced or dropped.
+- **Slider values MUST respect the declared `min`/`max`.** A `slider` value outside its control's declared bounds is invalid. Receivers (runtime, panel, MCP client) MUST reject an out-of-range value with an explicit error — they MUST NOT silently clamp it into range.
 
 ## Security
 

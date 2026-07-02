@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PanelSchema, ToggleControl } from "@runtime-inspector/protocol";
+import type { PanelSchema, SliderControl, ToggleControl } from "@runtime-inspector/protocol";
 
 function toggleValue(schema: PanelSchema): boolean | undefined {
   return (schema.groups[0].controls[0] as ToggleControl).value;
@@ -40,6 +40,34 @@ class FakeWebSocket {
     this.readyState = FakeWebSocket.OPEN;
     this.onopen?.();
   }
+}
+
+function makeSliderSchema(id: string): PanelSchema {
+  return {
+    id,
+    title: id,
+    groups: [
+      {
+        id: "group-1",
+        label: "Group",
+        controls: [
+          {
+            id: "value",
+            kind: "slider",
+            label: "Value",
+            defaultValue: 1,
+            min: 0,
+            max: 10,
+            binding: `${id}.value`
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function sliderValue(schema: PanelSchema): number | undefined {
+  return (schema.groups[0].controls[0] as SliderControl).value;
 }
 
 function makeSchema(id: string): PanelSchema {
@@ -172,6 +200,25 @@ describe("multi-schema sessions", () => {
     });
 
     expect(toggleValue(schema)).toBe(false);
+    expect(setter).not.toHaveBeenCalled();
+  });
+
+  it("rejects an out-of-range slider control patch", async () => {
+    const { definePanel, applyControlPatch, bindValue } = await import("./index");
+
+    const schema = makeSliderSchema("panel-slider-invalid");
+    definePanel(schema);
+    const setter = vi.fn();
+    bindValue("panel-slider-invalid.value", setter);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-slider-invalid",
+      controlId: "value",
+      value: 9999
+    });
+
+    expect(sliderValue(schema)).toBe(1);
     expect(setter).not.toHaveBeenCalled();
   });
 });

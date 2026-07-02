@@ -3,10 +3,12 @@ import {
   PanelSchemaSchema,
   RIP_VERSION,
   createPatch,
+  describeInvalidValue,
   isValidControlValue,
   parseRIPMessage,
   safeParseRIPMessage,
-  type InspectorControl
+  type InspectorControl,
+  type SliderControl
 } from "./index";
 
 describe("Runtime Inspector Protocol", () => {
@@ -92,6 +94,15 @@ describe("isValidControlValue", () => {
     expect(isValidControlValue(control, Number.NaN)).toBe(false);
   });
 
+  it("accepts slider values in-range and at bounds, rejects out-of-range", () => {
+    const control = makeControl("slider") as SliderControl;
+    expect(isValidControlValue(control, 0.5)).toBe(true);
+    expect(isValidControlValue(control, control.min)).toBe(true);
+    expect(isValidControlValue(control, control.max)).toBe(true);
+    expect(isValidControlValue(control, control.min - 0.001)).toBe(false);
+    expect(isValidControlValue(control, control.max + 0.001)).toBe(false);
+  });
+
   it("accepts a boolean for toggle and rejects a string", () => {
     const control = makeControl("toggle");
     expect(isValidControlValue(control, true)).toBe(true);
@@ -131,6 +142,29 @@ describe("isValidControlValue", () => {
   it("rejects an unknown control kind", () => {
     const control = { id: "x", kind: "unknown", label: "x" } as unknown as InspectorControl;
     expect(isValidControlValue(control, 1)).toBe(false);
+  });
+});
+
+describe("describeInvalidValue", () => {
+  it("describes an out-of-range slider value with its bounds", () => {
+    const control: SliderControl = {
+      id: "scale",
+      kind: "slider",
+      label: "Scale",
+      defaultValue: 1,
+      min: 0.5,
+      max: 2
+    };
+    expect(describeInvalidValue(control, 9999)).toBe(
+      'slider "scale" expects a finite number between 0.5 and 2, got 9999'
+    );
+  });
+
+  it("describes a wrong-type toggle value", () => {
+    const control = makeControl("toggle");
+    expect(describeInvalidValue(control, "true")).toBe(
+      'toggle "toggle" expects a boolean, got string'
+    );
   });
 });
 
