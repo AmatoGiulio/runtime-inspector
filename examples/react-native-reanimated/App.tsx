@@ -20,6 +20,8 @@ type CubicBezier = [number, number, number, number];
 
 export default function App() {
   const glow = useSharedValue(10);
+  // @inspect min=8 max=48
+  const cardRadius = useSharedValue(28);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const targetRef = useRef({
     moveX: 0,
@@ -148,6 +150,7 @@ export default function App() {
   const cardStyle = useAnimatedStyle(() => ({
     backgroundColor: card.color.value,
     opacity: card.opacity.value,
+    borderRadius: cardRadius.value,
     transform: [
       { translateX: card.moveX.value },
       { rotate: `${card.rotate.value}deg` },

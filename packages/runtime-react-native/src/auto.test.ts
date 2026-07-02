@@ -1,0 +1,142 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, id: string) {
+  return schema.groups[0].controls.find((control) => control.id === id);
+}
+
+describe("__riInspect", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    const { __resetAutoRegistryForTests } = await import("./auto");
+    __resetAutoRegistryForTests();
+    vi.useRealTimers();
+    vi.resetModules();
+  });
+
+  it("returns the shared value unchanged (transparent pass-through)", async () => {
+    const { __riInspect } = await import("./auto");
+    const sharedValue = { value: 10 };
+    const result = __riInspect(sharedValue, "glow", { min: 0, max: 48 });
+    expect(result).toBe(sharedValue);
+  });
+
+  it("registers a slider control and publishes after the debounce window", async () => {
+    const { __riInspect } = await import("./auto");
+    const { applyControlPatch } = await import("./index");
+
+    const sharedValue = { value: 8 };
+    __riInspect(sharedValue, "cardRadius", { min: 8, max: 48 });
+
+    // Not yet published.
+    await vi.advanceTimersByTimeAsync(50);
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "auto",
+      controlId: "cardRadius",
+      value: 24
+    });
+
+    expect(sharedValue.value).toBe(24);
+  });
+
+  it("infers a slider control with the declared range", async () => {
+    const { __riInspect } = await import("./auto");
+    const { definePanel } = await import("./index");
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+
+    const sharedValue = { value: 8 };
+    __riInspect(sharedValue, "cardRadius", { min: 8, max: 48, step: 2, unit: "px", label: "Card Radius" });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(definePanelSpy).toHaveBeenCalled();
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    const control = controlById(schema, "cardRadius");
+    expect(control?.kind).toBe("slider");
+    expect((control as { min: number }).min).toBe(8);
+    expect((control as { max: number }).max).toBe(48);
+    expect((control as { step?: number }).step).toBe(2);
+    expect((control as { unit?: string }).unit).toBe("px");
+    expect(control?.label).toBe("Card Radius");
+    void definePanel;
+  });
+
+  it("derives a default label from the variable name when no label is given", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    __riInspect({ value: 1 }, "moveX", { min: -10, max: 10 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "moveX")?.label).toBe("Move X");
+  });
+
+  it("infers a toggle from a boolean value with no min/max needed", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    __riInspect({ value: true }, "enabled", {});
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    const control = controlById(schema, "enabled");
+    expect(control?.kind).toBe("toggle");
+  });
+
+  it("assigns a collision suffix and warns when the same name registers twice", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    __riInspect({ value: 1 }, "moveX", { min: 0, max: 10 });
+    __riInspect({ value: 2 }, "moveX", { min: 0, max: 10 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "moveX")).toBeDefined();
+    expect(controlById(schema, "moveX2")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("collides"));
+
+    warnSpy.mockRestore();
+  });
+
+  it("debounces multiple registrations within the window into a single publish", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    __riInspect({ value: 1 }, "a", { min: 0, max: 1 });
+    await vi.advanceTimersByTimeAsync(50);
+    __riInspect({ value: 2 }, "b", { min: 0, max: 1 });
+    await vi.advanceTimersByTimeAsync(50);
+    __riInspect({ value: 3 }, "c", { min: 0, max: 1 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(definePanelSpy).toHaveBeenCalledTimes(1);
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(schema.groups[0].controls).toHaveLength(3);
+  });
+
+  it("is a no-op in production - returns the value unchanged and never registers", async () => {
+    vi.stubGlobal("__DEV__", false);
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    const sharedValue = { value: 5 };
+    const result = __riInspect(sharedValue, "prodValue", { min: 0, max: 10 });
+
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(result).toBe(sharedValue);
+    expect(definePanelSpy).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+});
+
+const DEBOUNCE_MS = 100;

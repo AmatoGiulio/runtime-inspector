@@ -34,12 +34,32 @@ const card = useInspector("card-transition", {
 
 The explicit API (`definePanel`, `bindSharedValue`, `bindValue`, `bindTrigger`, …) is still there underneath, for cases that need direct control over bindings or side effects.
 
+## Switch it on with a comment
+
+The third rung of the DX ladder (explicit API → `useInspector` → **directive**) needs no import and no hook: annotate an existing `useSharedValue` with an `// @inspect` comment and `@runtime-inspector/babel-plugin` does the rest at build time, dev-only:
+
+```ts
+// @inspect min=-120 max=120 step=1 unit=px label="Move X"
+const moveX = useSharedValue(0);
+```
+
+Register the plugin in `babel.config.js`:
+
+```js
+module.exports = {
+  plugins: ["@runtime-inspector/babel-plugin", "react-native-reanimated/plugin"]
+};
+```
+
+The plugin rewrites the declaration to `__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, ... })`, auto-importing `__riInspect` from `@runtime-inspector/react-native`. Numeric values require `min`/`max` (a build-time error otherwise, mirroring `useInspector`'s bare-number rule); the control kind is inferred the same way `useInspector` infers it. Production builds leave the code untouched — the comment stays inert.
+
 ## Packages
 
 - `@runtime-inspector/protocol`: TypeScript protocol types, Zod validation, shared value validation, conformance fixtures.
 - `@runtime-inspector/panel-core`: framework-agnostic panel session logic (connection, values, throttling, A/B compare, export) — the base for every panel client.
 - `@runtime-inspector/transport-ws`: local WebSocket broker for runtime/panel messages.
 - `@runtime-inspector/react-native`: React Native runtime SDK with zero-config broker discovery.
+- `@runtime-inspector/babel-plugin`: dev-only Babel plugin that auto-binds `// @inspect`-annotated `useSharedValue`s (see [RFC 0002](rfcs/0002-babel-plugin-auto-binding.md)).
 - `@runtime-inspector/panel-web`: Vite web panel that renders schema controls.
 - `@runtime-inspector/client-mcp`: MCP server exposing the broker to AI agents.
 - `@runtime-inspector/cli`: `runtime-inspector dev` command.

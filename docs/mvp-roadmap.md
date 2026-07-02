@@ -40,11 +40,11 @@ Ordered by impact:
 - Core consolidation (done): `panel-core` extracted from the web panel, runtime SDK multi-schema safe, protocol 0.3 semantic messages shipped via RFC 0001 (`control.trigger`, `control.commit`, `schema.dispose`, stale schema cache), conformance fixtures and normative protocol spec.
 - **Rozenite client**: a React Native DevTools plugin speaking the same protocol, built on `panel-core`. Distribution inside the official DevTools ecosystem, and the concrete proof of the "protocol-first, interchangeable panels" thesis.
 - **AI agent client**: an MCP server that connects to the broker as a panel-role client, letting an agent tune animations iteratively (patch → observe → repeat). No competitor does this; the architecture already allows it. At minimum, a demo for the launch post. First pass implemented: `packages/client-mcp` ships a stdio MCP server (`runtime-inspector-mcp`) with `get_schema`, `set_control_value`, `batch_set`, and `trigger` tools over the broker.
+- **Dev-only auto-binding**: the jump from "tool you configure" to "tool you switch on". First pass implemented via [RFC 0002](rfcs/0002-babel-plugin-auto-binding.md): `packages/babel-plugin` rewrites an `// @inspect min=... max=...`-annotated `useSharedValue` into a call to `__riInspect` (new `runtime-react-native/src/auto.ts`), which registers the value into a single debounced "auto" schema and republishes through the existing `definePanel` session-replacement path — no import or hook needed at the call site, dev-only, inert in production.
 - Launch: 45-second demo video (spring tuning + copy-as-code + agent tuning), posts on r/reactnative, X, SWM/Expo communities.
 
 ## Later
 
-- Dev-only auto-binding (Babel plugin registering `useSharedValue` automatically) — the jump from "tool you configure" to "tool you switch on".
 - Desktop and VSCode clients.
 - Native module path if JS transport becomes limiting.
 - Recording and timeline tools.

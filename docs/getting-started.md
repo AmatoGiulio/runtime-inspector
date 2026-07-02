@@ -34,7 +34,28 @@ adb reverse tcp:4577 tcp:4577
 
 ## Runtime usage
 
-### `useInspector` (recommended)
+### `// @inspect` directive (fastest path for an existing codebase)
+
+If you already have `useSharedValue`s scattered through a codebase, the fastest way in is a comment - no import, no hook. Add `@runtime-inspector/babel-plugin` to `babel.config.js`:
+
+```js
+module.exports = {
+  plugins: ["@runtime-inspector/babel-plugin", "react-native-reanimated/plugin"]
+};
+```
+
+Then annotate the declaration you want to expose:
+
+```ts
+// @inspect min=8 max=48
+const cardRadius = useSharedValue(28);
+```
+
+The plugin rewrites this (dev-only) into a call to `__riInspect`, which registers the value in an "auto" schema panel and publishes it — `cardRadius` is still the same shared value, transparently returned, so the rest of the component is untouched. Numeric values need `min`/`max` in the directive (same rule as `useInspector`'s bare-number rejection); `step`, `unit`, and a quoted `label="..."` are optional. In a production build (`api.env() === "production"`), the plugin does nothing and the comment stays inert.
+
+This is the right entry point when you want one or two values exposed without touching the surrounding component. Reach for `useInspector` below when you want several related controls grouped under one panel, or the explicit API when a patch needs a JS-side effect.
+
+### `useInspector` (recommended for multiple controls)
 
 `useInspector` infers the control kind from the shape of each spec value and returns a mutable `SharedValue`-like handle per key — no manual schema, no manual bindings:
 

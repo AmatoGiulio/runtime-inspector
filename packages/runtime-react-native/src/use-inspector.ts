@@ -113,6 +113,32 @@ function isBezierEntry(value: unknown): value is unknown[] {
   return Array.isArray(value);
 }
 
+/**
+ * The subset of control kinds that can be inferred purely from a value's
+ * runtime shape (no spec object), shared between `useInspector`'s spec-based
+ * inference and the auto-binding helper (`__riInspect`, see `./auto`), which
+ * only has a live value + optional numeric range metadata.
+ */
+export type InferredKind = "slider" | "toggle" | "color" | "spring" | "bezier";
+
+/**
+ * Infers a control kind from a raw value's shape - the same inference table
+ * `useInspector` uses (number->slider, boolean->toggle, string->color,
+ * spring shape->spring, 4-array->bezier). Does not inspect any spec-object
+ * wrapper (`{ value, min, max }`) - callers with a bare number must supply
+ * `min`/`max` out of band (see `RFC 0002`/`__riInspect`).
+ */
+export function inferKindFromValue(value: unknown): InferredKind | undefined {
+  if (typeof value === "number") return "slider";
+  if (typeof value === "boolean") return "toggle";
+  if (typeof value === "string") return "color";
+  if (isSpringEntry(value)) return "spring";
+  if (isBezierEntry(value) && value.length === 4 && value.every((part) => typeof part === "number")) {
+    return "bezier";
+  }
+  return undefined;
+}
+
 interface BuiltEntry {
   control: InspectorControl;
   handle: unknown;

@@ -264,14 +264,18 @@ export function applyBatchPatch(batch: BatchPatch) {
 
 export type { CubicBezier, PanelSchema, SpringValue };
 
-export { useInspector, buildInspector, deriveLabel } from "./use-inspector";
+export { useInspector, buildInspector, deriveLabel, inferKindFromValue } from "./use-inspector";
 export type {
   InspectorSpec,
   InspectorSpecEntry,
   InspectorHandles,
   SliderSpecEntry,
-  SpringSpecEntry
+  SpringSpecEntry,
+  InferredKind
 } from "./use-inspector";
+
+export { __riInspect } from "./auto";
+export type { InspectMeta } from "./auto";
 
 function connectRuntime(session: Session) {
   if (
