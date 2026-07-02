@@ -34,6 +34,8 @@ This starts:
 - broker: `ws://127.0.0.1:4577`
 - web panel: `http://127.0.0.1:4578`
 
+If either port is busy, the CLI picks the next available port and prints the URLs to use.
+
 Then run the React Native example:
 
 ```bash

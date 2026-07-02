@@ -2,6 +2,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
+import { createServer } from "node:net";
 import { execa } from "execa";
 import qrcode from "qrcode-terminal";
 import { startBroker } from "@runtime-inspector/transport-ws";
@@ -13,8 +14,10 @@ if (command !== "dev") {
   process.exit(command ? 1 : 0);
 }
 
-const brokerPort = Number(process.env.RUNTIME_INSPECTOR_PORT ?? 4577);
-const panelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 4578);
+const requestedBrokerPort = Number(process.env.RUNTIME_INSPECTOR_PORT ?? 4577);
+const requestedPanelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 4578);
+const brokerPort = await findAvailablePort(requestedBrokerPort);
+const panelPort = await findAvailablePort(requestedPanelPort);
 const lanAddress = getLanAddress();
 const broker = startBroker({ host: "0.0.0.0", port: brokerPort });
 const cliDir = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +27,12 @@ const lanPanelUrl = lanAddress ? `http://${lanAddress}:${panelPort}` : undefined
 const localBrokerUrl = `ws://127.0.0.1:${broker.port}`;
 const lanBrokerUrl = lanAddress ? `ws://${lanAddress}:${broker.port}` : localBrokerUrl;
 
+if (brokerPort !== requestedBrokerPort) {
+  console.log(`Runtime Inspector broker port ${requestedBrokerPort} busy; using ${brokerPort}.`);
+}
+if (panelPort !== requestedPanelPort) {
+  console.log(`Runtime Inspector panel port ${requestedPanelPort} busy; using ${panelPort}.`);
+}
 console.log(`Runtime Inspector broker local: ${localBrokerUrl}`);
 if (lanAddress) {
   console.log(`Runtime Inspector broker LAN:   ${lanBrokerUrl}`);
@@ -66,4 +75,28 @@ function getLanAddress() {
   }
 
   return undefined;
+}
+
+async function findAvailablePort(startPort: number) {
+  for (let port = startPort; port < startPort + 20; port += 1) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+  }
+
+  throw new Error(`No available port found from ${startPort} to ${startPort + 19}.`);
+}
+
+function isPortAvailable(port: number) {
+  return new Promise<boolean>((resolve) => {
+    const server = createServer();
+
+    server.once("error", () => {
+      resolve(false);
+    });
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, "0.0.0.0");
+  });
 }
