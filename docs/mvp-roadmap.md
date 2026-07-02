@@ -23,7 +23,7 @@ Ordered by impact:
 5. **Trigger control.** First pass implemented: a `trigger` control kind invokes a callback registered in the runtime, so a full tuning session can happen from the desktop without touching the device.
 6. **Patch throttling** on high-frequency controls. First pass implemented for sliders in the web panel; values update immediately in UI while WebSocket patches are capped during drag and flushed on release.
 7. Runtime-side Zod validation of incoming messages. Done: the runtime SDK parses incoming broker messages with the shared protocol validator and ignores invalid payloads instead of crashing the app.
-8. Better panel control state and error display.
+8. Better panel control state and error display. First pass implemented: the panel surfaces reconnect and invalid-message notices in the header.
 
 ## Phase 3: richer tuning (July/August)
 

@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
+} from "react-native-reanimated";
 import {
   bindTrigger,
   bindSharedValue,
@@ -20,15 +24,15 @@ export default function App() {
     bindSharedValue("card.blur", blur);
     bindSharedValue("card.opacity", opacity);
     bindTrigger("card.replay", () => {
-      scale.value = 0.92;
-      opacity.value = 0.72;
-      blur.value = 20;
+      scale.value = withTiming(0.92, { duration: 160 });
+      opacity.value = withTiming(0.72, { duration: 160 });
+      blur.value = withTiming(20, { duration: 160 });
 
       setTimeout(() => {
-        scale.value = 1;
-        opacity.value = 1;
-        blur.value = 0;
-      }, 180);
+        scale.value = withTiming(1, { duration: 240 });
+        opacity.value = withTiming(1, { duration: 240 });
+        blur.value = withTiming(0, { duration: 240 });
+      }, 220);
     });
 
     const brokerUrl =
@@ -94,20 +98,23 @@ export default function App() {
     transform: [{ scale: scale.value }]
   }));
 
-  const blurStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(1, blur.value / 32)
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(0.85, blur.value / 38),
+    transform: [{ scale: 1 + blur.value / 180 }]
   }));
 
   return (
     <View style={styles.screen}>
       <Text style={styles.eyebrow}>Runtime Inspector</Text>
-      <Animated.View style={[styles.card, cardStyle]}>
-        <Animated.View pointerEvents="none" style={[styles.blurLayer, blurStyle]} />
-        <Text style={styles.title}>Card Transition</Text>
-        <Text style={styles.body}>
-          Move the panel sliders to update Reanimated SharedValues live.
-        </Text>
-      </Animated.View>
+      <View style={styles.cardStage}>
+        <Animated.View pointerEvents="none" style={[styles.glowLayer, glowStyle]} />
+        <Animated.View style={[styles.card, cardStyle]}>
+          <Text style={styles.title}>Card Transition</Text>
+          <Text style={styles.body}>
+            Move the panel sliders to update Reanimated SharedValues live.
+          </Text>
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -127,6 +134,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textTransform: "uppercase"
   },
+  cardStage: {
+    position: "relative",
+    width: "100%"
+  },
+  glowLayer: {
+    backgroundColor: "rgba(69, 179, 127, 0.42)",
+    borderRadius: 34,
+    bottom: -12,
+    left: 10,
+    position: "absolute",
+    right: 10,
+    top: -12
+  },
   card: {
     backgroundColor: "#f5f7fb",
     borderRadius: 28,
@@ -134,10 +154,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     padding: 28,
     width: "100%"
-  },
-  blurLayer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(69, 179, 127, 0.28)"
   },
   title: {
     color: "#111318",

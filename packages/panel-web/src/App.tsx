@@ -29,6 +29,7 @@ function App() {
   const [schema, setSchema] = useState<PanelSchema>();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState<string>();
   const socketRef = useRef<WebSocket | null>(null);
   const pendingPatchesRef = useRef(new Map<string, PendingPatch>());
 
@@ -43,6 +44,7 @@ function App() {
 
       socket.onopen = () => {
         setStatus("connected");
+        setNotice(undefined);
         socket.send(
           JSON.stringify({
             type: "handshake.hello",
@@ -59,23 +61,40 @@ function App() {
           socketRef.current = null;
         }
         setStatus("disconnected");
+        setNotice("Broker disconnected. Reconnecting...");
         if (!closedByReact) {
           reconnectTimer = window.setTimeout(connect, 1000);
         }
       };
 
       socket.onerror = () => {
+        setNotice("WebSocket connection error.");
         socket.close();
       };
 
       socket.onmessage = (event) => {
-        const message = JSON.parse(String(event.data));
+        let message: { type?: string; [key: string]: unknown };
+
+        try {
+          message = JSON.parse(String(event.data));
+        } catch {
+          setNotice("Ignored invalid JSON message from broker.");
+          return;
+        }
+
         if (message.type === "schema.publish") {
-          setSchema(message.schema);
-          setValues(collectInitialValues(message.schema));
+          const nextSchema = message.schema as PanelSchema;
+          setSchema(nextSchema);
+          setValues(collectInitialValues(nextSchema));
+          setNotice(undefined);
         }
         if (message.type === "control.patch") {
-          setValues((current) => ({ ...current, [message.controlId]: message.value }));
+          if (typeof message.controlId !== "string") {
+            setNotice("Ignored invalid control patch from broker.");
+            return;
+          }
+          const controlId = message.controlId;
+          setValues((current) => ({ ...current, [controlId]: message.value }));
         }
       };
     };
@@ -145,7 +164,7 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Runtime Inspector</h1>
-          <p>{schema ? schema.title : "Waiting for runtime schema"}</p>
+          <p>{notice ?? (schema ? schema.title : "Waiting for runtime schema")}</p>
         </div>
         <span className={`status ${status}`}>{status}</span>
       </header>
