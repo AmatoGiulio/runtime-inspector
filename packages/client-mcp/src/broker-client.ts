@@ -2,10 +2,9 @@ import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
 import {
   RIP_VERSION,
-  describeInvalidValue,
-  isValidControlValue,
   isValueControl,
   safeParseRIPMessage,
+  validateControlValue,
   type InspectorControl,
   type PanelSchema,
   type RIPMessage
@@ -182,9 +181,10 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
 
   function setValue(schemaId: string, controlId: string, value: unknown) {
     const control = findControl(schemaId, controlId);
-    if (!isValidControlValue(control, value)) {
+    const result = validateControlValue(control, value);
+    if (!result.ok) {
       throw new Error(
-        `Invalid value for control "${controlId}": ${describeInvalidValue(control, value)}`
+        `Invalid value for control "${controlId}": ${result.code}: ${result.message}`
       );
     }
 
@@ -210,9 +210,10 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     const entries = Object.entries(patchValues);
     for (const [controlId, value] of entries) {
       const control = findControl(schemaId, controlId);
-      if (!isValidControlValue(control, value)) {
+      const result = validateControlValue(control, value);
+      if (!result.ok) {
         throw new Error(
-          `Invalid value for control "${controlId}": ${describeInvalidValue(control, value)}`
+          `Invalid value for control "${controlId}": ${result.code}: ${result.message}`
         );
       }
     }

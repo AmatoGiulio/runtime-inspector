@@ -136,9 +136,27 @@ Sent by a `panel` (or occasionally `runtime`) client to update a single control'
 }
 ```
 
-`value` is untyped at the message-schema level (`unknown`) — its shape is validated against the target control's `kind` at the application layer via `isValidControlValue`, not by `ControlPatchSchema`. `source` is one of `"panel" | "runtime" | "preset"`.
+`value` is untyped at the message-schema level (`unknown`) — its shape is validated against the target control's `kind` at the application layer via `validateControlValue`, not by `ControlPatchSchema`. `source` is one of `"panel" | "runtime" | "preset"`.
 
-For `slider` controls, `isValidControlValue` also enforces the control's declared `min`/`max` bounds: a finite number outside `[min, max]` is invalid, the same as a wrong-shape value. `step` is not enforced here — rounding to a step is a UI concern, not a validity concern.
+For `slider` controls, validation also enforces the control's declared `min`/`max` bounds: a finite number outside `[min, max]` is invalid, the same as a wrong-shape value. `step` is not enforced here — rounding to a step is a UI concern, not a validity concern.
+
+#### Validation entry point
+
+`validateControlValue(control, value): ValidationResult` (exported from `@runtime-inspector/protocol`) is the normative validation entry point — the single source of truth for whether a value is valid for a given control, and *why* it isn't when it's not:
+
+```ts
+type ValidationResult =
+  | { ok: true }
+  | { ok: false; code: ValidationErrorCode; message: string };
+
+type ValidationErrorCode =
+  | "WRONG_TYPE"       // wrong primitive/shape for the control's kind (e.g. a string for a toggle, a non-array for bezier)
+  | "OUT_OF_RANGE"      // right shape, but a slider value outside its declared min/max
+  | "MALFORMED_VALUE"   // right general shape but invalid contents (e.g. a bezier tuple of the wrong length, a spring object missing stiffness, or any non-finite number)
+  | "UNKNOWN_KIND";     // the control's `kind` is not a recognized control type
+```
+
+`isValidControlValue(control, value): boolean` and `describeInvalidValue(control, value): string` remain exported as thin conveniences on top of `validateControlValue` — `isValidControlValue` returns just the `ok` boolean, and `describeInvalidValue` returns just the `message` (or a generic "valid value" string when the value is in fact valid). Prefer `validateControlValue` directly wherever the error `code` is useful (e.g. surfacing a specific error to a human or an agent) rather than only a human-readable string.
 
 Since 0.3, a `control.patch` targeting a `trigger` control is invalid at the application layer: the runtime SDK ignores it and logs a dev warning. Use `control.trigger` instead.
 

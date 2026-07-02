@@ -1,7 +1,7 @@
 import {
   RIP_VERSION,
-  isValidControlValue,
   safeParseRIPMessage,
+  validateControlValue,
   type BatchPatch,
   type BezierControl,
   type ColorControl,
@@ -218,9 +218,10 @@ export function applyControlPatch(patch: ControlPatch) {
   }
 
   if (!isValueControl(control)) return;
-  if (!isValidControlValue(control, patch.value)) {
+  const validation = validateControlValue(control, patch.value);
+  if (!validation.ok) {
     warnDev(
-      `Ignoring invalid value for ${control.kind} control "${control.id}".`
+      `Ignoring invalid value for ${control.kind} control "${control.id}" (${validation.code}): ${validation.message}`
     );
     return;
   }

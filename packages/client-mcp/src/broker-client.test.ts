@@ -79,7 +79,7 @@ describe("createBrokerClient", () => {
       )
     ).toBe(true);
 
-    expect(() => client!.setValue("test-schema", "speed", "not-a-number")).toThrow();
+    expect(() => client!.setValue("test-schema", "speed", "not-a-number")).toThrow(/WRONG_TYPE/);
   });
 
   it("rejects setValue with an out-of-range slider value and reports the valid range", async () => {
@@ -91,7 +91,7 @@ describe("createBrokerClient", () => {
     await client.connect();
     await wait(50);
 
-    expect(() => client!.setValue("test-schema", "speed", 9999)).toThrow(/between 0 and 10/);
+    expect(() => client!.setValue("test-schema", "speed", 9999)).toThrow(/OUT_OF_RANGE.*between 0 and 10/);
   });
 
   it("rejects connect() with UNAUTHORIZED when broker requires a token and none is given", async () => {

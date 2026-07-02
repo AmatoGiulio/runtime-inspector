@@ -6,6 +6,7 @@ import {
   isValidControlValue,
   isValueControl,
   safeParseRIPMessage,
+  validateControlValue,
   type CubicBezier,
   type InspectorControl,
   type PanelSchema,
@@ -342,8 +343,9 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     const control = findControl(schemaId, controlId);
     if (!control) return;
 
-    if (!isValidControlValue(control, value)) {
-      setState({ notice: `Invalid value for ${control.label}.` });
+    const validation = validateControlValue(control, value);
+    if (!validation.ok) {
+      setState({ notice: `Invalid value for ${control.label}: ${validation.message}` });
       return;
     }
 

@@ -418,59 +418,119 @@ export function safeParseRIPMessage(data: unknown): RIPMessage | undefined {
   }
 }
 
-export function isValidControlValue(control: InspectorControl, value: unknown): boolean {
+export type ValidationErrorCode =
+  | "WRONG_TYPE"
+  | "OUT_OF_RANGE"
+  | "MALFORMED_VALUE"
+  | "UNKNOWN_KIND";
+
+export type ValidationResult =
+  | { ok: true }
+  | { ok: false; code: ValidationErrorCode; message: string };
+
+const VALID: ValidationResult = { ok: true };
+
+function invalid(code: ValidationErrorCode, message: string): ValidationResult {
+  return { ok: false, code, message };
+}
+
+/**
+ * Single source of truth for control value validation. Returns a structured
+ * result describing *why* a value is invalid, not just whether it is.
+ */
+export function validateControlValue(control: InspectorControl, value: unknown): ValidationResult {
+  const got = typeof value === "string" ? `string` : typeof value;
   switch (control.kind) {
     case "slider": {
-      if (typeof value !== "number" || !Number.isFinite(value)) return false;
-      if (typeof control.min === "number" && value < control.min) return false;
-      if (typeof control.max === "number" && value > control.max) return false;
-      return true;
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return invalid(
+          "WRONG_TYPE",
+          `slider "${control.id}" expects a finite number between ${control.min} and ${control.max}, got ${JSON.stringify(value)}`
+        );
+      }
+      if (
+        (typeof control.min === "number" && value < control.min) ||
+        (typeof control.max === "number" && value > control.max)
+      ) {
+        return invalid(
+          "OUT_OF_RANGE",
+          `slider "${control.id}" expects a finite number between ${control.min} and ${control.max}, got ${JSON.stringify(value)}`
+        );
+      }
+      return VALID;
     }
     case "toggle":
-      return typeof value === "boolean";
+      if (typeof value !== "boolean") {
+        return invalid("WRONG_TYPE", `toggle "${control.id}" expects a boolean, got ${got}`);
+      }
+      return VALID;
     case "color":
-      return typeof value === "string";
-    case "bezier":
-      return (
-        CubicBezierSchema.safeParse(value).success &&
-        Array.isArray(value) &&
-        value.every((part) => Number.isFinite(part))
-      );
+      if (typeof value !== "string") {
+        return invalid("WRONG_TYPE", `color "${control.id}" expects a string, got ${got}`);
+      }
+      return VALID;
+    case "bezier": {
+      if (!Array.isArray(value)) {
+        return invalid(
+          "WRONG_TYPE",
+          `bezier "${control.id}" expects a 4-tuple of finite numbers, got ${JSON.stringify(value)}`
+        );
+      }
+      if (value.length !== 4) {
+        return invalid(
+          "MALFORMED_VALUE",
+          `bezier "${control.id}" expects a 4-tuple of finite numbers, got ${JSON.stringify(value)} (wrong length)`
+        );
+      }
+      if (!value.every((part) => typeof part === "number" && Number.isFinite(part))) {
+        return invalid(
+          "MALFORMED_VALUE",
+          `bezier "${control.id}" expects a 4-tuple of finite numbers, got ${JSON.stringify(value)} (contains a non-finite value)`
+        );
+      }
+      return VALID;
+    }
     case "spring": {
       const parsed = SpringValueSchema.safeParse(value);
-      if (!parsed.success) return false;
+      if (!parsed.success) {
+        return invalid(
+          "MALFORMED_VALUE",
+          `spring "${control.id}" expects an object with finite damping/stiffness (and optional finite mass), got ${JSON.stringify(value)}`
+        );
+      }
       const { damping, stiffness, mass } = parsed.data;
-      return (
-        Number.isFinite(damping) &&
-        Number.isFinite(stiffness) &&
-        (mass === undefined || Number.isFinite(mass))
-      );
+      if (
+        !Number.isFinite(damping) ||
+        !Number.isFinite(stiffness) ||
+        (mass !== undefined && !Number.isFinite(mass))
+      ) {
+        return invalid(
+          "MALFORMED_VALUE",
+          `spring "${control.id}" expects an object with finite damping/stiffness (and optional finite mass), got ${JSON.stringify(value)} (contains a non-finite field)`
+        );
+      }
+      return VALID;
     }
     case "trigger":
-      return true;
+      return VALID;
     default:
-      return false;
+      return invalid(
+        "UNKNOWN_KIND",
+        `control "${(control as { id: string }).id}" has an unknown kind and cannot be validated`
+      );
   }
 }
 
+export function isValidControlValue(control: InspectorControl, value: unknown): boolean {
+  return validateControlValue(control, value).ok;
+}
+
 export function describeInvalidValue(control: InspectorControl, value: unknown): string {
-  const got = typeof value === "string" ? `string` : typeof value;
-  switch (control.kind) {
-    case "slider":
-      return `slider "${control.id}" expects a finite number between ${control.min} and ${control.max}, got ${JSON.stringify(value)}`;
-    case "toggle":
-      return `toggle "${control.id}" expects a boolean, got ${got}`;
-    case "color":
-      return `color "${control.id}" expects a string, got ${got}`;
-    case "bezier":
-      return `bezier "${control.id}" expects a 4-tuple of finite numbers, got ${JSON.stringify(value)}`;
-    case "spring":
-      return `spring "${control.id}" expects an object with finite damping/stiffness (and optional finite mass), got ${JSON.stringify(value)}`;
-    case "trigger":
-      return `trigger "${control.id}" accepts any value`;
-    default:
-      return `control "${(control as { id: string }).id}" has an unknown kind and cannot be validated`;
+  const result = validateControlValue(control, value);
+  if (result.ok) {
+    return `control "${control.id}" has a valid value`;
   }
+  return result.message;
 }
 
 export function createPatch(

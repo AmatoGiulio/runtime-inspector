@@ -124,7 +124,9 @@ describe("createPanelSession", () => {
     publishSchema(socket);
 
     session.setValue("demo", "enabled", "not-a-boolean");
-    expect(session.getState().notice).toBe("Invalid value for Enabled.");
+    expect(session.getState().notice).toBe(
+      'Invalid value for Enabled: toggle "enabled" expects a boolean, got string'
+    );
     const patches = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
     expect(patches).toHaveLength(0);
   });

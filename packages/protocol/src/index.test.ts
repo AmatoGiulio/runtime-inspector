@@ -7,6 +7,7 @@ import {
   isValidControlValue,
   parseRIPMessage,
   safeParseRIPMessage,
+  validateControlValue,
   type InspectorControl,
   type SliderControl
 } from "./index";
@@ -165,6 +166,68 @@ describe("describeInvalidValue", () => {
     expect(describeInvalidValue(control, "true")).toBe(
       'toggle "toggle" expects a boolean, got string'
     );
+  });
+});
+
+describe("validateControlValue", () => {
+  it("returns ok: true for a valid value", () => {
+    const control = makeControl("toggle");
+    expect(validateControlValue(control, true)).toEqual({ ok: true });
+  });
+
+  it("flags an out-of-range slider value with OUT_OF_RANGE", () => {
+    const control = makeControl("slider") as SliderControl;
+    const result = validateControlValue(control, control.max + 1);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("OUT_OF_RANGE");
+  });
+
+  // A NaN slider value fails the finite-number check before range comparison
+  // is even possible, so it is treated as a type mismatch (WRONG_TYPE) rather
+  // than MALFORMED_VALUE - the value isn't the right shape at all.
+  it("flags a NaN slider value with WRONG_TYPE", () => {
+    const control = makeControl("slider");
+    const result = validateControlValue(control, Number.NaN);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("WRONG_TYPE");
+  });
+
+  it("flags a string toggle value with WRONG_TYPE", () => {
+    const control = makeControl("toggle");
+    const result = validateControlValue(control, "true");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("WRONG_TYPE");
+  });
+
+  // A 3-element array is still "array-shaped" (the right general shape for
+  // bezier), just the wrong length - per spec this is MALFORMED_VALUE, not
+  // WRONG_TYPE. WRONG_TYPE is reserved for values that aren't even an array.
+  it("flags a 3-element bezier array with MALFORMED_VALUE", () => {
+    const control = makeControl("bezier");
+    const result = validateControlValue(control, [0.1, 0.2, 0.3]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("MALFORMED_VALUE");
+  });
+
+  it("flags a bezier array with a non-finite element with MALFORMED_VALUE", () => {
+    const control = makeControl("bezier");
+    const result = validateControlValue(control, [0, 0, 1, Number.POSITIVE_INFINITY]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("MALFORMED_VALUE");
+  });
+
+  it("flags a spring value missing stiffness with MALFORMED_VALUE", () => {
+    const control = makeControl("spring");
+    const result = validateControlValue(control, { damping: 10 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("MALFORMED_VALUE");
+  });
+
+  it("flags an unknown control kind with UNKNOWN_KIND", () => {
+    const control = { id: "x", kind: "unknown", label: "x" } as unknown as InspectorControl;
+    const result = validateControlValue(control, 1);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("UNKNOWN_KIND");
   });
 });
 
