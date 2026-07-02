@@ -17,6 +17,7 @@ import {
   type TriggerControl,
   isValueControl
 } from "@runtime-inspector/protocol";
+import { NativeModules, Platform, TurboModuleRegistry } from "react-native";
 import { getBrokerCandidates } from "./discovery";
 
 declare const __DEV__: boolean | undefined;
@@ -51,24 +52,32 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
-interface MinimalNativeModules {
-  SourceCode?: {
-    getConstants?: () => { scriptURL?: string };
-    scriptURL?: string;
-  };
-}
-
-interface MinimalPlatform {
-  OS?: string;
-}
-
 function getScriptUrl(): string | undefined {
   try {
-    const { NativeModules } = require("react-native") as { NativeModules?: MinimalNativeModules };
-    return (
+    const fromNativeModules =
       NativeModules?.SourceCode?.getConstants?.().scriptURL ??
-      NativeModules?.SourceCode?.scriptURL
-    );
+      NativeModules?.SourceCode?.scriptURL;
+    if (fromNativeModules) return fromNativeModules;
+  } catch {
+    // try the next source
+  }
+
+  try {
+    const sourceCode = TurboModuleRegistry?.get?.("SourceCode") as
+      | { getConstants?: () => { scriptURL?: string } }
+      | null
+      | undefined;
+    const fromTurboModule = sourceCode?.getConstants?.().scriptURL;
+    if (fromTurboModule) return fromTurboModule;
+  } catch {
+    // try the next source
+  }
+
+  try {
+    const expoGlobal = (globalThis as {
+      expo?: { modules?: { ExponentConstants?: { experienceUrl?: string } } };
+    }).expo;
+    return expoGlobal?.modules?.ExponentConstants?.experienceUrl;
   } catch {
     return undefined;
   }
@@ -76,7 +85,6 @@ function getScriptUrl(): string | undefined {
 
 function getPlatformOs(): string | undefined {
   try {
-    const { Platform } = require("react-native") as { Platform?: MinimalPlatform };
     return Platform?.OS;
   } catch {
     return undefined;
@@ -234,6 +242,12 @@ function connectRuntime(session: Session) {
         defaultPort: 4577
       });
   const brokerUrl = session.lockedUrl ?? candidates[session.candidateIndex % candidates.length];
+  if (session.candidateIndex === 0 && !session.lockedUrl) {
+    warnDev(
+      `Discovery: scriptUrl=${getScriptUrl() ?? "undefined"} platform=${getPlatformOs() ?? "undefined"} candidates=${candidates.join(", ")}`
+    );
+  }
+  warnDev(`Connecting to ${brokerUrl}`);
   const clientId = options.clientId ?? `runtime-${schema.id}`;
   const socket = new WebSocket(brokerUrl);
   session.socket = socket;
