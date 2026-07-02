@@ -16,6 +16,24 @@ The architectural core is the Runtime Inspector Protocol, not the panel: the web
 - **Hardened handshake**: protocol version enforcement plus a per-session token (embedded in the panel URL/QR) protecting patch-sending clients on the LAN.
 - **AI-agent client**: an MCP server (`runtime-inspector-mcp`) that connects as a panel-role client, so an agent can read the schema, patch values, and fire replays iteratively.
 
+## Declare controls in one hook
+
+`useInspector` infers a control kind from the shape of each spec value, builds the panel schema, and returns mutable handles — no manual `definePanel`/`bindSharedValue` wiring required:
+
+```ts
+const card = useInspector("card-transition", {
+  moveX: { value: 0, min: -120, max: 120, unit: "px" },
+  color: "#f5f7fb",
+  spring: { damping: 14, stiffness: 180 },
+  replay: () => runReplayAnimation()
+});
+
+// card.moveX, card.color, card.spring are SharedValue-like handles;
+// card.replay is the function itself, registered as a trigger.
+```
+
+The explicit API (`definePanel`, `bindSharedValue`, `bindValue`, `bindTrigger`, …) is still there underneath, for cases that need direct control over bindings or side effects.
+
 ## Packages
 
 - `@runtime-inspector/protocol`: TypeScript protocol types, Zod validation, shared value validation, conformance fixtures.

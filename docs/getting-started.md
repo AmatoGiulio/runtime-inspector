@@ -34,6 +34,45 @@ adb reverse tcp:4577 tcp:4577
 
 ## Runtime usage
 
+### `useInspector` (recommended)
+
+`useInspector` infers the control kind from the shape of each spec value and returns a mutable `SharedValue`-like handle per key — no manual schema, no manual bindings:
+
+```ts
+import { useInspector } from "@runtime-inspector/react-native";
+
+function Card() {
+  const card = useInspector("card-transition", {
+    scale: { value: 1, min: 0.8, max: 1.2, step: 0.01 }
+  });
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: card.scale.value }]
+  }));
+
+  // ...
+}
+```
+
+Spec value shape decides the control kind:
+
+| Spec value | Control |
+| --- | --- |
+| `{ value, min, max, step?, unit?, label? }` | slider |
+| `boolean` | toggle |
+| `string` | color |
+| `{ damping, stiffness, mass? }` | spring |
+| `[x1, y1, x2, y2]` (4 numbers) | bezier |
+| `() => void` | trigger |
+
+A bare `number` is rejected — sliders always need an explicit range. The control id and binding are the spec key; the label defaults to the key split into words (`moveX` → `"Move X"`), or the explicit `label` field.
+
+`useInspector` builds the schema and handles once (on mount) and connects/disconnects the panel session across the component's lifecycle, mirroring `definePanel(...).connect()` / `.disconnect()` under the hood.
+
+### Explicit API (advanced)
+
+For direct control over bindings, side effects triggered by patches, or wiring multiple schemas by hand, use the lower-level building blocks directly:
+
 ```ts
 import { bindSharedValue, definePanel, group, slider } from "@runtime-inspector/react-native";
 
@@ -63,3 +102,5 @@ const panel = definePanel({
 
 panel.connect();
 ```
+
+`useInspector` is sugar over exactly this API — reach for it when a binding needs a JS-side effect (e.g. re-running an animation, updating a ref) beyond writing directly to a `SharedValue`.

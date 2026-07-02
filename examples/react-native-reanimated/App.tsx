@@ -8,17 +8,7 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import {
-  bezier,
-  bindValue,
-  bindTrigger,
-  color,
-  definePanel,
-  group,
-  slider,
-  spring,
-  trigger
-} from "@runtime-inspector/react-native";
+import { bindTrigger, bindValue, useInspector } from "@runtime-inspector/react-native";
 
 type SpringConfig = {
   damping: number;
@@ -29,15 +19,7 @@ type SpringConfig = {
 type CubicBezier = [number, number, number, number];
 
 export default function App() {
-  const moveX = useSharedValue(0);
-  const rotate = useSharedValue(0);
-  const scale = useSharedValue(1);
   const glow = useSharedValue(10);
-  const opacity = useSharedValue(1);
-  const cardColor = useSharedValue("#f5f7fb");
-  const backdropScale = useSharedValue(1);
-  const backdropOpacity = useSharedValue(0.15);
-  const backdropColor = useSharedValue("#2a2f3a");
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const targetRef = useRef({
     moveX: 0,
@@ -54,264 +36,138 @@ export default function App() {
   });
   const easingRef = useRef<CubicBezier>([0.22, 1, 0.36, 1]);
 
+  // Placeholders - the spec functions below are re-bound with the real
+  // implementations in the effect once `card`/`backdrop` handles exist, the
+  // same way the explicit API's bindTrigger/bindValue calls used to run in
+  // a useEffect below.
+  const backdrop = useInspector(
+    "backdrop",
+    {
+      scale: { value: 1, min: 0.5, max: 3, step: 0.01, label: "Pattern scale" },
+      opacity: { value: 0.15, min: 0, max: 1, step: 0.01, label: "Backdrop opacity" },
+      color: "#2a2f3a",
+      replay: () => {}
+    },
+    { title: "Backdrop" }
+  );
+
+  const card = useInspector("card-transition", {
+    moveX: { value: 0, min: -120, max: 120, step: 1, unit: "px", label: "Move X" },
+    rotate: { value: 0, min: -18, max: 18, step: 1, unit: "deg", label: "Rotate" },
+    scale: { value: 1, min: 0.7, max: 1.35, step: 0.01, label: "Scale" },
+    opacity: { value: 1, min: 0, max: 1, step: 0.01, label: "Opacity" },
+    color: "#f5f7fb",
+    spring: {
+      damping: springConfigRef.current.damping,
+      stiffness: springConfigRef.current.stiffness,
+      mass: springConfigRef.current.mass,
+      label: "Replay return spring"
+    },
+    easing: easingRef.current,
+    replay: () => {}
+  });
+
   useEffect(() => {
     const replayTransition = () => {
       const easing = Easing.bezier(...easingRef.current);
-      moveX.value = withTiming(-110, { duration: 260, easing });
-      rotate.value = withTiming(-14, { duration: 260, easing });
-      scale.value = withTiming(0.82, { duration: 260, easing });
-      opacity.value = withTiming(0.62, { duration: 260, easing });
+      card.moveX.value = withTiming(-110, { duration: 260, easing });
+      card.rotate.value = withTiming(-14, { duration: 260, easing });
+      card.scale.value = withTiming(0.82, { duration: 260, easing });
+      card.opacity.value = withTiming(0.62, { duration: 260, easing });
 
       setTimeout(() => {
-        moveX.value = withSpring(targetRef.current.moveX, springConfigRef.current);
-        rotate.value = withSpring(targetRef.current.rotate, springConfigRef.current);
-        scale.value = withSpring(targetRef.current.scale, springConfigRef.current);
-        opacity.value = withSpring(targetRef.current.opacity, springConfigRef.current);
-        cardColor.value = targetRef.current.color;
+        card.moveX.value = withSpring(targetRef.current.moveX, springConfigRef.current);
+        card.rotate.value = withSpring(targetRef.current.rotate, springConfigRef.current);
+        card.scale.value = withSpring(targetRef.current.scale, springConfigRef.current);
+        card.opacity.value = withSpring(targetRef.current.opacity, springConfigRef.current);
+        card.color.value = targetRef.current.color;
       }, 220);
     };
 
+    // The value bindings are already registered by useInspector (via
+    // bindSharedValue), driving moveX/rotate/scale/opacity/color directly.
+    // These specific bindings additionally need a JS-side effect (updating
+    // targetRef, or scheduling a preview replay), so they're re-bound here
+    // with bindValue - the last registration for a given binding string wins.
     bindValue("card.moveX", (value) => {
       targetRef.current.moveX = value as number;
-      moveX.value = value as number;
+      card.moveX.value = value as number;
     });
     bindValue("card.rotate", (value) => {
       targetRef.current.rotate = value as number;
-      rotate.value = value as number;
+      card.rotate.value = value as number;
     });
     bindValue("card.scale", (value) => {
       targetRef.current.scale = value as number;
-      scale.value = value as number;
+      card.scale.value = value as number;
     });
-    
     bindValue("card.opacity", (value) => {
       targetRef.current.opacity = value as number;
-      opacity.value = value as number;
+      card.opacity.value = value as number;
     });
     bindValue("card.color", (value) => {
       targetRef.current.color = value as string;
-      cardColor.value = value as string;
+      card.color.value = value as string;
     });
     bindValue("card.spring", (value) => {
       springConfigRef.current = value as SpringConfig;
-
+      card.spring.value = value as SpringConfig;
       schedulePreview(replayTransition, previewTimerRef);
     });
     bindValue("card.easing", (value) => {
       easingRef.current = value as CubicBezier;
+      card.easing.value = value as CubicBezier;
       schedulePreview(replayTransition, previewTimerRef);
     });
     bindTrigger("card.replay", replayTransition);
 
     bindValue("backdrop.scale", (value) => {
-      backdropScale.value = value as number;
+      backdrop.scale.value = value as number;
     });
     bindValue("backdrop.opacity", (value) => {
-      backdropOpacity.value = value as number;
+      backdrop.opacity.value = value as number;
     });
     bindValue("backdrop.color", (value) => {
-      backdropColor.value = value as string;
+      backdrop.color.value = value as string;
     });
     bindTrigger("backdrop.replay", () => {
-      const current = backdropScale.value;
-      backdropScale.value = withSequence(
+      const current = backdrop.scale.value;
+      backdrop.scale.value = withSequence(
         withTiming(current * 1.25, { duration: 160 }),
         withSpring(current, { damping: 10, stiffness: 140 })
       );
     });
 
-    const brokerUrl = process.env.EXPO_PUBLIC_RI_BROKER_URL;
-
-    const backdropPanel = definePanel(
-      {
-        id: "backdrop",
-        title: "Backdrop",
-        version: "0.1.0",
-        groups: [
-          group({
-            id: "backdrop-controls",
-            label: "Backdrop controls",
-            controls: [
-              slider({
-                id: "scale",
-                label: "Pattern scale",
-                min: 0.5,
-                max: 3,
-                step: 0.01,
-                defaultValue: 1,
-                binding: "backdrop.scale"
-              }),
-              slider({
-                id: "opacity",
-                label: "Backdrop opacity",
-                min: 0,
-                max: 1,
-                step: 0.01,
-                defaultValue: 0.15,
-                binding: "backdrop.opacity"
-              }),
-              color({
-                id: "color",
-                label: "Backdrop color",
-                defaultValue: "#2a2f3a",
-                format: "hex",
-                binding: "backdrop.color"
-              }),
-              trigger({
-                id: "replay",
-                label: "Pulse",
-                binding: "backdrop.replay"
-              })
-            ]
-          })
-        ]
-      },
-      { brokerUrl }
-    );
-
-    backdropPanel.connect();
-
-    const panel = definePanel(
-      {
-        id: "card-transition",
-        title: "Card Transition",
-        version: "0.1.0",
-        groups: [
-          group({
-            id: "direct-controls",
-            label: "Live card controls",
-            controls: [
-              slider({
-                id: "moveX",
-                label: "Move X",
-                min: -120,
-                max: 120,
-                step: 1,
-                defaultValue: 0,
-                unit: "px",
-                binding: "card.moveX"
-              }),
-              slider({
-                id: "rotate",
-                label: "Rotate",
-                min: -18,
-                max: 18,
-                step: 1,
-                defaultValue: 0,
-                unit: "deg",
-                binding: "card.rotate"
-              }),
-              slider({
-                id: "scale",
-                label: "Scale",
-                min: 0.7,
-                max: 1.35,
-                step: 0.01,
-                defaultValue: 1,
-                binding: "card.scale"
-              }),
-              slider({
-                id: "opacity",
-                label: "Opacity",
-                min: 0,
-                max: 1,
-                step: 0.01,
-                defaultValue: 1,
-                binding: "card.opacity"
-              }),
-              color({
-                id: "color",
-                label: "Card color",
-                defaultValue: "#f5f7fb",
-                format: "hex",
-                binding: "card.color"
-              })
-            ]
-          }),
-          group({
-            id: "replay-tuning",
-            label: "Replay tuning",
-            description: "These controls change how the replay animation feels.",
-            controls: [
-              spring({
-                id: "spring",
-                label: "Replay return spring",
-                description: "Changing these values automatically replays the return motion.",
-                defaultValue: springConfigRef.current,
-                ranges: {
-                  damping: [4, 32],
-                  stiffness: [60, 320],
-                  mass: [0.4, 2.5]
-                },
-                binding: "card.spring"
-              }),
-              bezier({
-                id: "easing",
-                label: "Replay out easing",
-                description: "Changing this curve automatically replays the opening motion.",
-                defaultValue: easingRef.current,
-                presets: [
-                  { label: "Ease out", value: [0.22, 1, 0.36, 1] },
-                  { label: "Standard", value: [0.4, 0, 0.2, 1] }
-                ],
-                binding: "card.easing"
-              }),
-              trigger({
-                id: "replay",
-                label: "Replay transition",
-                description: "Run the demo transition from the panel.",
-                binding: "card.replay"
-              })
-            ]
-          })
-        ]
-      },
-      { brokerUrl }
-    );
-
-    panel.connect();
     return () => {
       if (previewTimerRef.current) {
         clearTimeout(previewTimerRef.current);
       }
-      panel.disconnect();
-      backdropPanel.disconnect();
     };
-  }, [
-    backdropColor,
-    backdropOpacity,
-    backdropScale,
-    cardColor,
-    glow,
-    moveX,
-    opacity,
-    rotate,
-    scale
-  ]);
+  }, [backdrop, card]);
 
   const cardStyle = useAnimatedStyle(() => ({
-    backgroundColor: cardColor.value,
-    opacity: opacity.value,
+    backgroundColor: card.color.value,
+    opacity: card.opacity.value,
     transform: [
-      { translateX: moveX.value },
-      { rotate: `${rotate.value}deg` },
-      { scale: scale.value }
+      { translateX: card.moveX.value },
+      { rotate: `${card.rotate.value}deg` },
+      { scale: card.scale.value }
     ]
   }));
 
   const glowStyle = useAnimatedStyle(() => ({
     opacity: Math.min(0.9, glow.value / 48),
     transform: [
-      { translateX: moveX.value },
-      { rotate: `${rotate.value}deg` },
+      { translateX: card.moveX.value },
+      { rotate: `${card.rotate.value}deg` },
       { scale: 1 + glow.value / 160 }
     ]
   }));
 
   const backdropStyle = useAnimatedStyle(() => ({
-    backgroundColor: backdropColor.value,
-    opacity: backdropOpacity.value,
-    transform: [{ rotate: "45deg" }, { scale: backdropScale.value }]
+    backgroundColor: backdrop.color.value,
+    opacity: backdrop.opacity.value,
+    transform: [{ rotate: "45deg" }, { scale: backdrop.scale.value }]
   }));
 
   return (

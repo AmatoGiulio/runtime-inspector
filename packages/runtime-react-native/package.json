@@ -12,6 +12,7 @@
     }
   },
   "peerDependencies": {
+    "react": ">=18",
     "react-native": ">=0.74",
     "react-native-reanimated": ">=3.0.0"
   },
@@ -24,7 +25,7 @@
     "@runtime-inspector/protocol": "workspace:*"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external react-native --external react-native-reanimated",
+    "build": "tsup src/index.ts --format esm --dts --external react --external react-native --external react-native-reanimated",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
+    "react": "18.3.1",
     "tsup": "^8.3.5",
     "vitest": "^4.1.9"
   }

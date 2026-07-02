@@ -264,6 +264,15 @@ export function applyBatchPatch(batch: BatchPatch) {
 
 export type { CubicBezier, PanelSchema, SpringValue };
 
+export { useInspector, buildInspector, deriveLabel } from "./use-inspector";
+export type {
+  InspectorSpec,
+  InspectorSpecEntry,
+  InspectorHandles,
+  SliderSpecEntry,
+  SpringSpecEntry
+} from "./use-inspector";
+
 function connectRuntime(session: Session) {
   if (
     session.socket?.readyState === WebSocket.OPEN ||
