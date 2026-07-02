@@ -40,7 +40,8 @@ if (lanAddress) {
 console.log(`Runtime Inspector panel local:  ${localPanelUrl}`);
 if (lanPanelUrl) {
   console.log(`Runtime Inspector panel LAN:    ${lanPanelUrl}`);
-  console.log(`React Native device env:        EXPO_PUBLIC_RI_BROKER_URL=${lanBrokerUrl}`);
+  console.log(`React Native devices auto-discover the broker via Metro (zero config).`);
+  console.log(`Override if needed:            EXPO_PUBLIC_RI_BROKER_URL=${lanBrokerUrl}`);
   qrcode.generate(lanPanelUrl, { small: true });
 }
 

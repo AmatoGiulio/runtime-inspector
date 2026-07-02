@@ -16,6 +16,7 @@ import {
   type TriggerControl,
   isValueControl
 } from "@runtime-inspector/protocol";
+import { getBrokerCandidates } from "./discovery";
 
 declare const __DEV__: boolean | undefined;
 
@@ -40,6 +41,40 @@ let socket: WebSocket | undefined;
 let activeSchema: PanelSchema | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let shouldReconnect = false;
+let candidateIndex = 0;
+let lockedUrl: string | undefined;
+
+interface MinimalNativeModules {
+  SourceCode?: {
+    getConstants?: () => { scriptURL?: string };
+    scriptURL?: string;
+  };
+}
+
+interface MinimalPlatform {
+  OS?: string;
+}
+
+function getScriptUrl(): string | undefined {
+  try {
+    const { NativeModules } = require("react-native") as { NativeModules?: MinimalNativeModules };
+    return (
+      NativeModules?.SourceCode?.getConstants?.().scriptURL ??
+      NativeModules?.SourceCode?.scriptURL
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function getPlatformOs(): string | undefined {
+  try {
+    const { Platform } = require("react-native") as { Platform?: MinimalPlatform };
+    return Platform?.OS;
+  } catch {
+    return undefined;
+  }
+}
 
 export function slider(config: Omit<SliderControl, "kind">): SliderControl {
   return { ...config, kind: "slider" };
@@ -165,11 +200,21 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
   }
 
   shouldReconnect = options.reconnect ?? true;
-  const brokerUrl = options.brokerUrl ?? "ws://127.0.0.1:4577";
+  const candidates = options.brokerUrl
+    ? [options.brokerUrl]
+    : getBrokerCandidates({
+        scriptUrl: getScriptUrl(),
+        platform: getPlatformOs(),
+        defaultPort: 4577
+      });
+  const brokerUrl = lockedUrl ?? candidates[candidateIndex % candidates.length];
   const clientId = options.clientId ?? `runtime-${schema.id}`;
   socket = new WebSocket(brokerUrl);
+  let didOpen = false;
 
   socket.onopen = () => {
+    didOpen = true;
+    lockedUrl = brokerUrl;
     socket?.send(
       JSON.stringify({
         type: "handshake.hello",
@@ -196,6 +241,9 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
 
   socket.onclose = () => {
     socket = undefined;
+    if (!didOpen && !lockedUrl) {
+      candidateIndex += 1;
+    }
     scheduleReconnect(schema, options);
   };
 
@@ -227,15 +275,21 @@ function disconnectRuntime() {
   }
   socket?.close();
   socket = undefined;
+  candidateIndex = 0;
+  lockedUrl = undefined;
 }
 
 function scheduleReconnect(schema: PanelSchema, options: RuntimeInspectorOptions) {
   if (!shouldReconnect || reconnectTimer) return;
 
+  const delay = lockedUrl
+    ? options.reconnectDelayMs ?? 1000
+    : Math.min(options.reconnectDelayMs ?? 1000, 250);
+
   reconnectTimer = setTimeout(() => {
     reconnectTimer = undefined;
     connectRuntime(schema, options);
-  }, options.reconnectDelayMs ?? 1000);
+  }, delay);
 }
 
 function findControl(schema: PanelSchema, controlId: string): InspectorControl | undefined {

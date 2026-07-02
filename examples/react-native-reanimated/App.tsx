@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -104,7 +104,7 @@ export default function App() {
     });
     bindTrigger("card.replay", replayTransition);
 
-    const brokerUrl = getBrokerUrl();
+    const brokerUrl = process.env.EXPO_PUBLIC_RI_BROKER_URL;
 
     const panel = definePanel(
       {
@@ -317,14 +317,6 @@ const styles = StyleSheet.create({
     marginTop: 12
   }
 });
-
-function getBrokerUrl() {
-  if (process.env.EXPO_PUBLIC_RI_BROKER_URL) {
-    return process.env.EXPO_PUBLIC_RI_BROKER_URL;
-  }
-
-  return Platform.OS === "android" ? "ws://10.0.2.2:4577" : "ws://127.0.0.1:4577";
-}
 
 function schedulePreview(
   replayTransition: () => void,
