@@ -94,6 +94,7 @@ The first milestone is a stable declarative protocol and a working local loop th
 - [Vision](docs/vision.md)
 - [Architecture](docs/architecture.md)
 - [Protocol](docs/protocol.md)
+- [Protocol stability policy](docs/protocol-stability.md)
 - [Getting started](docs/getting-started.md)
 - [MVP roadmap](docs/mvp-roadmap.md)
 

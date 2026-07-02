@@ -28,7 +28,7 @@ Se il protocollo è disegnato bene, il broker WebSocket e il panel web sono dett
 
 - **Panel web** (oggi): il client di riferimento.
 - **Plugin React Native DevTools via Rozenite** (poi): distribuzione dentro l'ecosistema DevTools ufficiale, senza finestre o server extra. È la prova concreta della tesi "protocol-first, panel intercambiabili".
-- **Agenti AI** (poi): un protocollo dichiarativo e tipizzato è perfetto per un agente. Un client MCP può connettersi al broker come "panel" e fare tuning iterativo (cambia parametri → osserva → ripeti) o applicare un motion-language coerente a tutta l'app. Il broker non distingue chi manda i patch: un agente è solo un client in più.
+- **Agenti AI** (oggi, `packages/client-mcp`): un protocollo dichiarativo e tipizzato è perfetto per un agente. Il client MCP si connette al broker come "panel" e fa tuning iterativo (cambia parametri → osserva → ripeti). Il broker non distingue chi manda i patch: un agente è solo un client in più — tesi già dimostrata dal vivo.
 
 ## Primo obiettivo
 

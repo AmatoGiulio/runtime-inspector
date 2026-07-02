@@ -49,4 +49,5 @@ Ordered by impact:
 - Native module path if JS transport becomes limiting.
 - Recording and timeline tools.
 - Plugin system only after the core protocol proves stable.
+- Future protocol extensions may introduce hierarchical control addressing (`control.path`) if required by real-world schemas — see docs/protocol-stability.md.
 - Designer↔dev remote collaboration (tunnel) as a possible paid product — explicitly out of scope this summer.
