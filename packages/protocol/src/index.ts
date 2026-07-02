@@ -338,6 +338,46 @@ export function parseRIPMessage(input: unknown): RIPMessage {
   return RIPMessageSchema.parse(input) as RIPMessage;
 }
 
+export function safeParseRIPMessage(data: unknown): RIPMessage | undefined {
+  try {
+    const raw = typeof data === "string" ? data : String(data);
+    return parseRIPMessage(JSON.parse(raw));
+  } catch {
+    return undefined;
+  }
+}
+
+export function isValidControlValue(control: InspectorControl, value: unknown): boolean {
+  switch (control.kind) {
+    case "slider":
+      return typeof value === "number" && Number.isFinite(value);
+    case "toggle":
+      return typeof value === "boolean";
+    case "color":
+      return typeof value === "string";
+    case "bezier":
+      return (
+        CubicBezierSchema.safeParse(value).success &&
+        Array.isArray(value) &&
+        value.every((part) => Number.isFinite(part))
+      );
+    case "spring": {
+      const parsed = SpringValueSchema.safeParse(value);
+      if (!parsed.success) return false;
+      const { damping, stiffness, mass } = parsed.data;
+      return (
+        Number.isFinite(damping) &&
+        Number.isFinite(stiffness) &&
+        (mass === undefined || Number.isFinite(mass))
+      );
+    }
+    case "trigger":
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function createPatch(
   schemaId: string,
   controlId: string,
