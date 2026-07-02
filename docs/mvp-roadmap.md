@@ -22,7 +22,7 @@ Ordered by impact:
 4. **Copy as code.** Implemented: the panel exports current values as paste-ready TypeScript and emits Reanimated-oriented snippets for spring and bezier controls.
 5. **Trigger control.** First pass implemented: a `trigger` control kind invokes a callback registered in the runtime, so a full tuning session can happen from the desktop without touching the device.
 6. **Patch throttling** on high-frequency controls. First pass implemented for sliders in the web panel; values update immediately in UI while WebSocket patches are capped during drag and flushed on release.
-7. Runtime-side Zod validation of incoming messages. Done: the runtime SDK parses incoming broker messages with the shared protocol validator and ignores invalid payloads instead of crashing the app.
+7. Runtime-side validation. Done: the runtime SDK parses incoming broker messages with the shared protocol validator and rejects patch values that do not match the declared control kind.
 8. Better panel control state and error display. First pass implemented: the panel surfaces reconnect and invalid-message notices, validates incoming protocol messages, and syncs external batch patches.
 
 ## Phase 3: richer tuning (July/August)

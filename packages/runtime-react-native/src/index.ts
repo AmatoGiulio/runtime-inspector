@@ -125,6 +125,12 @@ export function applyControlPatch(patch: ControlPatch) {
   }
 
   if (!isValueControl(control)) return;
+  if (!isPatchValueValid(control, patch.value)) {
+    warnDev(
+      `Ignoring invalid value for ${control.kind} control "${control.id}".`
+    );
+    return;
+  }
 
   control.value = patch.value as never;
   const bindingId = control.binding ?? control.id;
@@ -238,6 +244,49 @@ function findControl(schema: PanelSchema, controlId: string): InspectorControl |
     if (control) return control;
   }
   return undefined;
+}
+
+function isPatchValueValid(control: InspectorControl, value: unknown) {
+  switch (control.kind) {
+    case "slider":
+      return typeof value === "number" && Number.isFinite(value);
+    case "toggle":
+      return typeof value === "boolean";
+    case "color":
+      return typeof value === "string";
+    case "bezier":
+      return (
+        Array.isArray(value) &&
+        value.length === 4 &&
+        value.every((part) => typeof part === "number" && Number.isFinite(part))
+      );
+    case "spring":
+      return isSpringPatchValue(value);
+    case "trigger":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isSpringPatchValue(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as Partial<SpringValue>;
+  return (
+    typeof candidate.damping === "number" &&
+    Number.isFinite(candidate.damping) &&
+    typeof candidate.stiffness === "number" &&
+    Number.isFinite(candidate.stiffness) &&
+    (candidate.mass === undefined ||
+      (typeof candidate.mass === "number" && Number.isFinite(candidate.mass)))
+  );
+}
+
+function warnDev(message: string) {
+  if (isDev()) {
+    console.warn(`[Runtime Inspector] ${message}`);
+  }
 }
 
 function isDev() {
