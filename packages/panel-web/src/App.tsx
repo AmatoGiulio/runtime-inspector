@@ -25,6 +25,11 @@ type PendingPatch = {
   lastSentAt: number;
 };
 type CompareSlot = "A" | "B";
+type LastPatch = {
+  controlId: string;
+  label: string;
+  at: string;
+};
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 const sliderThrottleMs = 50;
@@ -36,6 +41,7 @@ function App() {
   const [compare, setCompare] = useState<Partial<Record<CompareSlot, Record<string, unknown>>>>({});
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string>();
+  const [lastPatch, setLastPatch] = useState<LastPatch>();
   const socketRef = useRef<WebSocket | null>(null);
   const pendingPatchesRef = useRef(new Map<string, PendingPatch>());
 
@@ -137,6 +143,20 @@ function App() {
     return createTypeScriptPreset(schema, values);
   }, [schema, values]);
 
+  const controlStats = useMemo(() => {
+    if (!schema) return { advanced: 0, live: 0 };
+    return schema.groups.reduce(
+      (stats, controlGroup) => {
+        const isAdvanced = controlGroup.id.includes("replay");
+        return {
+          advanced: stats.advanced + (isAdvanced ? controlGroup.controls.length : 0),
+          live: stats.live + (isAdvanced ? 0 : controlGroup.controls.length)
+        };
+      },
+      { advanced: 0, live: 0 }
+    );
+  }, [schema]);
+
   function updateValue(control: InspectorControl, value: unknown) {
     if (!schema) return;
     if (isValueControl(control)) {
@@ -145,12 +165,14 @@ function App() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(createPatch(schema.id, control.id, value)));
     }
+    markPatch(control);
   }
 
   function updateSliderValue(control: SliderControl, value: number) {
     if (!schema) return;
     setValues((current) => ({ ...current, [control.id]: value }));
     sendPatchThrottled(schema.id, control.id, value, socketRef, pendingPatchesRef);
+    markPatch(control);
   }
 
   function flushControl(controlId: string) {
@@ -184,6 +206,19 @@ function App() {
         sendPatch(schema.id, replayTrigger.id, Date.now(), socketRef);
       }, 80);
     }
+    setLastPatch({
+      controlId: `compare-${slot}`,
+      label: `Applied ${slot}`,
+      at: formatTime(new Date())
+    });
+  }
+
+  function markPatch(control: InspectorControl) {
+    setLastPatch({
+      controlId: control.id,
+      label: control.label,
+      at: formatTime(new Date())
+    });
   }
 
   return (
@@ -193,7 +228,17 @@ function App() {
           <h1>Runtime Inspector</h1>
           <p>{notice ?? (schema ? schema.title : "Waiting for runtime schema")}</p>
         </div>
-        <span className={`status ${status}`}>{status}</span>
+        <div className="topbarMeta">
+          {schema ? (
+            <span className="metaText">
+              {controlStats.live} live / {controlStats.advanced} replay
+            </span>
+          ) : null}
+          {lastPatch ? (
+            <span className="metaText">Last patch: {lastPatch.label} {lastPatch.at}</span>
+          ) : null}
+          <span className={`status ${status}`}>{status}</span>
+        </div>
       </header>
 
       {!schema ? (
@@ -207,7 +252,12 @@ function App() {
             {schema.groups.map((controlGroup) => (
               <section className="group" key={controlGroup.id}>
                 <div className="groupHeader">
-                  <h2>{controlGroup.label}</h2>
+                  <div className="groupTitleRow">
+                    <h2>{controlGroup.label}</h2>
+                    <span className={`groupBadge ${controlGroup.id.includes("replay") ? "replay" : "live"}`}>
+                      {controlGroup.id.includes("replay") ? "Replay" : "Live"}
+                    </span>
+                  </div>
                   {controlGroup.description ? <p>{controlGroup.description}</p> : null}
                 </div>
                 <div className="controls">
@@ -611,6 +661,14 @@ function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
 }
 
 function sendPatchThrottled(

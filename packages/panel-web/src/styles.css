@@ -28,6 +28,7 @@ input {
   align-items: center;
   border-bottom: 1px solid #2b2e36;
   display: flex;
+  gap: 16px;
   justify-content: space-between;
   padding: 16px 20px;
 }
@@ -47,6 +48,19 @@ h1 {
   color: #9da3af;
   font-size: 12px;
   margin-top: 4px;
+}
+
+.topbarMeta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.metaText {
+  color: #8f97a6;
+  font-size: 12px;
 }
 
 .status {
@@ -87,6 +101,31 @@ h1 {
   border-bottom: 1px solid #2b2e36;
   margin-bottom: 12px;
   padding-bottom: 10px;
+}
+
+.groupTitleRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.groupBadge {
+  border: 1px solid #3a3e49;
+  border-radius: 999px;
+  color: #aeb4bf;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.groupBadge.live {
+  border-color: #236e50;
+  color: #62d49d;
+}
+
+.groupBadge.replay {
+  border-color: #665431;
+  color: #f0c66a;
 }
 
 .groupHeader h2,
