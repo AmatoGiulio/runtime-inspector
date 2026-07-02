@@ -178,6 +178,12 @@ function App() {
 
     setValues(snapshot);
     sendBatchPatch(schema.id, snapshot, socketRef);
+    const replayTrigger = findReplayTrigger(schema);
+    if (replayTrigger) {
+      window.setTimeout(() => {
+        sendPatch(schema.id, replayTrigger.id, Date.now(), socketRef);
+      }, 80);
+    }
   }
 
   return (
@@ -703,6 +709,17 @@ function sendBatchPatch(
       }))
     })
   );
+}
+
+function findReplayTrigger(schema: PanelSchema) {
+  return schema.groups
+    .flatMap((controlGroup) => controlGroup.controls)
+    .find(
+      (control): control is TriggerControl =>
+        control.kind === "trigger" &&
+        (control.id.toLowerCase().includes("replay") ||
+          Boolean(control.binding?.toLowerCase().includes("replay")))
+    );
 }
 
 function createTypeScriptPreset(schema: PanelSchema, values: Record<string, unknown>) {
