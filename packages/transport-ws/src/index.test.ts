@@ -57,6 +57,126 @@ describe("Runtime Inspector WebSocket broker", () => {
   });
 });
 
+describe("Runtime Inspector protocol version enforcement", () => {
+  it("rejects a mismatched protocol version and disconnects the socket", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string; code?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.1",
+        role: "panel",
+        clientId: "panel-old"
+      })
+    );
+
+    await closed;
+
+    expect(messages.some((message) => message.type === "error" && message.code === "VERSION_MISMATCH")).toBe(
+      true
+    );
+  });
+
+  it("accepts a correct-version hello", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.2",
+        role: "runtime",
+        clientId: "runtime-ok"
+      })
+    );
+
+    await wait(50);
+    socket.close();
+
+    expect(messages.some((message) => message.type === "handshake.accept")).toBe(true);
+  });
+});
+
+describe("Runtime Inspector panel token enforcement", () => {
+  it("rejects a panel hello without a token when the broker requires one", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string; code?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.2",
+        role: "panel",
+        clientId: "panel-no-token"
+      })
+    );
+
+    await closed;
+
+    expect(messages.some((message) => message.type === "error" && message.code === "UNAUTHORIZED")).toBe(
+      true
+    );
+  });
+
+  it("accepts a panel hello with the correct token", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.2",
+        role: "panel",
+        clientId: "panel-token",
+        token: "secret"
+      })
+    );
+
+    await wait(50);
+    socket.close();
+
+    expect(messages.some((message) => message.type === "handshake.accept")).toBe(true);
+  });
+
+  it("accepts a runtime hello without a token even when the broker requires one for panels", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.2",
+        role: "runtime",
+        clientId: "runtime-no-token"
+      })
+    );
+
+    await wait(50);
+    socket.close();
+
+    expect(messages.some((message) => message.type === "handshake.accept")).toBe(true);
+  });
+});
+
 function openSocket(url: string) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(url);

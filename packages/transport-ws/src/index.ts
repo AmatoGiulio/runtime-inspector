@@ -12,6 +12,7 @@ import {
 export interface BrokerOptions {
   port?: number;
   host?: string;
+  token?: string;
 }
 
 interface ClientRecord {
@@ -30,6 +31,7 @@ export interface RuntimeInspectorBroker {
 export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker {
   const port = options.port ?? Number(process.env.RUNTIME_INSPECTOR_PORT ?? 4577);
   const host = options.host ?? "127.0.0.1";
+  const token = options.token;
   const brokerId = `broker-${randomUUID()}`;
   const server = new WebSocketServer({ host, port });
   const clients = new Map<WebSocket, ClientRecord>();
@@ -58,6 +60,26 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
       }
 
       if (message.type === "handshake.hello") {
+        if (message.protocolVersion !== RIP_VERSION) {
+          send(socket, {
+            type: "error",
+            code: "VERSION_MISMATCH",
+            message: `Protocol version mismatch: client sent "${message.protocolVersion}", broker expects "${RIP_VERSION}".`
+          });
+          socket.close();
+          return;
+        }
+
+        if (token && message.role === "panel" && message.token !== token) {
+          send(socket, {
+            type: "error",
+            code: "UNAUTHORIZED",
+            message: "Missing or invalid panel token."
+          });
+          socket.close();
+          return;
+        }
+
         record.role = message.role;
         record.id = message.clientId;
         const accept: HandshakeAccept = {

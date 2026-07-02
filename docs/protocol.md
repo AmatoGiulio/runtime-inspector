@@ -17,6 +17,14 @@ Clients identify as `runtime` or `panel`.
 
 The broker responds with `handshake.accept`.
 
+### Version enforcement
+
+The broker rejects a `handshake.hello` whose `protocolVersion` does not match the broker's `RIP_VERSION`. It sends an `error` message with code `VERSION_MISMATCH` (including both versions in the human-readable `message`) and then closes the socket without registering the client.
+
+### Panel token
+
+`handshake.hello` accepts an optional `token` field. When the broker is started with a `token` (dev-grade protection for LAN use), any `panel`-role hello must include a matching `token` or the broker responds with an `error` message (code `UNAUTHORIZED`) and closes the socket. The `runtime` role is never token-checked, so devices stay zero-config.
+
 ## Schema
 
 The runtime publishes a `PanelSchema`.

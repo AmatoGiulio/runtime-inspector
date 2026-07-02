@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 import { createServer } from "node:net";
+import { randomBytes } from "node:crypto";
 import { execa } from "execa";
 import qrcode from "qrcode-terminal";
 import { startBroker } from "@runtime-inspector/transport-ws";
@@ -19,11 +20,12 @@ const requestedPanelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 45
 const brokerPort = await findAvailablePort(requestedBrokerPort);
 const panelPort = await findAvailablePort(requestedPanelPort);
 const lanAddress = getLanAddress();
-const broker = startBroker({ host: "0.0.0.0", port: brokerPort });
+const token = randomBytes(4).toString("hex");
+const broker = startBroker({ host: "0.0.0.0", port: brokerPort, token });
 const cliDir = dirname(fileURLToPath(import.meta.url));
 const panelDir = resolve(cliDir, "../../panel-web");
-const localPanelUrl = `http://127.0.0.1:${panelPort}`;
-const lanPanelUrl = lanAddress ? `http://${lanAddress}:${panelPort}` : undefined;
+const localPanelUrl = `http://127.0.0.1:${panelPort}?token=${token}`;
+const lanPanelUrl = lanAddress ? `http://${lanAddress}:${panelPort}?token=${token}` : undefined;
 const localBrokerUrl = `ws://127.0.0.1:${broker.port}`;
 const lanBrokerUrl = lanAddress ? `ws://${lanAddress}:${broker.port}` : localBrokerUrl;
 
@@ -51,7 +53,8 @@ const panel = execa("pnpm", ["dev"], {
   env: {
     ...process.env,
     VITE_RI_BROKER_URL: lanBrokerUrl,
-    VITE_RI_PANEL_PORT: String(panelPort)
+    VITE_RI_PANEL_PORT: String(panelPort),
+    VITE_RI_TOKEN: token
   }
 });
 

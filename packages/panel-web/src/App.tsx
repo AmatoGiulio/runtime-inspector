@@ -34,6 +34,8 @@ type LastPatch = {
 };
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
+const panelToken =
+  new URLSearchParams(window.location.search).get("token") ?? import.meta.env.VITE_RI_TOKEN;
 const sliderThrottleMs = 50;
 
 function App() {
@@ -50,6 +52,7 @@ function App() {
   useEffect(() => {
     let reconnectTimer: number | undefined;
     let closedByReact = false;
+    let stopReconnecting = false;
 
     const connect = () => {
       setStatus("connecting");
@@ -65,7 +68,8 @@ function App() {
             protocolVersion: RIP_VERSION,
             role: "panel",
             clientId: "panel-web",
-            clientName: "Runtime Inspector Web Panel"
+            clientName: "Runtime Inspector Web Panel",
+            token: panelToken
           })
         );
       };
@@ -75,8 +79,10 @@ function App() {
           socketRef.current = null;
         }
         setStatus("disconnected");
-        setNotice("Broker disconnected. Reconnecting...");
-        if (!closedByReact) {
+        if (!stopReconnecting) {
+          setNotice("Broker disconnected. Reconnecting...");
+        }
+        if (!closedByReact && !stopReconnecting) {
           reconnectTimer = window.setTimeout(connect, 1000);
         }
       };
@@ -109,6 +115,11 @@ function App() {
               message.patches.map((patch) => [patch.controlId, patch.value])
             )
           }));
+        }
+        if (message.type === "error" && message.code === "UNAUTHORIZED") {
+          stopReconnecting = true;
+          setNotice("Broker rejected this panel: missing or wrong token.");
+          socket.close();
         }
       };
     };

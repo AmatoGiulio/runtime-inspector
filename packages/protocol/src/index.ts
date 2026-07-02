@@ -12,6 +12,7 @@ export interface HandshakeHello {
   role: RIPRole;
   clientId: string;
   clientName?: string;
+  token?: string;
 }
 
 export interface HandshakeAccept {
@@ -161,7 +162,8 @@ export const HandshakeHelloSchema = z.object({
   protocolVersion: z.string(),
   role: roleSchema,
   clientId: z.string().min(1),
-  clientName: z.string().optional()
+  clientName: z.string().optional(),
+  token: z.string().optional()
 });
 
 export const HandshakeAcceptSchema = z.object({
