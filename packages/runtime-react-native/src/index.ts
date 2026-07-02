@@ -11,7 +11,9 @@ import {
   type SliderControl,
   type SpringControl,
   type SpringValue,
-  type ToggleControl
+  type ToggleControl,
+  type TriggerControl,
+  isValueControl
 } from "@runtime-inspector/protocol";
 
 declare const __DEV__: boolean | undefined;
@@ -20,6 +22,8 @@ export interface RuntimeInspectorOptions {
   brokerUrl?: string;
   clientId?: string;
   clientName?: string;
+  reconnect?: boolean;
+  reconnectDelayMs?: number;
 }
 
 export interface SharedValueLike<T> {
@@ -31,6 +35,8 @@ type BindingTarget = SharedValueLike<unknown> | ((value: unknown) => void);
 const bindingRegistry = new Map<string, BindingTarget>();
 let socket: WebSocket | undefined;
 let activeSchema: PanelSchema | undefined;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let shouldReconnect = false;
 
 export function slider(config: Omit<SliderControl, "kind">): SliderControl {
   return { ...config, kind: "slider" };
@@ -52,6 +58,10 @@ export function spring(config: Omit<SpringControl, "kind">): SpringControl {
   return { ...config, kind: "spring" };
 }
 
+export function trigger(config: Omit<TriggerControl, "kind">): TriggerControl {
+  return { ...config, kind: "trigger" };
+}
+
 export function group(config: {
   id: string;
   label: string;
@@ -66,7 +76,7 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
 
   for (const controlGroup of schema.groups) {
     for (const control of controlGroup.controls) {
-      if (control.binding && control.value === undefined) {
+      if (control.kind !== "trigger" && control.binding && control.value === undefined) {
         control.value = control.defaultValue as never;
       }
     }
@@ -99,7 +109,7 @@ export function applyControlPatch(patch: ControlPatch) {
   if (!activeSchema || patch.schemaId !== activeSchema.id) return;
 
   const control = findControl(activeSchema, patch.controlId);
-  if (!control) return;
+  if (!control || !isValueControl(control)) return;
 
   control.value = patch.value as never;
   const bindingId = control.binding ?? control.id;
@@ -129,8 +139,11 @@ export function applyBatchPatch(batch: BatchPatch) {
 export type { CubicBezier, PanelSchema, SpringValue };
 
 function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
-  if (socket?.readyState === WebSocket.OPEN) return;
+  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+    return;
+  }
 
+  shouldReconnect = options.reconnect ?? true;
   const brokerUrl = options.brokerUrl ?? "ws://127.0.0.1:4577";
   const clientId = options.clientId ?? `runtime-${schema.id}`;
   socket = new WebSocket(brokerUrl);
@@ -157,11 +170,34 @@ function connectRuntime(schema: PanelSchema, options: RuntimeInspectorOptions) {
       applyBatchPatch(message);
     }
   };
+
+  socket.onclose = () => {
+    socket = undefined;
+    scheduleReconnect(schema, options);
+  };
+
+  socket.onerror = () => {
+    socket?.close();
+  };
 }
 
 function disconnectRuntime() {
+  shouldReconnect = false;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+  }
   socket?.close();
   socket = undefined;
+}
+
+function scheduleReconnect(schema: PanelSchema, options: RuntimeInspectorOptions) {
+  if (!shouldReconnect || reconnectTimer) return;
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined;
+    connectRuntime(schema, options);
+  }, options.reconnectDelayMs ?? 1000);
 }
 
 function findControl(schema: PanelSchema, controlId: string): InspectorControl | undefined {

@@ -3,5 +3,8 @@ packages:
   - "examples/*"
 onlyBuiltDependencies:
   - esbuild
+publicHoistPattern:
+  - "*eslint*"
+  - "*prettier*"
 allowBuilds:
   esbuild: true

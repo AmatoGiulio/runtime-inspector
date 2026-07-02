@@ -13,6 +13,7 @@
     "clean": "rm -rf .expo"
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.7",
     "@runtime-inspector/react-native": "workspace:*",
     "expo": "^52.0.0",
     "expo-blur": "~14.0.1",

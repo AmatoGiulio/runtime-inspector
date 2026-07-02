@@ -20,6 +20,9 @@ importers:
 
   examples/react-native-reanimated:
     dependencies:
+      '@babel/runtime':
+        specifier: ^7.29.7
+        version: 7.29.7
       '@runtime-inspector/react-native':
         specifier: workspace:*
         version: link:../../packages/runtime-react-native

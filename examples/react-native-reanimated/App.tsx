@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import {
   bindSharedValue,
@@ -18,47 +18,53 @@ export default function App() {
     bindSharedValue("card.blur", blur);
     bindSharedValue("card.opacity", opacity);
 
-    const panel = definePanel({
-      id: "card-transition",
-      title: "Card Transition",
-      version: "0.1.0",
-      groups: [
-        group({
-          id: "motion",
-          label: "Motion",
-          controls: [
-            slider({
-              id: "scale",
-              label: "Scale",
-              min: 0.8,
-              max: 1.2,
-              step: 0.01,
-              defaultValue: 1,
-              binding: "card.scale"
-            }),
-            slider({
-              id: "blur",
-              label: "Blur",
-              min: 0,
-              max: 32,
-              step: 1,
-              defaultValue: 0,
-              unit: "px",
-              binding: "card.blur"
-            }),
-            slider({
-              id: "opacity",
-              label: "Opacity",
-              min: 0,
-              max: 1,
-              step: 0.01,
-              defaultValue: 1,
-              binding: "card.opacity"
-            })
-          ]
-        })
-      ]
-    });
+    const brokerUrl =
+      Platform.OS === "android" ? "ws://10.0.2.2:4577" : "ws://127.0.0.1:4577";
+
+    const panel = definePanel(
+      {
+        id: "card-transition",
+        title: "Card Transition",
+        version: "0.1.0",
+        groups: [
+          group({
+            id: "motion",
+            label: "Motion",
+            controls: [
+              slider({
+                id: "scale",
+                label: "Scale",
+                min: 0.8,
+                max: 1.2,
+                step: 0.01,
+                defaultValue: 1,
+                binding: "card.scale"
+              }),
+              slider({
+                id: "blur",
+                label: "Blur",
+                min: 0,
+                max: 32,
+                step: 1,
+                defaultValue: 0,
+                unit: "px",
+                binding: "card.blur"
+              }),
+              slider({
+                id: "opacity",
+                label: "Opacity",
+                min: 0,
+                max: 1,
+                step: 0.01,
+                defaultValue: 1,
+                binding: "card.opacity"
+              })
+            ]
+          })
+        ]
+      },
+      { brokerUrl }
+    );
 
     panel.connect();
     return panel.disconnect;

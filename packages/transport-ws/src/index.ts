@@ -4,6 +4,7 @@ import {
   HandshakeAccept,
   parseRIPMessage,
   RIP_VERSION,
+  type SchemaMessage,
   type RIPMessage,
   type RIPRole
 } from "@runtime-inspector/protocol";
@@ -32,6 +33,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
   const brokerId = `broker-${randomUUID()}`;
   const server = new WebSocketServer({ host, port });
   const clients = new Map<WebSocket, ClientRecord>();
+  const schemasByRuntime = new Map<string, SchemaMessage>();
 
   server.on("connection", (socket) => {
     const record: ClientRecord = {
@@ -65,7 +67,17 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
           clientId: message.clientId
         };
         send(socket, accept);
+        if (message.role === "panel") {
+          replaySchemas(socket, schemasByRuntime);
+        }
+        if (message.role === "runtime") {
+          broadcastRuntimeStatus(clients, record, true);
+        }
         return;
+      }
+
+      if (message.type === "schema.publish" && record.role === "runtime") {
+        schemasByRuntime.set(record.id, message);
       }
 
       forwardToOppositeRole(clients, record, message);
@@ -73,6 +85,10 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
 
     socket.on("close", () => {
       clients.delete(socket);
+      if (record.role === "runtime") {
+        schemasByRuntime.delete(record.id);
+        broadcastRuntimeStatus(clients, record, false);
+      }
     });
   });
 
@@ -88,6 +104,30 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         server.close((error) => (error ? reject(error) : resolve()));
       })
   };
+}
+
+function replaySchemas(
+  socket: WebSocket,
+  schemasByRuntime: Map<string, SchemaMessage>
+) {
+  for (const schemaMessage of schemasByRuntime.values()) {
+    send(socket, schemaMessage);
+  }
+}
+
+function broadcastRuntimeStatus(
+  clients: Map<WebSocket, ClientRecord>,
+  runtime: ClientRecord,
+  online: boolean
+) {
+  for (const target of clients.values()) {
+    if (target.role !== "panel") continue;
+    send(target.socket, {
+      type: "runtime.status",
+      online,
+      clientId: runtime.id
+    });
+  }
 }
 
 function forwardToOppositeRole(

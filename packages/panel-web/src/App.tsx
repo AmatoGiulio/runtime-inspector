@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   RIP_VERSION,
   createPatch,
+  isValueControl,
   type ColorControl,
   type InspectorControl,
   type PanelSchema,
@@ -12,6 +13,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
+const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 
 function App() {
   const [status, setStatus] = useState<ConnectionState>("connecting");
@@ -20,36 +22,62 @@ function App() {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    const socket = new WebSocket(import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577");
-    socketRef.current = socket;
+    let reconnectTimer: number | undefined;
+    let closedByReact = false;
 
-    socket.onopen = () => {
-      setStatus("connected");
-      socket.send(
-        JSON.stringify({
-          type: "handshake.hello",
-          protocolVersion: RIP_VERSION,
-          role: "panel",
-          clientId: "panel-web",
-          clientName: "Runtime Inspector Web Panel"
-        })
-      );
+    const connect = () => {
+      setStatus("connecting");
+      const socket = new WebSocket(brokerUrl);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        setStatus("connected");
+        socket.send(
+          JSON.stringify({
+            type: "handshake.hello",
+            protocolVersion: RIP_VERSION,
+            role: "panel",
+            clientId: "panel-web",
+            clientName: "Runtime Inspector Web Panel"
+          })
+        );
+      };
+
+      socket.onclose = () => {
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+        }
+        setStatus("disconnected");
+        if (!closedByReact) {
+          reconnectTimer = window.setTimeout(connect, 1000);
+        }
+      };
+
+      socket.onerror = () => {
+        socket.close();
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(String(event.data));
+        if (message.type === "schema.publish") {
+          setSchema(message.schema);
+          setValues(collectInitialValues(message.schema));
+        }
+        if (message.type === "control.patch") {
+          setValues((current) => ({ ...current, [message.controlId]: message.value }));
+        }
+      };
     };
 
-    socket.onclose = () => setStatus("disconnected");
-    socket.onerror = () => setStatus("disconnected");
-    socket.onmessage = (event) => {
-      const message = JSON.parse(String(event.data));
-      if (message.type === "schema.publish") {
-        setSchema(message.schema);
-        setValues(collectInitialValues(message.schema));
-      }
-      if (message.type === "control.patch") {
-        setValues((current) => ({ ...current, [message.controlId]: message.value }));
-      }
-    };
+    connect();
 
-    return () => socket.close();
+    return () => {
+      closedByReact = true;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      socketRef.current?.close();
+    };
   }, []);
 
   const preset = useMemo(() => {
@@ -70,7 +98,9 @@ function App() {
   function updateValue(control: InspectorControl, value: unknown) {
     if (!schema) return;
     setValues((current) => ({ ...current, [control.id]: value }));
-    socketRef.current?.send(JSON.stringify(createPatch(schema.id, control.id, value)));
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(createPatch(schema.id, control.id, value)));
+    }
   }
 
   return (
@@ -102,7 +132,7 @@ function App() {
                     <ControlRow
                       control={control}
                       key={control.id}
-                      value={values[control.id] ?? control.defaultValue}
+                      value={getControlValue(control, values)}
                       onChange={(value) => updateValue(control, value)}
                     />
                   ))}
@@ -224,12 +254,16 @@ function ColorRow({
 function collectInitialValues(schema: PanelSchema) {
   return Object.fromEntries(
     schema.groups.flatMap((controlGroup) =>
-      controlGroup.controls.map((control) => [
-        control.id,
-        control.value ?? control.defaultValue
-      ])
+      controlGroup.controls
+        .filter(isValueControl)
+        .map((control) => [control.id, control.value ?? control.defaultValue])
     )
   );
+}
+
+function getControlValue(control: InspectorControl, values: Record<string, unknown>) {
+  if (!isValueControl(control)) return undefined;
+  return values[control.id] ?? control.defaultValue;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

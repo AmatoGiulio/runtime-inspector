@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const RIP_VERSION = "0.1";
+export const RIP_VERSION = "0.2";
 
 export type RuntimeRole = "runtime";
 export type PanelRole = "panel";
@@ -64,12 +64,27 @@ export interface SpringControl extends BaseControl<"spring", SpringValue> {
   };
 }
 
+export interface TriggerControl {
+  id: string;
+  kind: "trigger";
+  label: string;
+  description?: string;
+  binding?: string;
+}
+
 export type InspectorControl =
   | SliderControl
   | ToggleControl
   | ColorControl
   | BezierControl
-  | SpringControl;
+  | SpringControl
+  | TriggerControl;
+
+export type ValueControl = Exclude<InspectorControl, TriggerControl>;
+
+export function isValueControl(control: InspectorControl): control is ValueControl {
+  return control.kind !== "trigger";
+}
 
 export interface ControlGroup {
   id: string;
@@ -116,6 +131,13 @@ export interface SchemaMessage {
   schema: PanelSchema;
 }
 
+export interface RuntimeStatusMessage {
+  type: "runtime.status";
+  online: boolean;
+  clientId?: string;
+  schemaId?: string;
+}
+
 export interface ErrorMessage {
   type: "error";
   code: string;
@@ -129,6 +151,7 @@ export type RIPMessage =
   | SchemaMessage
   | ControlPatch
   | BatchPatch
+  | RuntimeStatusMessage
   | ErrorMessage;
 
 const roleSchema = z.union([z.literal("runtime"), z.literal("panel")]);
@@ -218,12 +241,21 @@ export const SpringControlSchema = z.object({
     .optional()
 });
 
+export const TriggerControlSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal("trigger"),
+  label: z.string().min(1),
+  description: z.string().optional(),
+  binding: z.string().optional()
+});
+
 export const InspectorControlSchema = z.discriminatedUnion("kind", [
   SliderControlSchema,
   ToggleControlSchema,
   ColorControlSchema,
   BezierControlSchema,
-  SpringControlSchema
+  SpringControlSchema,
+  TriggerControlSchema
 ]);
 
 export const ControlGroupSchema = z.object({
@@ -278,6 +310,13 @@ export const SchemaMessageSchema = z.object({
   schema: PanelSchemaSchema
 });
 
+export const RuntimeStatusMessageSchema = z.object({
+  type: z.literal("runtime.status"),
+  online: z.boolean(),
+  clientId: z.string().optional(),
+  schemaId: z.string().optional()
+});
+
 export const ErrorMessageSchema = z.object({
   type: z.literal("error"),
   code: z.string(),
@@ -291,6 +330,7 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   SchemaMessageSchema,
   ControlPatchSchema,
   BatchPatchSchema,
+  RuntimeStatusMessageSchema,
   ErrorMessageSchema
 ]);
 
