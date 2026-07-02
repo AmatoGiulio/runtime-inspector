@@ -94,7 +94,10 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
 
   return {
     brokerId,
-    port,
+    get port() {
+      const address = server.address();
+      return typeof address === "object" && address ? address.port : port;
+    },
     host,
     close: () =>
       new Promise((resolve, reject) => {

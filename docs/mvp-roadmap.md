@@ -27,6 +27,7 @@ Ordered by impact:
 
 ## Phase 3: richer tuning (July/August)
 
+- Automated test baseline: protocol validation and broker schema replay are covered with Vitest.
 - Demo clarity pass: the example now starts with obvious direct controls (`Move X`, `Rotate`, `Scale`, `Glow`, `Opacity`, `Card color`) before advanced spring/bezier tuning.
 - Spring editor UI first pass: render damping/stiffness/mass and bind it to the example replay transition. Changing spring values now auto-replays the return motion; next pass is a curve preview.
 - Bezier editor UI first pass: render four control-point sliders with a curve preview and bind it to the example replay easing.

@@ -49,6 +49,7 @@ Open the panel and move the sliders. The desired loop is:
 ```bash
 pnpm build
 pnpm typecheck
+pnpm test
 ```
 
 ## Next up (Phase 2)
