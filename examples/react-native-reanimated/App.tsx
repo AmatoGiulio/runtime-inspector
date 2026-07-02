@@ -57,14 +57,12 @@ export default function App() {
       rotate.value = withTiming(-14, { duration: 260, easing });
       scale.value = withTiming(0.82, { duration: 260, easing });
       opacity.value = withTiming(0.62, { duration: 260, easing });
-      glow.value = withTiming(36, { duration: 260, easing });
 
       setTimeout(() => {
         moveX.value = withSpring(targetRef.current.moveX, springConfigRef.current);
         rotate.value = withSpring(targetRef.current.rotate, springConfigRef.current);
         scale.value = withSpring(targetRef.current.scale, springConfigRef.current);
         opacity.value = withSpring(targetRef.current.opacity, springConfigRef.current);
-        glow.value = withSpring(targetRef.current.glow, springConfigRef.current);
         cardColor.value = targetRef.current.color;
       }, 220);
     };
@@ -81,10 +79,7 @@ export default function App() {
       targetRef.current.scale = value as number;
       scale.value = value as number;
     });
-    bindValue("card.glow", (value) => {
-      targetRef.current.glow = value as number;
-      glow.value = value as number;
-    });
+    
     bindValue("card.opacity", (value) => {
       targetRef.current.opacity = value as number;
       opacity.value = value as number;
@@ -144,16 +139,6 @@ export default function App() {
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.scale"
-              }),
-              slider({
-                id: "glow",
-                label: "Glow",
-                min: 0,
-                max: 48,
-                step: 1,
-                defaultValue: 10,
-                unit: "px",
-                binding: "card.glow"
               }),
               slider({
                 id: "opacity",
@@ -246,7 +231,6 @@ export default function App() {
     <View style={styles.screen}>
       <Text style={styles.eyebrow}>Runtime Inspector</Text>
       <View style={styles.cardStage}>
-        <Animated.View pointerEvents="none" style={[styles.glowLayer, glowStyle]} />
         <Animated.View style={[styles.card, cardStyle]}>
           <Text style={styles.liveBadge}>LIVE</Text>
           <Text style={styles.title}>Obvious Card</Text>
