@@ -31,6 +31,14 @@ Supported MVP controls:
 
 The web panel currently renders `slider`, `toggle`, and `color`. Other controls are typed in the protocol and reserved for the next implementation pass.
 
+Planned control kinds (not yet in the protocol):
+
+- `trigger`: invokes a callback registered in the runtime (e.g. "replay transition"), so tuning sessions can re-run an animation from the panel.
+
+## Schema replay (planned, Phase 2)
+
+The broker will cache the last `schema.publish` per runtime and replay it to `panel`-role clients that connect later. Connection order and panel refreshes must never strand a panel without a schema.
+
 ## Patches
 
 The panel sends a `control.patch`:
@@ -61,3 +69,12 @@ Batch updates use `control.batchPatch`.
   }
 }
 ```
+
+Presets are also the basis for two planned features:
+
+- **Copy as code**: clients turn current values into paste-ready code (e.g. `withSpring(x, { damping: 14, stiffness: 180 })`), so tuned values end up in the codebase rather than dying in the panel.
+- **A/B compare**: two named value sets that a client can switch between instantly while re-triggering an animation.
+
+## Clients
+
+Any client may take the `panel` role: the web panel, a future Rozenite/DevTools plugin, a CLI, or an AI agent (e.g. via an MCP server). The protocol assumes nothing about who is on the other side; a machine-driven tuning loop (patch → observe → repeat) is a first-class use case.

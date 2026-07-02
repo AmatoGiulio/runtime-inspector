@@ -4,7 +4,7 @@ Runtime Inspector is a protocol-first developer tool for React Native runtime co
 
 An app declares a typed panel schema. A Web/Desktop/VSCode panel reads that schema, renders controls automatically, and sends live patches back to the app. The runtime applies those patches to `SharedValue`, Reanimated, or native values without routing every update through React state.
 
-The panel is not the product core. The Runtime Inspector Protocol is.
+The architectural core is the Runtime Inspector Protocol, not the panel: the web panel is the reference client, and the same protocol is meant to serve a React Native DevTools (Rozenite) plugin and AI-agent clients later. The product bar, though, is developer experience: 60 seconds from `runtime-inspector dev` to a working slider on a real device, and tuned values that flow back into code ("copy as code").
 
 ## Current MVP
 
@@ -51,6 +51,10 @@ pnpm build
 pnpm typecheck
 ```
 
+## Next up (Phase 2)
+
+See [MVP roadmap](docs/mvp-roadmap.md). Highlights, in priority order: broker-side schema cache and replay (a panel refresh must never strand on "No schema published"), reconnect behavior, physical-device support (LAN URL + QR from the CLI), copy-as-code export, and a `trigger` control to replay animations from the panel.
+
 ## Non-goals for this phase
 
 - No Nitro module.
@@ -60,7 +64,7 @@ pnpm typecheck
 - No recording engine.
 - No production networking.
 
-The first milestone is a stable declarative protocol and a working local loop.
+The first milestone is a stable declarative protocol and a working local loop that is bulletproof on a real device.
 
 ## Docs
 
