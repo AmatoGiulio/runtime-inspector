@@ -269,6 +269,44 @@ output,
   background: #2d3340;
 }
 
+.compareGrid {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.compareSlot {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 28px 1fr 1fr;
+}
+
+.compareSlot span {
+  color: #d7dbe2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.compareSlot button {
+  background: #242832;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  color: #d9dee8;
+  cursor: pointer;
+  font-size: 12px;
+  height: 28px;
+}
+
+.compareSlot button:disabled {
+  color: #697080;
+  cursor: not-allowed;
+}
+
+.compareSlot button:not(:disabled):hover {
+  background: #2d3340;
+}
+
 .exportPanel pre {
   color: #b7beca;
   font-size: 12px;

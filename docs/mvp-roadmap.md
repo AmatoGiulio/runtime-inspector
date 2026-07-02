@@ -29,7 +29,7 @@ Ordered by impact:
 
 - Spring editor UI first pass: render damping/stiffness/mass and bind it to the example replay transition. Changing spring values now auto-replays the return motion; next pass is a curve preview.
 - Bezier editor UI first pass: render four control-point sliders with a curve preview and bind it to the example replay easing.
-- **A/B compare**: hold two parameter sets and switch between them instantly while re-triggering the animation. Motion tuning is comparative by nature; no existing tool offers this. Small superset of the preset model already in the protocol.
+- **A/B compare** first pass: the panel can save and apply two value snapshots through `control.batchPatch`. Next pass should optionally re-trigger animation on apply.
 - Control metadata for display density and labels.
 - Better color formats.
 

@@ -24,6 +24,7 @@ type PendingPatch = {
   timer: number | undefined;
   lastSentAt: number;
 };
+type CompareSlot = "A" | "B";
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 const sliderThrottleMs = 50;
@@ -32,6 +33,7 @@ function App() {
   const [status, setStatus] = useState<ConnectionState>("connecting");
   const [schema, setSchema] = useState<PanelSchema>();
   const [values, setValues] = useState<Record<string, unknown>>({});
+  const [compare, setCompare] = useState<Partial<Record<CompareSlot, Record<string, unknown>>>>({});
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string>();
   const socketRef = useRef<WebSocket | null>(null);
@@ -163,6 +165,21 @@ function App() {
     window.setTimeout(() => setCopied(false), 1200);
   }
 
+  function saveCompareSlot(slot: CompareSlot) {
+    setCompare((current) => ({
+      ...current,
+      [slot]: structuredClone(values)
+    }));
+  }
+
+  function applyCompareSlot(slot: CompareSlot) {
+    const snapshot = compare[slot];
+    if (!schema || !snapshot) return;
+
+    setValues(snapshot);
+    sendBatchPatch(schema.id, snapshot, socketRef);
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -204,6 +221,23 @@ function App() {
           </section>
           <aside className="exports">
             <section className="exportPanel">
+              <h2>A/B Compare</h2>
+              <div className="compareGrid">
+                <CompareSlotControls
+                  hasSnapshot={Boolean(compare.A)}
+                  label="A"
+                  onApply={() => applyCompareSlot("A")}
+                  onSave={() => saveCompareSlot("A")}
+                />
+                <CompareSlotControls
+                  hasSnapshot={Boolean(compare.B)}
+                  label="B"
+                  onApply={() => applyCompareSlot("B")}
+                  onSave={() => saveCompareSlot("B")}
+                />
+              </div>
+            </section>
+            <section className="exportPanel">
               <div className="exportHeader">
                 <h2>TypeScript</h2>
                 <button type="button" onClick={copyCode}>
@@ -220,6 +254,30 @@ function App() {
         </div>
       )}
     </main>
+  );
+}
+
+function CompareSlotControls({
+  hasSnapshot,
+  label,
+  onApply,
+  onSave
+}: {
+  hasSnapshot: boolean;
+  label: CompareSlot;
+  onApply: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="compareSlot">
+      <span>{label}</span>
+      <button type="button" onClick={onSave}>
+        Save
+      </button>
+      <button type="button" disabled={!hasSnapshot} onClick={onApply}>
+        Apply
+      </button>
+    </div>
   );
 }
 
@@ -624,6 +682,27 @@ function sendPatch(
   if (socketRef.current?.readyState === WebSocket.OPEN) {
     socketRef.current.send(JSON.stringify(createPatch(schemaId, controlId, value)));
   }
+}
+
+function sendBatchPatch(
+  schemaId: string,
+  snapshot: Record<string, unknown>,
+  socketRef: RefObject<WebSocket | null>
+) {
+  if (socketRef.current?.readyState !== WebSocket.OPEN) return;
+
+  socketRef.current.send(
+    JSON.stringify({
+      type: "control.batchPatch",
+      schemaId,
+      source: "preset",
+      timestamp: Date.now(),
+      patches: Object.entries(snapshot).map(([controlId, value]) => ({
+        controlId,
+        value
+      }))
+    })
+  );
 }
 
 function createTypeScriptPreset(schema: PanelSchema, values: Record<string, unknown>) {
