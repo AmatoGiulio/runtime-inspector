@@ -158,8 +158,22 @@ function App() {
     );
   }, [schema]);
 
+  const controlsById = useMemo(() => {
+    if (!schema) return new Map<string, InspectorControl>();
+    return new Map(
+      schema.groups.flatMap((controlGroup) =>
+        controlGroup.controls.map((control) => [control.id, control] as const)
+      )
+    );
+  }, [schema]);
+
   function updateValue(control: InspectorControl, value: unknown) {
     if (!schema) return;
+    if (!isPatchValueValid(control, value)) {
+      setNotice(`Invalid value for ${control.label}.`);
+      return;
+    }
+
     if (isValueControl(control)) {
       setValues((current) => ({ ...current, [control.id]: value }));
     }
@@ -171,6 +185,11 @@ function App() {
 
   function updateSliderValue(control: SliderControl, value: number) {
     if (!schema) return;
+    if (!isPatchValueValid(control, value)) {
+      setNotice(`Invalid value for ${control.label}.`);
+      return;
+    }
+
     setValues((current) => ({ ...current, [control.id]: value }));
     sendPatchThrottled(schema.id, control.id, value, socketRef, pendingPatchesRef);
     markPatch(control);
@@ -199,8 +218,9 @@ function App() {
     const snapshot = compare[slot];
     if (!schema || !snapshot) return;
 
-    setValues(snapshot);
-    sendBatchPatch(schema.id, snapshot, socketRef);
+    const validSnapshot = filterValidSnapshot(snapshot, controlsById);
+    setValues(validSnapshot);
+    sendBatchPatch(schema.id, validSnapshot, socketRef);
     const replayTrigger = findReplayTrigger(schema);
     if (replayTrigger) {
       window.setTimeout(() => {
@@ -311,6 +331,18 @@ function App() {
         </div>
       )}
     </main>
+  );
+}
+
+function filterValidSnapshot(
+  snapshot: Record<string, unknown>,
+  controlsById: Map<string, InspectorControl>
+) {
+  return Object.fromEntries(
+    Object.entries(snapshot).filter(([controlId, value]) => {
+      const control = controlsById.get(controlId);
+      return control ? isPatchValueValid(control, value) : false;
+    })
   );
 }
 
@@ -667,6 +699,27 @@ function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
   if (!Array.isArray(value) || value.length !== 4) return fallback;
   if (!value.every((part) => typeof part === "number")) return fallback;
   return value as CubicBezier;
+}
+
+function isPatchValueValid(control: InspectorControl, value: unknown) {
+  switch (control.kind) {
+    case "slider":
+      return typeof value === "number" && Number.isFinite(value);
+    case "toggle":
+      return typeof value === "boolean";
+    case "color":
+      return typeof value === "string";
+    case "bezier":
+      return (
+        Array.isArray(value) &&
+        value.length === 4 &&
+        value.every((part) => typeof part === "number" && Number.isFinite(part))
+      );
+    case "spring":
+      return Boolean(coerceOptionalSpringValue(value));
+    case "trigger":
+      return true;
+  }
 }
 
 function formatNumber(value: number) {
