@@ -1,0 +1,8 @@
+{
+  "type": "control.commit",
+  "schemaId": "card-transition",
+  "controlId": "scale",
+  "value": 1.08,
+  "source": "panel",
+  "timestamp": 1780000000000
+}

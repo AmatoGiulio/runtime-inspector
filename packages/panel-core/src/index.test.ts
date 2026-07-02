@@ -111,8 +111,10 @@ describe("createPanelSession", () => {
 
     session.commitValue("demo", "speed");
     const sentPatchesAfterCommit = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
-    expect(sentPatchesAfterCommit).toHaveLength(2);
-    expect(JSON.parse(sentPatchesAfterCommit[1]!).value).toBe(4);
+    expect(sentPatchesAfterCommit).toHaveLength(1);
+    const sentCommits = socket.sent.filter((raw) => JSON.parse(raw).type === "control.commit");
+    expect(sentCommits).toHaveLength(1);
+    expect(JSON.parse(sentCommits[0]!).value).toBe(4);
   });
 
   it("rejects invalid outgoing value with a notice and does not send", () => {
@@ -160,15 +162,16 @@ describe("createPanelSession", () => {
 
     const batchPatches = socket.sent.filter((raw) => JSON.parse(raw).type === "control.batchPatch");
     expect(batchPatches).toHaveLength(1);
+    expect(JSON.parse(batchPatches[0]!).committed).toBe(true);
 
     const triggerPatchesBefore = socket.sent.filter(
-      (raw) => JSON.parse(raw).type === "control.patch" && JSON.parse(raw).controlId === "replayTrigger"
+      (raw) => JSON.parse(raw).type === "control.trigger" && JSON.parse(raw).controlId === "replayTrigger"
     );
     expect(triggerPatchesBefore).toHaveLength(0);
 
     vi.advanceTimersByTime(80);
     const triggerPatchesAfter = socket.sent.filter(
-      (raw) => JSON.parse(raw).type === "control.patch" && JSON.parse(raw).controlId === "replayTrigger"
+      (raw) => JSON.parse(raw).type === "control.trigger" && JSON.parse(raw).controlId === "replayTrigger"
     );
     expect(triggerPatchesAfter).toHaveLength(1);
 
@@ -192,6 +195,67 @@ describe("createPanelSession", () => {
     expect(output).toContain("// withSpring(targetValue, demopresetSpring)");
     expect(output).toContain("export const demopresetEasing = Easing.bezier(0.3, 0.1, 0.3, 1);");
     expect(output).toContain('// import { Easing, withSpring } from "react-native-reanimated";');
+  });
+
+  it("sends control.trigger on fireTrigger", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    session.fireTrigger("demo", "replayTrigger");
+
+    const triggers = socket.sent.filter((raw) => JSON.parse(raw).type === "control.trigger");
+    expect(triggers).toHaveLength(1);
+    expect(JSON.parse(triggers[0]!).controlId).toBe("replayTrigger");
+    const patches = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
+    expect(patches).toHaveLength(0);
+  });
+
+  it("marks a schema stale on runtime.status offline and blocks outgoing messages", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    socket.receive({ type: "runtime.status", online: false, clientId: "runtime-demo", schemaId: "demo" });
+
+    expect(session.getState().staleSchemaIds.demo).toBe(true);
+
+    session.setValue("demo", "speed", 5);
+    expect(session.getState().notice).toBe("Runtime disconnected - controls are frozen.");
+    const patchesWhileStale = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
+    expect(patchesWhileStale).toHaveLength(0);
+
+    session.fireTrigger("demo", "replayTrigger");
+    const triggersWhileStale = socket.sent.filter((raw) => JSON.parse(raw).type === "control.trigger");
+    expect(triggersWhileStale).toHaveLength(0);
+
+    session.commitValue("demo", "speed");
+    const commitsWhileStale = socket.sent.filter((raw) => JSON.parse(raw).type === "control.commit");
+    expect(commitsWhileStale).toHaveLength(0);
+
+    // Schema and values remain visible while stale.
+    expect(session.getState().schemas.some((schema) => schema.id === "demo")).toBe(true);
+
+    // Republish clears staleness.
+    socket.receive({ type: "runtime.status", online: true, clientId: "runtime-demo", schemaId: "demo" });
+    expect(session.getState().staleSchemaIds.demo).toBe(false);
+  });
+
+  it("removes the schema and its values on schema.dispose", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    expect(session.getState().schemas.some((schema) => schema.id === "demo")).toBe(true);
+
+    socket.receive({ type: "schema.dispose", schemaId: "demo", source: "runtime" });
+
+    expect(session.getState().schemas.some((schema) => schema.id === "demo")).toBe(false);
+    expect(session.getState().values.demo).toBeUndefined();
+    expect(session.getState().staleSchemaIds.demo).toBeUndefined();
   });
 
   it("updates state on incoming control.patch and control.batchPatch", () => {

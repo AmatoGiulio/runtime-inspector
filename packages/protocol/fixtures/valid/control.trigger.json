@@ -1,0 +1,7 @@
+{
+  "type": "control.trigger",
+  "schemaId": "card-transition",
+  "controlId": "replay",
+  "source": "panel",
+  "timestamp": 1780000000000
+}

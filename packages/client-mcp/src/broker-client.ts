@@ -22,6 +22,7 @@ export interface BrokerClient {
   connect(): Promise<void>;
   getSchemas(): PanelSchema[];
   getValues(schemaId: string): Record<string, unknown>;
+  isStale(schemaId: string): boolean;
   setValue(schemaId: string, controlId: string, value: unknown): void;
   batchSet(schemaId: string, values: Record<string, unknown>): void;
   fireTrigger(schemaId: string, controlId: string): void;
@@ -32,6 +33,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
   const clientId = options.clientId ?? `client-mcp-${randomUUID()}`;
   const schemas = new Map<string, PanelSchema>();
   const values = new Map<string, Record<string, unknown>>();
+  const staleSchemaIds = new Set<string>();
   let socket: WebSocket | undefined;
 
   function connect(): Promise<void> {
@@ -101,10 +103,34 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     if (message.type === "schema.publish") {
       schemas.set(message.schema.id, message.schema);
       values.set(message.schema.id, collectInitialValues(message.schema));
+      staleSchemaIds.delete(message.schema.id);
+      return;
+    }
+
+    if (message.type === "schema.dispose") {
+      schemas.delete(message.schemaId);
+      values.delete(message.schemaId);
+      staleSchemaIds.delete(message.schemaId);
+      return;
+    }
+
+    if (message.type === "runtime.status" && message.schemaId) {
+      if (message.online) {
+        staleSchemaIds.delete(message.schemaId);
+      } else if (schemas.has(message.schemaId)) {
+        staleSchemaIds.add(message.schemaId);
+      }
       return;
     }
 
     if (message.type === "control.patch") {
+      const schemaValues = values.get(message.schemaId);
+      if (!schemaValues) return;
+      schemaValues[message.controlId] = message.value;
+      return;
+    }
+
+    if (message.type === "control.commit") {
       const schemaValues = values.get(message.schemaId);
       if (!schemaValues) return;
       schemaValues[message.controlId] = message.value;
@@ -126,6 +152,10 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
 
   function getValues(schemaId: string): Record<string, unknown> {
     return { ...(values.get(schemaId) ?? {}) };
+  }
+
+  function isStale(schemaId: string): boolean {
+    return staleSchemaIds.has(schemaId);
   }
 
   function findControl(schemaId: string, controlId: string): InspectorControl {
@@ -157,8 +187,10 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
       );
     }
 
+    // An agent-driven value change is, by definition, a decided value rather
+    // than an ephemeral preview - send it as a commit, not a patch.
     send({
-      type: "control.patch",
+      type: "control.commit",
       schemaId,
       controlId,
       value,
@@ -190,7 +222,8 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
       schemaId,
       source: "panel",
       timestamp,
-      patches: entries.map(([controlId, value]) => ({ controlId, value }))
+      patches: entries.map(([controlId, value]) => ({ controlId, value })),
+      committed: true
     });
 
     const schemaValues = values.get(schemaId) ?? {};
@@ -207,10 +240,9 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     }
 
     send({
-      type: "control.patch",
+      type: "control.trigger",
       schemaId,
       controlId,
-      value: Date.now(),
       source: "panel",
       timestamp: Date.now()
     });
@@ -221,7 +253,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     socket = undefined;
   }
 
-  return { connect, getSchemas, getValues, setValue, batchSet, fireTrigger, close };
+  return { connect, getSchemas, getValues, isStale, setValue, batchSet, fireTrigger, close };
 }
 
 function collectInitialValues(schema: PanelSchema): Record<string, unknown> {

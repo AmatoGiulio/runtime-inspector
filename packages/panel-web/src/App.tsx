@@ -33,6 +33,7 @@ function App() {
 
   const schema = state.schemas[0];
   const values = schema ? state.values[schema.id] ?? {} : {};
+  const isStale = schema ? Boolean(state.staleSchemaIds[schema.id]) : false;
 
   const preset = useMemo(() => {
     if (!schema) return "";
@@ -109,7 +110,11 @@ function App() {
       <header className="topbar">
         <div>
           <h1>Runtime Inspector</h1>
-          <p>{state.notice ?? (schema ? schema.title : "Waiting for runtime schema")}</p>
+          <p>
+            {isStale
+              ? "Runtime disconnected - controls are frozen."
+              : (state.notice ?? (schema ? schema.title : "Waiting for runtime schema"))}
+          </p>
         </div>
         <div className="topbarMeta">
           {schema ? (
@@ -122,6 +127,7 @@ function App() {
               Last patch: {state.lastPatch.label} {state.lastPatch.at}
             </span>
           ) : null}
+          {isStale ? <span className="status disconnected">stale</span> : null}
           <span className={`status ${state.status}`}>{state.status}</span>
         </div>
       </header>
@@ -149,6 +155,7 @@ function App() {
                   {controlGroup.controls.map((control) => (
                     <ControlRow
                       control={control}
+                      disabled={isStale}
                       key={control.id}
                       value={getControlValue(control, values)}
                       onChange={(value) => updateValue(control, value)}
@@ -224,12 +231,14 @@ function CompareSlotControls({
 
 function ControlRow({
   control,
+  disabled = false,
   value,
   onChange,
   onSliderChange,
   onCommit
 }: {
   control: InspectorControl;
+  disabled?: boolean;
   value: unknown;
   onChange: (value: unknown) => void;
   onSliderChange: (control: SliderControl, value: number) => void;
@@ -239,6 +248,7 @@ function ControlRow({
     return (
       <SliderRow
         control={control}
+        disabled={disabled}
         value={Number(value)}
         onChange={(nextValue) => onSliderChange(control, nextValue)}
         onCommit={() => onCommit(control.id)}
@@ -246,15 +256,16 @@ function ControlRow({
     );
   }
   if (control.kind === "toggle") {
-    return <ToggleRow control={control} value={Boolean(value)} onChange={onChange} />;
+    return <ToggleRow control={control} disabled={disabled} value={Boolean(value)} onChange={onChange} />;
   }
   if (control.kind === "color") {
-    return <ColorRow control={control} value={String(value)} onChange={onChange} />;
+    return <ColorRow control={control} disabled={disabled} value={String(value)} onChange={onChange} />;
   }
   if (control.kind === "bezier") {
     return (
       <BezierRow
         control={control}
+        disabled={disabled}
         value={coerceBezierValue(value, control.defaultValue)}
         onChange={onChange}
       />
@@ -264,24 +275,27 @@ function ControlRow({
     return (
       <SpringRow
         control={control}
+        disabled={disabled}
         value={coerceSpringValue(value, control.defaultValue)}
         onChange={onChange}
       />
     );
   }
   if (control.kind === "trigger") {
-    return <TriggerRow control={control} onChange={onChange} />;
+    return <TriggerRow control={control} disabled={disabled} onChange={onChange} />;
   }
   return null;
 }
 
 function SliderRow({
   control,
+  disabled = false,
   value,
   onChange,
   onCommit
 }: {
   control: SliderControl;
+  disabled?: boolean;
   value: number;
   onChange: (value: number) => void;
   onCommit: () => void;
@@ -291,6 +305,7 @@ function SliderRow({
       <label htmlFor={control.id}>{control.label}</label>
       <div className="sliderGrid">
         <input
+          disabled={disabled}
           id={control.id}
           min={control.min}
           max={control.max}
@@ -312,10 +327,12 @@ function SliderRow({
 
 function ToggleRow({
   control,
+  disabled = false,
   value,
   onChange
 }: {
   control: ToggleControl;
+  disabled?: boolean;
   value: boolean;
   onChange: (value: boolean) => void;
 }) {
@@ -323,6 +340,7 @@ function ToggleRow({
     <div className="controlRow inline">
       <label htmlFor={control.id}>{control.label}</label>
       <input
+        disabled={disabled}
         id={control.id}
         type="checkbox"
         checked={value}
@@ -334,10 +352,12 @@ function ToggleRow({
 
 function ColorRow({
   control,
+  disabled = false,
   value,
   onChange
 }: {
   control: ColorControl;
+  disabled?: boolean;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -345,6 +365,7 @@ function ColorRow({
     <div className="controlRow inline">
       <label htmlFor={control.id}>{control.label}</label>
       <input
+        disabled={disabled}
         id={control.id}
         type="color"
         value={value}
@@ -356,9 +377,11 @@ function ColorRow({
 
 function TriggerRow({
   control,
+  disabled = false,
   onChange
 }: {
   control: TriggerControl;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }) {
   return (
@@ -369,6 +392,7 @@ function TriggerRow({
       </div>
       <button
         className="triggerButton"
+        disabled={disabled}
         type="button"
         onClick={() => onChange(Date.now())}
       >
@@ -380,10 +404,12 @@ function TriggerRow({
 
 function SpringRow({
   control,
+  disabled = false,
   value,
   onChange
 }: {
   control: SpringControl;
+  disabled?: boolean;
   value: SpringValue;
   onChange: (value: SpringValue) => void;
 }) {
@@ -398,6 +424,7 @@ function SpringRow({
       <label>{control.label}</label>
       {control.description ? <p className="controlDescription">{control.description}</p> : null}
       <SpringParameter
+        disabled={disabled}
         label="Damping"
         max={ranges.damping[1]}
         min={ranges.damping[0]}
@@ -406,6 +433,7 @@ function SpringRow({
         onChange={(nextValue) => onChange({ ...value, damping: nextValue })}
       />
       <SpringParameter
+        disabled={disabled}
         label="Stiffness"
         max={ranges.stiffness[1]}
         min={ranges.stiffness[0]}
@@ -414,6 +442,7 @@ function SpringRow({
         onChange={(nextValue) => onChange({ ...value, stiffness: nextValue })}
       />
       <SpringParameter
+        disabled={disabled}
         label="Mass"
         max={ranges.mass[1]}
         min={ranges.mass[0]}
@@ -427,10 +456,12 @@ function SpringRow({
 
 function BezierRow({
   control,
+  disabled = false,
   value,
   onChange
 }: {
   control: BezierControl;
+  disabled?: boolean;
   value: CubicBezier;
   onChange: (value: CubicBezier) => void;
 }) {
@@ -441,6 +472,7 @@ function BezierRow({
       <BezierPreview value={value} />
       {(["x1", "y1", "x2", "y2"] as const).map((label, index) => (
         <SpringParameter
+          disabled={disabled}
           key={label}
           label={label}
           max={1}
@@ -478,6 +510,7 @@ function BezierPreview({ value }: { value: CubicBezier }) {
 }
 
 function SpringParameter({
+  disabled = false,
   label,
   max,
   min,
@@ -485,6 +518,7 @@ function SpringParameter({
   value,
   onChange
 }: {
+  disabled?: boolean;
   label: string;
   max: number;
   min: number;
@@ -496,6 +530,7 @@ function SpringParameter({
     <div className="springParameter">
       <span>{label}</span>
       <input
+        disabled={disabled}
         max={max}
         min={min}
         step={step}

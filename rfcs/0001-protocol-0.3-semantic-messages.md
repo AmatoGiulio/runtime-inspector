@@ -1,6 +1,6 @@
 # RFC 0001 — Protocol 0.3: semantic messages
 
-- Status: proposed
+- Status: implemented
 - Author: architect session, 2026-07-03
 - Affects: `protocol`, `transport-ws`, `runtime-react-native`, `panel-core`, `panel-web`, `client-mcp`, docs
 - Breaking: yes (single bump `0.2 → 0.3`; the broker already rejects mismatched versions with `VERSION_MISMATCH`)

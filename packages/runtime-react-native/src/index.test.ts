@@ -176,6 +176,136 @@ describe("multi-schema sessions", () => {
   });
 });
 
+function makeTriggerSchema(id: string): PanelSchema {
+  return {
+    id,
+    title: id,
+    groups: [
+      {
+        id: "group-1",
+        label: "Group",
+        controls: [
+          {
+            id: "replay",
+            kind: "trigger",
+            label: "Replay",
+            binding: `${id}.replay`
+          }
+        ]
+      }
+    ]
+  };
+}
+
+describe("protocol 0.3 semantic messages", () => {
+  it("routes control.trigger to the trigger registry", async () => {
+    const { definePanel, applyControlTrigger, bindTrigger } = await import("./index");
+
+    const schema = makeTriggerSchema("panel-trigger");
+    const panel = definePanel(schema);
+    const handler = vi.fn();
+    bindTrigger("panel-trigger.replay", handler);
+
+    applyControlTrigger({
+      type: "control.trigger",
+      schemaId: "panel-trigger",
+      controlId: "replay"
+    });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    panel.disconnect();
+  });
+
+  it("ignores control.patch targeting a trigger control with a dev warning", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { definePanel, applyControlPatch, bindTrigger } = await import("./index");
+
+    const schema = makeTriggerSchema("panel-trigger-patch");
+    const panel = definePanel(schema);
+    const handler = vi.fn();
+    bindTrigger("panel-trigger-patch.replay", handler);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-trigger-patch",
+      controlId: "replay",
+      value: Date.now()
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(
+      warnSpy.mock.calls.some((call) => String(call[0]).includes("Ignoring control.patch targeting trigger control"))
+    ).toBe(true);
+
+    panel.disconnect();
+    warnSpy.mockRestore();
+  });
+
+  it("applies control.commit exactly like a control.patch", async () => {
+    const { definePanel, applyControlCommit, bindValue } = await import("./index");
+
+    const schema = makeSchema("panel-commit");
+    const panel = definePanel(schema);
+    const setter = vi.fn();
+    bindValue("panel-commit.value", setter);
+
+    applyControlCommit({
+      type: "control.commit",
+      schemaId: "panel-commit",
+      controlId: "value",
+      value: true
+    });
+
+    expect(toggleValue(schema)).toBe(true);
+    expect(setter).toHaveBeenCalledWith(true);
+
+    panel.disconnect();
+  });
+
+  it("sends schema.dispose before closing the socket on disconnect()", async () => {
+    const { definePanel } = await import("./index");
+
+    const schema = makeSchema("panel-dispose");
+    const panel = definePanel(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    socket.open();
+
+    panel.disconnect();
+
+    const disposeMessages = socket.sent
+      .map((raw) => JSON.parse(raw))
+      .filter((message) => message.type === "schema.dispose");
+
+    expect(disposeMessages).toEqual([{ type: "schema.dispose", schemaId: "panel-dispose", source: "runtime" }]);
+    expect(socket.closeCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  it("sends schema.dispose during hot-reload teardown", async () => {
+    const { definePanel } = await import("./index");
+
+    const schema = makeSchema("panel-hot-dispose");
+    const panel1 = definePanel(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+    panel1.connect();
+
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+    socket.open();
+
+    // Redefine the panel with the same schema id (hot reload) - this tears
+    // down the previous session, which should best-effort dispose.
+    const panel2 = definePanel(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+
+    const disposeMessages = socket.sent
+      .map((raw) => JSON.parse(raw))
+      .filter((message) => message.type === "schema.dispose");
+
+    expect(disposeMessages).toEqual([{ type: "schema.dispose", schemaId: "panel-hot-dispose", source: "runtime" }]);
+
+    panel2.disconnect();
+  });
+});
+
 describe("discovery diagnostics", () => {
   it("warns exactly once after a full cycle of failed candidates", async () => {
     vi.useFakeTimers();

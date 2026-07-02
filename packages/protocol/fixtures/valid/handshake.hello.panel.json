@@ -1,6 +1,6 @@
 {
   "type": "handshake.hello",
-  "protocolVersion": "0.2",
+  "protocolVersion": "0.3",
   "role": "panel",
   "clientId": "panel-web-1"
 }

@@ -1,6 +1,8 @@
 import {
   RIP_VERSION,
+  createCommit,
   createPatch,
+  createTrigger,
   isValidControlValue,
   isValueControl,
   safeParseRIPMessage,
@@ -25,6 +27,13 @@ export interface PanelState {
   status: ConnectionStatus;
   notice?: string;
   schemas: PanelSchema[];
+  /**
+   * Per-schema staleness: true when the publishing runtime has disconnected
+   * without disposing the schema (e.g. mid Metro-reload). The schema and its
+   * last-known values remain visible, but outgoing patches/commits/triggers
+   * are blocked until the runtime republishes.
+   */
+  staleSchemaIds: Record<string, boolean>;
   values: Record<string, Record<string, unknown>>;
   lastPatch?: LastPatchInfo;
   compareSlots: Partial<Record<CompareSlotId, Record<string, unknown>>>;
@@ -89,6 +98,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     status: "connecting",
     notice: undefined,
     schemas: [],
+    staleSchemaIds: {},
     values: {},
     lastPatch: undefined,
     compareSlots: {}
@@ -97,6 +107,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   const listeners = new Set<() => void>();
   const schemasById = new Map<string, PanelSchema>();
   const pendingPatches = new Map<string, PendingPatch>();
+  const schemaIdByRuntimeClientId = new Map<string, string>();
 
   let socket: WebSocketLike | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -173,10 +184,40 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
             ...state.values,
             [message.schema.id]: collectInitialValues(message.schema)
           },
+          staleSchemaIds: { ...state.staleSchemaIds, [message.schema.id]: false },
           notice: undefined
         });
       }
+      if (message.type === "schema.dispose") {
+        schemasById.delete(message.schemaId);
+        const { [message.schemaId]: _removedStale, ...restStale } = state.staleSchemaIds;
+        const { [message.schemaId]: _removedValues, ...restValues } = state.values;
+        setState({
+          schemas: Array.from(schemasById.values()),
+          staleSchemaIds: restStale,
+          values: restValues
+        });
+      }
+      if (message.type === "runtime.status") {
+        if (message.schemaId) {
+          schemaIdByRuntimeClientId.set(message.clientId ?? message.schemaId, message.schemaId);
+          if (schemasById.has(message.schemaId)) {
+            setState({
+              staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online }
+            });
+          }
+        }
+      }
       if (message.type === "control.patch") {
+        const schemaValues = state.values[message.schemaId] ?? {};
+        setState({
+          values: {
+            ...state.values,
+            [message.schemaId]: { ...schemaValues, [message.controlId]: message.value }
+          }
+        });
+      }
+      if (message.type === "control.commit") {
         const schemaValues = state.values[message.schemaId] ?? {};
         setState({
           values: {
@@ -236,18 +277,37 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     }
   }
 
+  function isStale(schemaId: string): boolean {
+    return Boolean(state.staleSchemaIds[schemaId]);
+  }
+
+  function blockIfStale(schemaId: string): boolean {
+    if (!isStale(schemaId)) return false;
+    setState({ notice: "Runtime disconnected - controls are frozen." });
+    return true;
+  }
+
   function sendPatch(schemaId: string, controlId: string, value: unknown) {
     send(createPatch(schemaId, controlId, value));
   }
 
-  function sendBatchPatch(schemaId: string, snapshot: Record<string, unknown>) {
+  function sendCommit(schemaId: string, controlId: string, value: unknown) {
+    send(createCommit(schemaId, controlId, value));
+  }
+
+  function sendTrigger(schemaId: string, controlId: string) {
+    send(createTrigger(schemaId, controlId));
+  }
+
+  function sendBatchPatch(schemaId: string, snapshot: Record<string, unknown>, committed = false) {
     if (!socket || socket.readyState !== WEBSOCKET_OPEN) return;
     send({
       type: "control.batchPatch",
       schemaId,
       source: "preset",
       timestamp: Date.now(),
-      patches: Object.entries(snapshot).map(([controlId, value]) => ({ controlId, value }))
+      patches: Object.entries(snapshot).map(([controlId, value]) => ({ controlId, value })),
+      committed
     });
   }
 
@@ -272,6 +332,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function setValue(schemaId: string, controlId: string, value: unknown) {
+    if (blockIfStale(schemaId)) return;
+
     const control = findControl(schemaId, controlId);
     if (!control) return;
 
@@ -334,6 +396,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function commitValue(schemaId: string, controlId: string) {
+    if (blockIfStale(schemaId)) return;
+
     const pending = pendingPatches.get(controlId);
     if (!pending) return;
 
@@ -341,12 +405,15 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       clearTimeout(pending.timer);
     }
 
-    sendPatch(schemaId, controlId, pending.value);
+    sendCommit(schemaId, controlId, pending.value);
     pendingPatches.delete(controlId);
   }
 
   function fireTrigger(schemaId: string, controlId: string) {
-    setValue(schemaId, controlId, Date.now());
+    if (blockIfStale(schemaId)) return;
+    const control = findControl(schemaId, controlId);
+    sendTrigger(schemaId, controlId);
+    markPatch(controlId, control?.label ?? controlId);
   }
 
   function saveCompareSlot(slot: CompareSlotId, schemaId: string) {
@@ -360,6 +427,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function applyCompareSlot(slot: CompareSlotId, schemaId: string) {
+    if (blockIfStale(schemaId)) return;
+
     const snapshot = state.compareSlots[slot];
     const schema = schemasById.get(schemaId);
     if (!schema || !snapshot) return;
@@ -371,12 +440,12 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         [schemaId]: validSnapshot
       }
     });
-    sendBatchPatch(schemaId, validSnapshot);
+    sendBatchPatch(schemaId, validSnapshot, true);
 
     const replayTrigger = findReplayTrigger(schema);
     if (replayTrigger) {
       setTimeout(() => {
-        sendPatch(schemaId, replayTrigger.id, Date.now());
+        sendTrigger(schemaId, replayTrigger.id);
       }, 80);
     }
 

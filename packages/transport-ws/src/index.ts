@@ -36,6 +36,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
   const server = new WebSocketServer({ host, port });
   const clients = new Map<WebSocket, ClientRecord>();
   const schemasByRuntime = new Map<string, SchemaMessage>();
+  const onlineRuntimeIds = new Set<string>();
 
   server.on("connection", (socket) => {
     const record: ClientRecord = {
@@ -90,10 +91,11 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         };
         send(socket, accept);
         if (message.role === "panel") {
-          replaySchemas(socket, schemasByRuntime);
+          replaySchemas(socket, schemasByRuntime, onlineRuntimeIds);
         }
         if (message.role === "runtime") {
-          broadcastRuntimeStatus(clients, record, true);
+          onlineRuntimeIds.add(record.id);
+          broadcastRuntimeStatus(clients, record, true, schemasByRuntime.get(record.id)?.schema.id);
         }
         return;
       }
@@ -102,14 +104,22 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         schemasByRuntime.set(record.id, message);
       }
 
+      if (message.type === "schema.dispose" && record.role === "runtime") {
+        schemasByRuntime.delete(record.id);
+      }
+
       forwardToOppositeRole(clients, record, message);
     });
 
     socket.on("close", () => {
       clients.delete(socket);
       if (record.role === "runtime") {
-        schemasByRuntime.delete(record.id);
-        broadcastRuntimeStatus(clients, record, false);
+        // Silent disconnect (no schema.dispose was sent): keep the cached
+        // schema so late-joining panels can render it as stale, rather than
+        // showing an empty screen during e.g. a Metro reload. The cache
+        // entry is only dropped by an explicit schema.dispose message.
+        onlineRuntimeIds.delete(record.id);
+        broadcastRuntimeStatus(clients, record, false, schemasByRuntime.get(record.id)?.schema.id);
       }
     });
   });
@@ -133,24 +143,38 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
 
 function replaySchemas(
   socket: WebSocket,
-  schemasByRuntime: Map<string, SchemaMessage>
+  schemasByRuntime: Map<string, SchemaMessage>,
+  onlineRuntimeIds: Set<string>
 ) {
-  for (const schemaMessage of schemasByRuntime.values()) {
+  for (const [runtimeId, schemaMessage] of schemasByRuntime.entries()) {
     send(socket, schemaMessage);
+    if (!onlineRuntimeIds.has(runtimeId)) {
+      // The publishing runtime is currently disconnected: follow the cached
+      // schema.publish with its current runtime.status so the late-joining
+      // panel can render the schema as stale rather than assuming it's live.
+      send(socket, {
+        type: "runtime.status",
+        online: false,
+        clientId: runtimeId,
+        schemaId: schemaMessage.schema.id
+      });
+    }
   }
 }
 
 function broadcastRuntimeStatus(
   clients: Map<WebSocket, ClientRecord>,
   runtime: ClientRecord,
-  online: boolean
+  online: boolean,
+  schemaId?: string
 ) {
   for (const target of clients.values()) {
     if (target.role !== "panel") continue;
     send(target.socket, {
       type: "runtime.status",
       online,
-      clientId: runtime.id
+      clientId: runtime.id,
+      schemaId
     });
   }
 }

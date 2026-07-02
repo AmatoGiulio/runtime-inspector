@@ -58,7 +58,7 @@ describe("createBrokerClient", () => {
     expect(client.getValues("test-schema").speed).toBe(1);
   });
 
-  it("sends a control.patch for a valid value and rejects an invalid one without sending", async () => {
+  it("sends a control.commit for a valid value (an agent decision is a commit) and rejects an invalid one without sending", async () => {
     broker = startBroker({ port: 0 });
     await waitForBrokerPort(broker);
     runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
@@ -75,7 +75,7 @@ describe("createBrokerClient", () => {
 
     expect(
       runtimeMessages.some(
-        (message) => message.type === "control.patch" && message.controlId === "speed" && message.value === 5
+        (message) => message.type === "control.commit" && message.controlId === "speed" && message.value === 5
       )
     ).toBe(true);
 
@@ -90,7 +90,7 @@ describe("createBrokerClient", () => {
     await expect(client.connect()).rejects.toThrow(/UNAUTHORIZED/);
   });
 
-  it("delivers a control.patch to the runtime when firing a trigger", async () => {
+  it("delivers a control.trigger to the runtime when firing a trigger", async () => {
     broker = startBroker({ port: 0 });
     await waitForBrokerPort(broker);
     runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
@@ -107,9 +107,26 @@ describe("createBrokerClient", () => {
 
     expect(
       runtimeMessages.some(
-        (message) => message.type === "control.patch" && message.controlId === "replay"
+        (message) => message.type === "control.trigger" && message.controlId === "replay"
       )
     ).toBe(true);
+  });
+
+  it("exposes schema staleness that follows runtime.status", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    await client.connect();
+    await wait(50);
+
+    expect(client.isStale("test-schema")).toBe(false);
+
+    runtime.close();
+    await wait(50);
+
+    expect(client.isStale("test-schema")).toBe(true);
   });
 });
 
@@ -120,7 +137,7 @@ function openRuntime(url: string, schema: unknown) {
       socket.send(
         JSON.stringify({
           type: "handshake.hello",
-          protocolVersion: "0.2",
+          protocolVersion: "0.3",
           role: "runtime",
           clientId: "runtime-test"
         })

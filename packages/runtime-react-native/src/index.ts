@@ -5,8 +5,10 @@ import {
   type BatchPatch,
   type BezierControl,
   type ColorControl,
+  type ControlCommit,
   type ControlGroup,
   type ControlPatch,
+  type ControlTrigger,
   type CubicBezier,
   type InspectorControl,
   type PanelSchema,
@@ -183,6 +185,24 @@ export function bindTrigger(binding: string, handler: TriggerHandler) {
   triggerRegistry.set(binding, handler);
 }
 
+export function applyControlTrigger(trigger: ControlTrigger) {
+  const session = sessions.get(trigger.schemaId);
+  if (!session) return;
+
+  const control = findControl(session.schema, trigger.controlId);
+  if (!control) return;
+
+  if (control.kind !== "trigger") {
+    warnDev(
+      `Ignoring control.trigger for non-trigger control "${control.id}".`
+    );
+    return;
+  }
+
+  const bindingId = control.binding ?? control.id;
+  triggerRegistry.get(bindingId)?.();
+}
+
 export function applyControlPatch(patch: ControlPatch) {
   const session = sessions.get(patch.schemaId);
   if (!session) return;
@@ -191,8 +211,9 @@ export function applyControlPatch(patch: ControlPatch) {
   if (!control) return;
 
   if (control.kind === "trigger") {
-    const bindingId = control.binding ?? control.id;
-    triggerRegistry.get(bindingId)?.();
+    warnDev(
+      `Ignoring control.patch targeting trigger control "${control.id}" - use control.trigger instead.`
+    );
     return;
   }
 
@@ -214,6 +235,17 @@ export function applyControlPatch(patch: ControlPatch) {
   } else {
     target.value = patch.value;
   }
+}
+
+export function applyControlCommit(commit: ControlCommit) {
+  applyControlPatch({
+    type: "control.patch",
+    schemaId: commit.schemaId,
+    controlId: commit.controlId,
+    value: commit.value,
+    source: commit.source,
+    timestamp: commit.timestamp
+  });
 }
 
 export function applyBatchPatch(batch: BatchPatch) {
@@ -306,6 +338,12 @@ function connectRuntime(session: Session) {
     if (message.type === "control.batchPatch") {
       applyBatchPatch(message);
     }
+    if (message.type === "control.trigger") {
+      applyControlTrigger(message);
+    }
+    if (message.type === "control.commit") {
+      applyControlCommit(message);
+    }
   };
 
   socket.onclose = () => {
@@ -329,12 +367,29 @@ function parseRuntimeMessage(data: unknown) {
   return message;
 }
 
+function sendSchemaDispose(session: Session) {
+  const socket = session.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  try {
+    socket.send(
+      JSON.stringify({
+        type: "schema.dispose",
+        schemaId: session.schema.id,
+        source: "runtime"
+      })
+    );
+  } catch {
+    // best-effort: disposal is not guaranteed delivery
+  }
+}
+
 function disconnectRuntime(session: Session) {
   session.shouldReconnect = false;
   if (session.reconnectTimer) {
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = undefined;
   }
+  sendSchemaDispose(session);
   session.socket?.close();
   session.socket = undefined;
   session.candidateIndex = 0;
@@ -347,6 +402,7 @@ function teardownSession(session: Session) {
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = undefined;
   }
+  sendSchemaDispose(session);
   session.socket?.close();
   session.socket = undefined;
 }

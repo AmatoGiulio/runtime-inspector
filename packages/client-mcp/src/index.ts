@@ -46,6 +46,7 @@ function schemaWithValues(activeClient: BrokerClient, schema: PanelSchema) {
   const values = activeClient.getValues(schema.id);
   return {
     ...schema,
+    stale: activeClient.isStale(schema.id),
     groups: schema.groups.map((group) => ({
       ...group,
       controls: group.controls.map((control) => ({

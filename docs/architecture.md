@@ -25,11 +25,13 @@ The protocol is the stable core. Everything else is a replaceable client or tran
 2. Panel connects to the broker and sends `handshake.hello`.
 3. Runtime publishes `schema.publish`.
 4. Panel renders groups and controls from the schema.
-5. Panel sends `control.patch` when a value changes.
-6. Broker forwards the patch to runtime clients.
-7. Runtime SDK applies the value to the registered binding.
+5. Panel sends `control.patch` for in-progress value changes (e.g. a slider drag), and `control.commit` (or a `control.batchPatch` with `committed: true`) for the decided value (drag release, A/B apply, agent decision).
+6. Panel sends `control.trigger` to fire a `trigger` control (e.g. "replay transition") — a Command, distinct from a value patch/commit.
+7. Broker forwards patches, commits, and triggers to runtime clients.
+8. Runtime SDK applies patches and commits to the registered binding the same way, and routes triggers to the trigger registry.
+9. On deliberate teardown (screen unmount, hot reload), the runtime sends `schema.dispose` before closing its socket; the broker drops the cached schema and forwards the message to panels.
 
-The broker caches the last published schema per runtime and replays it to panels that connect or reconnect later, so connection order and browser refreshes never strand a panel without a schema.
+The broker caches the last published schema per runtime and replays it to panels that connect or reconnect later, so connection order and browser refreshes never strand a panel without a schema. If the publishing runtime disconnects **without** disposing (e.g. mid Metro-reload), the broker keeps the cached schema and broadcasts `runtime.status` so panels can render it **stale** (visible, frozen) instead of empty; a late-joining panel gets the cached schema followed by the current status so it knows immediately whether it's live or stale.
 
 ## Binding model
 

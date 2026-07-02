@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const RIP_VERSION = "0.2";
+export const RIP_VERSION = "0.3";
 
 export type RuntimeRole = "runtime";
 export type PanelRole = "panel";
@@ -117,6 +117,30 @@ export interface BatchPatch {
   patches: Array<Omit<ControlPatch, "type" | "schemaId">>;
   source?: "panel" | "runtime" | "preset";
   timestamp?: number;
+  committed?: boolean;
+}
+
+export interface ControlTrigger {
+  type: "control.trigger";
+  schemaId: string;
+  controlId: string;
+  source?: "panel" | "runtime" | "preset";
+  timestamp?: number;
+}
+
+export interface ControlCommit {
+  type: "control.commit";
+  schemaId: string;
+  controlId: string;
+  value: unknown;
+  source?: "panel" | "runtime" | "preset";
+  timestamp?: number;
+}
+
+export interface SchemaDispose {
+  type: "schema.dispose";
+  schemaId: string;
+  source?: "runtime";
 }
 
 export interface PresetExport {
@@ -152,6 +176,9 @@ export type RIPMessage =
   | SchemaMessage
   | ControlPatch
   | BatchPatch
+  | ControlTrigger
+  | ControlCommit
+  | SchemaDispose
   | RuntimeStatusMessage
   | ErrorMessage;
 
@@ -296,7 +323,31 @@ export const BatchPatchSchema = z.object({
     })
   ),
   source: z.union([z.literal("panel"), z.literal("runtime"), z.literal("preset")]).optional(),
+  timestamp: z.number().optional(),
+  committed: z.boolean().optional()
+});
+
+export const ControlTriggerSchema = z.object({
+  type: z.literal("control.trigger"),
+  schemaId: z.string().min(1),
+  controlId: z.string().min(1),
+  source: z.union([z.literal("panel"), z.literal("runtime"), z.literal("preset")]).optional(),
   timestamp: z.number().optional()
+});
+
+export const ControlCommitSchema = z.object({
+  type: z.literal("control.commit"),
+  schemaId: z.string().min(1),
+  controlId: z.string().min(1),
+  value: z.unknown(),
+  source: z.union([z.literal("panel"), z.literal("runtime"), z.literal("preset")]).optional(),
+  timestamp: z.number().optional()
+});
+
+export const SchemaDisposeSchema = z.object({
+  type: z.literal("schema.dispose"),
+  schemaId: z.string().min(1),
+  source: z.literal("runtime").optional()
 });
 
 export const PresetExportSchema = z.object({
@@ -332,18 +383,36 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   SchemaMessageSchema,
   ControlPatchSchema,
   BatchPatchSchema,
+  ControlTriggerSchema,
+  ControlCommitSchema,
+  SchemaDisposeSchema,
   RuntimeStatusMessageSchema,
   ErrorMessageSchema
 ]);
 
+function checkStructuralRequirements(input: unknown): void {
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    "type" in input &&
+    (input as { type: unknown }).type === "control.commit" &&
+    !Object.prototype.hasOwnProperty.call(input, "value")
+  ) {
+    throw new Error("control.commit requires a value field");
+  }
+}
+
 export function parseRIPMessage(input: unknown): RIPMessage {
+  checkStructuralRequirements(input);
   return RIPMessageSchema.parse(input) as RIPMessage;
 }
 
 export function safeParseRIPMessage(data: unknown): RIPMessage | undefined {
   try {
     const raw = typeof data === "string" ? data : String(data);
-    return parseRIPMessage(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    checkStructuralRequirements(parsed);
+    return RIPMessageSchema.parse(parsed) as RIPMessage;
   } catch {
     return undefined;
   }
@@ -387,6 +456,31 @@ export function createPatch(
 ): ControlPatch {
   return {
     type: "control.patch",
+    schemaId,
+    controlId,
+    value,
+    source: "panel",
+    timestamp: Date.now()
+  };
+}
+
+export function createTrigger(schemaId: string, controlId: string): ControlTrigger {
+  return {
+    type: "control.trigger",
+    schemaId,
+    controlId,
+    source: "panel",
+    timestamp: Date.now()
+  };
+}
+
+export function createCommit(
+  schemaId: string,
+  controlId: string,
+  value: unknown
+): ControlCommit {
+  return {
+    type: "control.commit",
     schemaId,
     controlId,
     value,
