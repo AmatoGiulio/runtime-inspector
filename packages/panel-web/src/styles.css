@@ -163,6 +163,37 @@ h1 {
   gap: 12px;
 }
 
+.bezierControl {
+  gap: 12px;
+}
+
+.bezierPreview {
+  background: #181b21;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  height: 108px;
+  width: 100%;
+}
+
+.bezierGuide {
+  stroke: #4b5565;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+
+.bezierCurve {
+  fill: none;
+  stroke: #56c78f;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.bezierPoint {
+  fill: #56c78f;
+  stroke: #101318;
+  stroke-width: 2;
+}
+
 .springParameter {
   align-items: center;
   display: grid;

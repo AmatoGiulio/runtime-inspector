@@ -3,7 +3,9 @@ import {
   RIP_VERSION,
   createPatch,
   isValueControl,
+  type BezierControl,
   type ColorControl,
+  type CubicBezier,
   type InspectorControl,
   type PanelSchema,
   type SliderControl,
@@ -250,6 +252,15 @@ function ControlRow({
   if (control.kind === "color") {
     return <ColorRow control={control} value={String(value)} onChange={onChange} />;
   }
+  if (control.kind === "bezier") {
+    return (
+      <BezierRow
+        control={control}
+        value={coerceBezierValue(value, control.defaultValue)}
+        onChange={onChange}
+      />
+    );
+  }
   if (control.kind === "spring") {
     return (
       <SpringRow
@@ -415,6 +426,58 @@ function SpringRow({
   );
 }
 
+function BezierRow({
+  control,
+  value,
+  onChange
+}: {
+  control: BezierControl;
+  value: CubicBezier;
+  onChange: (value: CubicBezier) => void;
+}) {
+  return (
+    <div className="controlRow bezierControl">
+      <label>{control.label}</label>
+      {control.description ? <p className="controlDescription">{control.description}</p> : null}
+      <BezierPreview value={value} />
+      {(["x1", "y1", "x2", "y2"] as const).map((label, index) => (
+        <SpringParameter
+          key={label}
+          label={label}
+          max={1}
+          min={0}
+          step={0.01}
+          value={value[index]}
+          onChange={(nextValue) => {
+            const nextBezier = [...value] as CubicBezier;
+            nextBezier[index] = nextValue;
+            onChange(nextBezier);
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function BezierPreview({ value }: { value: CubicBezier }) {
+  const [x1, y1, x2, y2] = value;
+  const start = { x: 12, y: 88 };
+  const end = { x: 148, y: 12 };
+  const controlA = { x: 12 + x1 * 136, y: 88 - y1 * 76 };
+  const controlB = { x: 12 + x2 * 136, y: 88 - y2 * 76 };
+  const path = `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`;
+
+  return (
+    <svg className="bezierPreview" viewBox="0 0 160 100" role="img" aria-label="Bezier curve preview">
+      <line className="bezierGuide" x1={start.x} x2={controlA.x} y1={start.y} y2={controlA.y} />
+      <line className="bezierGuide" x1={end.x} x2={controlB.x} y1={end.y} y2={controlB.y} />
+      <path className="bezierCurve" d={path} />
+      <circle className="bezierPoint" cx={controlA.x} cy={controlA.y} r="4" />
+      <circle className="bezierPoint" cx={controlB.x} cy={controlB.y} r="4" />
+    </svg>
+  );
+}
+
 function SpringParameter({
   label,
   max,
@@ -474,6 +537,12 @@ function coerceSpringValue(value: unknown, fallback: SpringValue): SpringValue {
         : fallback.stiffness,
     mass: typeof candidate.mass === "number" ? candidate.mass : fallback.mass
   };
+}
+
+function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
+  if (!Array.isArray(value) || value.length !== 4) return fallback;
+  if (!value.every((part) => typeof part === "number")) return fallback;
+  return value as CubicBezier;
 }
 
 function formatNumber(value: number) {

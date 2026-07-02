@@ -1,12 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming
 } from "react-native-reanimated";
 import {
+  bezier,
   bindValue,
   bindTrigger,
   bindSharedValue,
@@ -23,6 +25,8 @@ type SpringConfig = {
   mass?: number;
 };
 
+type CubicBezier = [number, number, number, number];
+
 export default function App() {
   const scale = useSharedValue(1);
   const blur = useSharedValue(0);
@@ -33,12 +37,14 @@ export default function App() {
     stiffness: 180,
     mass: 1
   });
+  const easingRef = useRef<CubicBezier>([0.22, 1, 0.36, 1]);
 
   useEffect(() => {
     const replayTransition = () => {
-      scale.value = withTiming(0.92, { duration: 160 });
-      opacity.value = withTiming(0.72, { duration: 160 });
-      blur.value = withTiming(20, { duration: 160 });
+      const easing = Easing.bezier(...easingRef.current);
+      scale.value = withTiming(0.92, { duration: 260, easing });
+      opacity.value = withTiming(0.72, { duration: 260, easing });
+      blur.value = withTiming(20, { duration: 260, easing });
 
       setTimeout(() => {
         scale.value = withSpring(1, springConfigRef.current);
@@ -53,11 +59,11 @@ export default function App() {
     bindValue("card.spring", (value) => {
       springConfigRef.current = value as SpringConfig;
 
-      if (previewTimerRef.current) {
-        clearTimeout(previewTimerRef.current);
-      }
-
-      previewTimerRef.current = setTimeout(replayTransition, 120);
+      schedulePreview(replayTransition, previewTimerRef);
+    });
+    bindValue("card.easing", (value) => {
+      easingRef.current = value as CubicBezier;
+      schedulePreview(replayTransition, previewTimerRef);
     });
     bindTrigger("card.replay", replayTransition);
 
@@ -112,6 +118,17 @@ export default function App() {
                   mass: [0.4, 2.5]
                 },
                 binding: "card.spring"
+              }),
+              bezier({
+                id: "easing",
+                label: "Replay out easing",
+                description: "Changing this curve automatically replays the opening motion.",
+                defaultValue: easingRef.current,
+                presets: [
+                  { label: "Ease out", value: [0.22, 1, 0.36, 1] },
+                  { label: "Standard", value: [0.4, 0, 0.2, 1] }
+                ],
+                binding: "card.easing"
               }),
               trigger({
                 id: "replay",
@@ -216,4 +233,15 @@ function getBrokerUrl() {
   }
 
   return Platform.OS === "android" ? "ws://10.0.2.2:4577" : "ws://127.0.0.1:4577";
+}
+
+function schedulePreview(
+  replayTransition: () => void,
+  previewTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
+) {
+  if (previewTimerRef.current) {
+    clearTimeout(previewTimerRef.current);
+  }
+
+  previewTimerRef.current = setTimeout(replayTransition, 120);
 }
