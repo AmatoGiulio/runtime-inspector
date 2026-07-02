@@ -3,6 +3,7 @@ import {
   RIP_VERSION,
   createPatch,
   isValueControl,
+  parseRIPMessage,
   type BezierControl,
   type ColorControl,
   type CubicBezier,
@@ -85,28 +86,28 @@ function App() {
       };
 
       socket.onmessage = (event) => {
-        let message: { type?: string; [key: string]: unknown };
-
-        try {
-          message = JSON.parse(String(event.data));
-        } catch {
-          setNotice("Ignored invalid JSON message from broker.");
+        const message = parsePanelMessage(event.data);
+        if (!message) {
+          setNotice("Ignored invalid protocol message from broker.");
           return;
         }
 
         if (message.type === "schema.publish") {
-          const nextSchema = message.schema as PanelSchema;
-          setSchema(nextSchema);
-          setValues(collectInitialValues(nextSchema));
+          setSchema(message.schema);
+          setValues(collectInitialValues(message.schema));
           setNotice(undefined);
         }
         if (message.type === "control.patch") {
-          if (typeof message.controlId !== "string") {
-            setNotice("Ignored invalid control patch from broker.");
-            return;
-          }
           const controlId = message.controlId;
           setValues((current) => ({ ...current, [controlId]: message.value }));
+        }
+        if (message.type === "control.batchPatch") {
+          setValues((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              message.patches.map((patch) => [patch.controlId, patch.value])
+            )
+          }));
         }
       };
     };
@@ -335,6 +336,15 @@ function CompareSlotControls({
       </button>
     </div>
   );
+}
+
+function parsePanelMessage(data: unknown) {
+  try {
+    const raw = typeof data === "string" ? data : String(data);
+    return parseRIPMessage(JSON.parse(raw));
+  } catch {
+    return undefined;
+  }
 }
 
 function ControlRow({
