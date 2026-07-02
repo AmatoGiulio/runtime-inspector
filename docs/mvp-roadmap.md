@@ -28,7 +28,7 @@ Ordered by impact:
 ## Phase 3: richer tuning (July/August)
 
 - Automated test baseline: protocol validation and broker schema replay are covered with Vitest.
-- Demo clarity pass: the example now starts with obvious direct controls (`Move X`, `Rotate`, `Scale`, `Glow`, `Opacity`, `Card color`) before advanced spring/bezier tuning.
+- Demo clarity pass: the example now starts with obvious direct controls (`Move X`, `Rotate`, `Scale`, `Opacity`, `Card color`) before advanced spring/bezier tuning.
 - Spring editor UI first pass: render damping/stiffness/mass and bind it to the example replay transition. Changing spring values now auto-replays the return motion; next pass is a curve preview.
 - Bezier editor UI first pass: render four control-point sliders with a curve preview and bind it to the example replay easing.
 - **A/B compare** first pass: the panel can save and apply two value snapshots through `control.batchPatch`, then auto-trigger a replay control when one exists.
@@ -37,7 +37,8 @@ Ordered by impact:
 
 ## Phase 4: distribution (August)
 
-- **Rozenite client**: a React Native DevTools plugin speaking the same protocol. Distribution inside the official DevTools ecosystem, and the concrete proof of the "protocol-first, interchangeable panels" thesis.
+- Core consolidation (done): `panel-core` extracted from the web panel, runtime SDK multi-schema safe, protocol 0.3 semantic messages shipped via RFC 0001 (`control.trigger`, `control.commit`, `schema.dispose`, stale schema cache), conformance fixtures and normative protocol spec.
+- **Rozenite client**: a React Native DevTools plugin speaking the same protocol, built on `panel-core`. Distribution inside the official DevTools ecosystem, and the concrete proof of the "protocol-first, interchangeable panels" thesis.
 - **AI agent client**: an MCP server that connects to the broker as a panel-role client, letting an agent tune animations iteratively (patch → observe → repeat). No competitor does this; the architecture already allows it. At minimum, a demo for the launch post. First pass implemented: `packages/client-mcp` ships a stdio MCP server (`runtime-inspector-mcp`) with `get_schema`, `set_control_value`, `batch_set`, and `trigger` tools over the broker.
 - Launch: 45-second demo video (spring tuning + copy-as-code + agent tuning), posts on r/reactnative, X, SWM/Expo communities.
 

@@ -18,7 +18,8 @@ The architectural core is the Runtime Inspector Protocol, not the panel: the web
 
 ## Packages
 
-- `@runtime-inspector/protocol`: TypeScript protocol types, Zod validation, shared value validation.
+- `@runtime-inspector/protocol`: TypeScript protocol types, Zod validation, shared value validation, conformance fixtures.
+- `@runtime-inspector/panel-core`: framework-agnostic panel session logic (connection, values, throttling, A/B compare, export) — the base for every panel client.
 - `@runtime-inspector/transport-ws`: local WebSocket broker for runtime/panel messages.
 - `@runtime-inspector/react-native`: React Native runtime SDK with zero-config broker discovery.
 - `@runtime-inspector/panel-web`: Vite web panel that renders schema controls.
@@ -75,7 +76,7 @@ pnpm test
 
 ## Next up
 
-See [MVP roadmap](docs/mvp-roadmap.md). Highlights: spring curve preview in the panel, a `panel-core` package extracted from the web panel to back the future Rozenite/DevTools client, and the launch pass (45-second demo: spring tuning by feel, copy as code, agent tuning).
+See [MVP roadmap](docs/mvp-roadmap.md). The core is consolidated: `panel-core` extracted, protocol 0.3 semantic messages (`control.trigger`, `control.commit`, `schema.dispose`, stale schemas across reloads) shipped via [RFC 0001](rfcs/0001-protocol-0.3-semantic-messages.md) with a conformance fixture suite. Next: spring curve preview in the panel, the Rozenite/DevTools client on top of `panel-core`, and the launch pass (45-second demo: spring tuning by feel, copy as code, agent tuning).
 
 ## Non-goals for this phase
 

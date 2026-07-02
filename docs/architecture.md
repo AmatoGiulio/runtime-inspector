@@ -6,7 +6,8 @@ Runtime Inspector is split into small workspace packages.
 
 - `packages/protocol`: shared TypeScript types, Zod schemas, protocol helpers, examples.
 - `packages/runtime-react-native`: runtime SDK used by a React Native app.
-- `packages/panel-web`: browser panel that renders controls from a schema.
+- `packages/panel-core`: framework-agnostic panel session (connection, values store, throttling, A/B compare, export) shared by all panel clients.
+- `packages/panel-web`: browser panel that renders controls from a schema; thin React layer over `panel-core`.
 - `packages/transport-ws`: local broker that routes messages between runtime and panel.
 - `packages/cli`: developer command that starts broker and panel.
 - `packages/client-mcp`: MCP server that lets an AI agent tune a running app through the broker as a panel-role client.
