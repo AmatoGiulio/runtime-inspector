@@ -81,11 +81,22 @@ h1 {
   color: #ff9b9b;
 }
 
+.schemaSection {
+  border-bottom: 1px solid #2b2e36;
+}
+
+.schemaSectionHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px 0;
+}
+
 .layout {
   display: grid;
   gap: 0;
   grid-template-columns: minmax(360px, 1fr) 380px;
-  min-height: calc(100vh - 67px);
+  min-height: 0;
 }
 
 .groups {

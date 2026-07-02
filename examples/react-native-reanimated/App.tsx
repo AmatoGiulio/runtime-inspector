@@ -4,6 +4,7 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
   withTiming
 } from "react-native-reanimated";
@@ -34,6 +35,9 @@ export default function App() {
   const glow = useSharedValue(10);
   const opacity = useSharedValue(1);
   const cardColor = useSharedValue("#f5f7fb");
+  const backdropScale = useSharedValue(1);
+  const backdropOpacity = useSharedValue(0.15);
+  const backdropColor = useSharedValue("#2a2f3a");
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const targetRef = useRef({
     moveX: 0,
@@ -99,7 +103,73 @@ export default function App() {
     });
     bindTrigger("card.replay", replayTransition);
 
+    bindValue("backdrop.scale", (value) => {
+      backdropScale.value = value as number;
+    });
+    bindValue("backdrop.opacity", (value) => {
+      backdropOpacity.value = value as number;
+    });
+    bindValue("backdrop.color", (value) => {
+      backdropColor.value = value as string;
+    });
+    bindTrigger("backdrop.replay", () => {
+      const current = backdropScale.value;
+      backdropScale.value = withSequence(
+        withTiming(current * 1.25, { duration: 160 }),
+        withSpring(current, { damping: 10, stiffness: 140 })
+      );
+    });
+
     const brokerUrl = process.env.EXPO_PUBLIC_RI_BROKER_URL;
+
+    const backdropPanel = definePanel(
+      {
+        id: "backdrop",
+        title: "Backdrop",
+        version: "0.1.0",
+        groups: [
+          group({
+            id: "backdrop-controls",
+            label: "Backdrop controls",
+            controls: [
+              slider({
+                id: "scale",
+                label: "Pattern scale",
+                min: 0.5,
+                max: 3,
+                step: 0.01,
+                defaultValue: 1,
+                binding: "backdrop.scale"
+              }),
+              slider({
+                id: "opacity",
+                label: "Backdrop opacity",
+                min: 0,
+                max: 1,
+                step: 0.01,
+                defaultValue: 0.15,
+                binding: "backdrop.opacity"
+              }),
+              color({
+                id: "color",
+                label: "Backdrop color",
+                defaultValue: "#2a2f3a",
+                format: "hex",
+                binding: "backdrop.color"
+              }),
+              trigger({
+                id: "replay",
+                label: "Pulse",
+                binding: "backdrop.replay"
+              })
+            ]
+          })
+        ]
+      },
+      { brokerUrl }
+    );
+
+    backdropPanel.connect();
 
     const panel = definePanel(
       {
@@ -205,8 +275,19 @@ export default function App() {
         clearTimeout(previewTimerRef.current);
       }
       panel.disconnect();
+      backdropPanel.disconnect();
     };
-  }, [cardColor, glow, moveX, opacity, rotate, scale]);
+  }, [
+    backdropColor,
+    backdropOpacity,
+    backdropScale,
+    cardColor,
+    glow,
+    moveX,
+    opacity,
+    rotate,
+    scale
+  ]);
 
   const cardStyle = useAnimatedStyle(() => ({
     backgroundColor: cardColor.value,
@@ -227,8 +308,15 @@ export default function App() {
     ]
   }));
 
+  const backdropStyle = useAnimatedStyle(() => ({
+    backgroundColor: backdropColor.value,
+    opacity: backdropOpacity.value,
+    transform: [{ rotate: "45deg" }, { scale: backdropScale.value }]
+  }));
+
   return (
     <View style={styles.screen}>
+      <Animated.View style={[styles.backdrop, backdropStyle]} />
       <Text style={styles.eyebrow}>Runtime Inspector</Text>
       <View style={styles.cardStage}>
         <Animated.View style={[styles.card, cardStyle]}>
@@ -261,6 +349,14 @@ const styles = StyleSheet.create({
   cardStage: {
     position: "relative",
     width: "100%"
+  },
+  backdrop: {
+    alignSelf: "center",
+    backgroundColor: "#2a2f3a",
+    borderRadius: 40,
+    height: 260,
+    position: "absolute",
+    width: 260
   },
   glowLayer: {
     backgroundColor: "rgba(69, 179, 127, 0.42)",

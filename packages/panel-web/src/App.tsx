@@ -5,6 +5,7 @@ import {
   type ColorControl,
   type CubicBezier,
   type InspectorControl,
+  type PanelSchema,
   type SliderControl,
   type SpringControl,
   type SpringValue,
@@ -29,14 +30,48 @@ session.connect();
 
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.getState);
+
+  return (
+    <main className="shell">
+      <header className="topbar">
+        <div>
+          <h1>Runtime Inspector</h1>
+          <p>
+            {state.notice ??
+              (state.schemas.length > 0
+                ? `${state.schemas.length} schema${state.schemas.length === 1 ? "" : "s"} published`
+                : "Waiting for runtime schema")}
+          </p>
+        </div>
+        <div className="topbarMeta">
+          {state.lastPatch ? (
+            <span className="metaText">
+              Last patch: {state.lastPatch.label} {state.lastPatch.at}
+            </span>
+          ) : null}
+          <span className={`status ${state.status}`}>{state.status}</span>
+        </div>
+      </header>
+
+      {state.schemas.length === 0 ? (
+        <section className="empty">
+          <h2>No schema published</h2>
+          <p>Start a React Native runtime and call definePanel().connect().</p>
+        </section>
+      ) : (
+        state.schemas.map((schema) => <SchemaSection key={schema.id} schema={schema} state={state} />)
+      )}
+    </main>
+  );
+}
+
+function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnType<typeof session.getState> }) {
   const [copied, setCopied] = useState(false);
 
-  const schema = state.schemas[0];
-  const values = schema ? state.values[schema.id] ?? {} : {};
-  const isStale = schema ? Boolean(state.staleSchemaIds[schema.id]) : false;
+  const values = state.values[schema.id] ?? {};
+  const isStale = Boolean(state.staleSchemaIds[schema.id]);
 
   const preset = useMemo(() => {
-    if (!schema) return "";
     return JSON.stringify(
       {
         schemaId: schema.id,
@@ -51,12 +86,10 @@ function App() {
   }, [schema, values]);
 
   const codeExport = useMemo(() => {
-    if (!schema) return "";
     return session.exportTypeScript(schema.id);
   }, [schema, values]);
 
   const controlStats = useMemo(() => {
-    if (!schema) return { advanced: 0, live: 0 };
     return schema.groups.reduce(
       (stats, controlGroup) => {
         const isAdvanced = controlGroup.id.includes("replay");
@@ -70,7 +103,6 @@ function App() {
   }, [schema]);
 
   function updateValue(control: InspectorControl, value: unknown) {
-    if (!schema) return;
     if (control.kind === "trigger") {
       session.fireTrigger(schema.id, control.id);
       return;
@@ -79,12 +111,10 @@ function App() {
   }
 
   function updateSliderValue(control: SliderControl, value: number) {
-    if (!schema) return;
     session.setValue(schema.id, control.id, value);
   }
 
   function flushControl(controlId: string) {
-    if (!schema) return;
     session.commitValue(schema.id, controlId);
   }
 
@@ -96,112 +126,85 @@ function App() {
   }
 
   function saveCompareSlot(slot: CompareSlot) {
-    if (!schema) return;
     session.saveCompareSlot(slot, schema.id);
   }
 
   function applyCompareSlot(slot: CompareSlot) {
-    if (!schema) return;
     session.applyCompareSlot(slot, schema.id);
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div>
-          <h1>Runtime Inspector</h1>
-          <p>
-            {isStale
-              ? "Runtime disconnected - controls are frozen."
-              : (state.notice ?? (schema ? schema.title : "Waiting for runtime schema"))}
-          </p>
-        </div>
-        <div className="topbarMeta">
-          {schema ? (
-            <span className="metaText">
-              {controlStats.live} live / {controlStats.advanced} replay
-            </span>
-          ) : null}
-          {state.lastPatch ? (
-            <span className="metaText">
-              Last patch: {state.lastPatch.label} {state.lastPatch.at}
-            </span>
-          ) : null}
-          {isStale ? <span className="status disconnected">stale</span> : null}
-          <span className={`status ${state.status}`}>{state.status}</span>
-        </div>
-      </header>
-
-      {!schema ? (
-        <section className="empty">
-          <h2>No schema published</h2>
-          <p>Start a React Native runtime and call definePanel().connect().</p>
+    <section className="schemaSection">
+      <div className="schemaSectionHeader">
+        <h2>{schema.title}</h2>
+        <span className="metaText">
+          {controlStats.live} live / {controlStats.advanced} replay
+        </span>
+        {isStale ? <span className="status disconnected">stale</span> : null}
+      </div>
+      <div className="layout">
+        <section className="groups">
+          {schema.groups.map((controlGroup) => (
+            <section className="group" key={controlGroup.id}>
+              <div className="groupHeader">
+                <div className="groupTitleRow">
+                  <h2>{controlGroup.label}</h2>
+                  <span className={`groupBadge ${controlGroup.id.includes("replay") ? "replay" : "live"}`}>
+                    {controlGroup.id.includes("replay") ? "Replay" : "Live"}
+                  </span>
+                </div>
+                {controlGroup.description ? <p>{controlGroup.description}</p> : null}
+              </div>
+              <div className="controls">
+                {controlGroup.controls.map((control) => (
+                  <ControlRow
+                    control={control}
+                    disabled={isStale}
+                    key={control.id}
+                    value={getControlValue(control, values)}
+                    onChange={(value) => updateValue(control, value)}
+                    onSliderChange={updateSliderValue}
+                    onCommit={flushControl}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </section>
-      ) : (
-        <div className="layout">
-          <section className="groups">
-            {schema.groups.map((controlGroup) => (
-              <section className="group" key={controlGroup.id}>
-                <div className="groupHeader">
-                  <div className="groupTitleRow">
-                    <h2>{controlGroup.label}</h2>
-                    <span className={`groupBadge ${controlGroup.id.includes("replay") ? "replay" : "live"}`}>
-                      {controlGroup.id.includes("replay") ? "Replay" : "Live"}
-                    </span>
-                  </div>
-                  {controlGroup.description ? <p>{controlGroup.description}</p> : null}
-                </div>
-                <div className="controls">
-                  {controlGroup.controls.map((control) => (
-                    <ControlRow
-                      control={control}
-                      disabled={isStale}
-                      key={control.id}
-                      value={getControlValue(control, values)}
-                      onChange={(value) => updateValue(control, value)}
-                      onSliderChange={updateSliderValue}
-                      onCommit={flushControl}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+        <aside className="exports">
+          <section className="exportPanel">
+            <h2>A/B Compare</h2>
+            <div className="compareGrid">
+              <CompareSlotControls
+                hasSnapshot={Boolean(state.compareSlots[schema.id]?.A)}
+                label="A"
+                onApply={() => applyCompareSlot("A")}
+                onSave={() => saveCompareSlot("A")}
+              />
+              <CompareSlotControls
+                hasSnapshot={Boolean(state.compareSlots[schema.id]?.B)}
+                label="B"
+                onApply={() => applyCompareSlot("B")}
+                onSave={() => saveCompareSlot("B")}
+              />
+            </div>
           </section>
-          <aside className="exports">
-            <section className="exportPanel">
-              <h2>A/B Compare</h2>
-              <div className="compareGrid">
-                <CompareSlotControls
-                  hasSnapshot={Boolean(state.compareSlots[schema.id]?.A)}
-                  label="A"
-                  onApply={() => applyCompareSlot("A")}
-                  onSave={() => saveCompareSlot("A")}
-                />
-                <CompareSlotControls
-                  hasSnapshot={Boolean(state.compareSlots[schema.id]?.B)}
-                  label="B"
-                  onApply={() => applyCompareSlot("B")}
-                  onSave={() => saveCompareSlot("B")}
-                />
-              </div>
-            </section>
-            <section className="exportPanel">
-              <div className="exportHeader">
-                <h2>TypeScript</h2>
-                <button type="button" onClick={copyCode}>
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <pre>{codeExport}</pre>
-            </section>
-            <section className="exportPanel">
-              <h2>Preset JSON</h2>
-              <pre>{preset}</pre>
-            </section>
-          </aside>
-        </div>
-      )}
-    </main>
+          <section className="exportPanel">
+            <div className="exportHeader">
+              <h2>TypeScript</h2>
+              <button type="button" onClick={copyCode}>
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre>{codeExport}</pre>
+          </section>
+          <section className="exportPanel">
+            <h2>Preset JSON</h2>
+            <pre>{preset}</pre>
+          </section>
+        </aside>
+      </div>
+    </section>
   );
 }
 
