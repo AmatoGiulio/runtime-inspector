@@ -49,3 +49,18 @@ The broker can require a per-session token for `panel`-role clients, generated b
 ## Device reality
 
 The default broker URL is local, but motion is judged by feel on a physical device. The CLI prints a LAN URL + QR code, and the runtime SDK auto-discovers the broker: it derives the dev machine's host from Metro's `scriptURL` (the same trick Reactotron uses), probes broker ports 4577-4581 on that host, and falls back to the emulator loopback (`10.0.2.2` on Android, `127.0.0.1` otherwise) if nothing answers. `EXPO_PUBLIC_RI_BROKER_URL` remains available as an override for unusual networks.
+
+Discovery reads `scriptURL` from whichever source the runtime exposes, in cascade order, and every path is unit-tested:
+
+| Environment | Source | Fallback behavior |
+| --- | --- | --- |
+| Expo Go / New Architecture | `TurboModuleRegistry.get("SourceCode")` | next source in cascade |
+| Old Architecture | `NativeModules.SourceCode` | next source in cascade |
+| Expo Go (extra) | `globalThis.expo.modules.ExponentConstants.experienceUrl` | last resort before loopback-only candidates |
+| Android emulator | n/a | `10.0.2.2` loopback candidate always appended |
+| iOS simulator | n/a | `127.0.0.1` loopback candidate always appended |
+| `adb reverse` (physical Android) | `scriptURL` resolves to `localhost`/LAN host | host-derived candidates probed first |
+| Tunnel mode (ngrok/Expo tunnel/Cloudflare/etc.) | `scriptURL` host matches a known tunnel suffix | unsupported — discarded from candidates, explicit one-time dev warning telling the user to use LAN mode or set `EXPO_PUBLIC_RI_BROKER_URL` |
+| Release builds | `__DEV__` is false | SDK is a no-op — `definePanel` returns inert `connect`/`disconnect` |
+
+When every candidate in a cycle fails to connect, the SDK also warns once per session with the full candidate list, so a broken broker connection is never silent.

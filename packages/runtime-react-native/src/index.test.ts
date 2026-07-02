@@ -175,3 +175,64 @@ describe("multi-schema sessions", () => {
     expect(setter).not.toHaveBeenCalled();
   });
 });
+
+describe("discovery diagnostics", () => {
+  it("warns exactly once after a full cycle of failed candidates", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { definePanel } = await import("./index");
+
+    const schema = makeSchema("panel-cycle");
+    const panel = definePanel(schema);
+    panel.connect();
+
+    // Each candidate fails immediately (never opens) then closes, advancing the index.
+    for (let i = 0; i < 20; i++) {
+      const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+      socket.readyState = FakeWebSocket.CLOSED;
+      socket.onclose?.();
+      vi.advanceTimersByTime(5000);
+    }
+
+    const fullCycleWarnings = warnSpy.mock.calls.filter((call) =>
+      String(call[0]).includes("Could not reach a Runtime Inspector broker")
+    );
+    expect(fullCycleWarnings.length).toBe(1);
+
+    panel.disconnect();
+    warnSpy.mockRestore();
+  });
+
+  it("warns once when discovery resolves only a tunnel url", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { NativeModules } = await import("react-native");
+    const originalSourceCode = NativeModules.SourceCode;
+    NativeModules.SourceCode = {
+      scriptURL: "http://my-app.ngrok.io/index.bundle"
+    };
+
+    try {
+      const { definePanel } = await import("./index");
+
+      const schema = makeSchema("panel-tunnel");
+      const panel = definePanel(schema);
+      panel.connect();
+
+      const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
+      socket.readyState = FakeWebSocket.CLOSED;
+      socket.onclose?.();
+      vi.advanceTimersByTime(5000);
+
+      const tunnelWarnings = warnSpy.mock.calls.filter((call) =>
+        String(call[0]).includes("Dev server is behind a tunnel")
+      );
+      expect(tunnelWarnings.length).toBe(1);
+
+      panel.disconnect();
+    } finally {
+      NativeModules.SourceCode = originalSourceCode;
+      warnSpy.mockRestore();
+    }
+  });
+});

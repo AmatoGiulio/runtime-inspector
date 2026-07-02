@@ -18,7 +18,7 @@ import {
   isValueControl
 } from "@runtime-inspector/protocol";
 import { NativeModules, Platform, TurboModuleRegistry } from "react-native";
-import { getBrokerCandidates } from "./discovery";
+import { getBrokerCandidates, resolveScriptUrl } from "./discovery";
 
 declare const __DEV__: boolean | undefined;
 
@@ -48,39 +48,44 @@ interface Session {
   shouldReconnect: boolean;
   candidateIndex: number;
   lockedUrl: string | undefined;
+  warnedTunnel: boolean;
+  warnedFullCycle: boolean;
 }
 
 const sessions = new Map<string, Session>();
 
-function getScriptUrl(): string | undefined {
+function getScriptUrl(): Array<string | undefined> {
+  let fromNativeModules: string | undefined;
   try {
-    const fromNativeModules =
+    fromNativeModules =
       NativeModules?.SourceCode?.getConstants?.().scriptURL ??
       NativeModules?.SourceCode?.scriptURL;
-    if (fromNativeModules) return fromNativeModules;
   } catch {
     // try the next source
   }
 
+  let fromTurboModule: string | undefined;
   try {
     const sourceCode = TurboModuleRegistry?.get?.("SourceCode") as
       | { getConstants?: () => { scriptURL?: string } }
       | null
       | undefined;
-    const fromTurboModule = sourceCode?.getConstants?.().scriptURL;
-    if (fromTurboModule) return fromTurboModule;
+    fromTurboModule = sourceCode?.getConstants?.().scriptURL;
   } catch {
     // try the next source
   }
 
+  let fromExpoGlobal: string | undefined;
   try {
     const expoGlobal = (globalThis as {
       expo?: { modules?: { ExponentConstants?: { experienceUrl?: string } } };
     }).expo;
-    return expoGlobal?.modules?.ExponentConstants?.experienceUrl;
+    fromExpoGlobal = expoGlobal?.modules?.ExponentConstants?.experienceUrl;
   } catch {
-    return undefined;
+    // no more sources
   }
+
+  return [fromNativeModules, fromTurboModule, fromExpoGlobal];
 }
 
 function getPlatformOs(): string | undefined {
@@ -149,7 +154,9 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
     reconnectTimer: undefined,
     shouldReconnect: false,
     candidateIndex: 0,
-    lockedUrl: undefined
+    lockedUrl: undefined,
+    warnedTunnel: false,
+    warnedFullCycle: false
   };
   sessions.set(schema.id, session);
 
@@ -234,17 +241,38 @@ function connectRuntime(session: Session) {
 
   const { schema, options } = session;
   session.shouldReconnect = options.reconnect ?? true;
+  const { scriptUrl, tunnelUrl } = resolveScriptUrl(getScriptUrl());
   const candidates = options.brokerUrl
     ? [options.brokerUrl]
     : getBrokerCandidates({
-        scriptUrl: getScriptUrl(),
+        scriptUrl,
         platform: getPlatformOs(),
         defaultPort: 4577
       });
+
+  if (tunnelUrl && !scriptUrl && !session.warnedTunnel) {
+    session.warnedTunnel = true;
+    warnDev(
+      `Dev server is behind a tunnel (${tunnelUrl}). A tunnel cannot reach a local broker - use LAN mode or set EXPO_PUBLIC_RI_BROKER_URL.`
+    );
+  }
+
+  if (
+    !session.lockedUrl &&
+    !session.warnedFullCycle &&
+    session.candidateIndex > 0 &&
+    session.candidateIndex % candidates.length === 0
+  ) {
+    session.warnedFullCycle = true;
+    warnDev(
+      `Could not reach a Runtime Inspector broker at: ${candidates.join(", ")}. Is \`runtime-inspector dev\` running? Set EXPO_PUBLIC_RI_BROKER_URL or pass brokerUrl to override.`
+    );
+  }
+
   const brokerUrl = session.lockedUrl ?? candidates[session.candidateIndex % candidates.length];
   if (session.candidateIndex === 0 && !session.lockedUrl) {
     warnDev(
-      `Discovery: scriptUrl=${getScriptUrl() ?? "undefined"} platform=${getPlatformOs() ?? "undefined"} candidates=${candidates.join(", ")}`
+      `Discovery: scriptUrl=${scriptUrl ?? "undefined"} tunnelUrl=${tunnelUrl ?? "undefined"} platform=${getPlatformOs() ?? "undefined"} candidates=${candidates.join(", ")}`
     );
   }
   warnDev(`Connecting to ${brokerUrl}`);

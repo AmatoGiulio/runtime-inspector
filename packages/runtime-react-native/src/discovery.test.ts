@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBrokerCandidates, getDevServerHost } from "./discovery";
+import { getBrokerCandidates, getDevServerHost, isTunnelUrl, resolveScriptUrl } from "./discovery";
 
 describe("getDevServerHost", () => {
   it("parses a host from a URL with a port", () => {
@@ -18,6 +18,65 @@ describe("getDevServerHost", () => {
 
   it("returns undefined for undefined input", () => {
     expect(getDevServerHost(undefined)).toBeUndefined();
+  });
+});
+
+describe("isTunnelUrl", () => {
+  const suffixes = [
+    ".exp.direct",
+    ".ngrok.io",
+    ".ngrok-free.app",
+    ".trycloudflare.com",
+    ".tunnelmole.net",
+    ".loca.lt"
+  ];
+
+  for (const suffix of suffixes) {
+    it(`returns true for a host ending with ${suffix}`, () => {
+      expect(isTunnelUrl(`http://my-app${suffix}/index.bundle`)).toBe(true);
+    });
+
+    it(`is case-insensitive for ${suffix}`, () => {
+      expect(isTunnelUrl(`http://MY-APP${suffix.toUpperCase()}/index.bundle`)).toBe(true);
+    });
+  }
+
+  it("returns false for a LAN IP", () => {
+    expect(isTunnelUrl("http://192.168.1.23:8081/index.bundle")).toBe(false);
+  });
+
+  it("returns false for localhost", () => {
+    expect(isTunnelUrl("http://localhost:8081/index.bundle")).toBe(false);
+  });
+});
+
+describe("resolveScriptUrl", () => {
+  it("returns the first valid url as scriptUrl", () => {
+    expect(
+      resolveScriptUrl(["http://192.168.1.23:8081/index.bundle", "http://example.com/index.bundle"])
+    ).toEqual({ scriptUrl: "http://192.168.1.23:8081/index.bundle" });
+  });
+
+  it("skips undefined entries", () => {
+    expect(resolveScriptUrl([undefined, "http://192.168.1.23:8081/index.bundle"])).toEqual({
+      scriptUrl: "http://192.168.1.23:8081/index.bundle"
+    });
+  });
+
+  it("skips a tunnel url and picks a later LAN url", () => {
+    expect(
+      resolveScriptUrl(["http://my-app.ngrok.io/index.bundle", "http://192.168.1.23:8081/index.bundle"])
+    ).toEqual({ scriptUrl: "http://192.168.1.23:8081/index.bundle" });
+  });
+
+  it("returns tunnelUrl when only a tunnel url is present", () => {
+    expect(resolveScriptUrl(["http://my-app.ngrok.io/index.bundle"])).toEqual({
+      tunnelUrl: "http://my-app.ngrok.io/index.bundle"
+    });
+  });
+
+  it("returns an empty object when all entries are undefined", () => {
+    expect(resolveScriptUrl([undefined, undefined])).toEqual({});
   });
 });
 

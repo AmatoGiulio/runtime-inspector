@@ -10,6 +10,45 @@ export function getDevServerHost(scriptUrl: string | undefined): string | undefi
   }
 }
 
+const TUNNEL_HOST_SUFFIXES = [
+  ".exp.direct",
+  ".ngrok.io",
+  ".ngrok-free.app",
+  ".trycloudflare.com",
+  ".tunnelmole.net",
+  ".loca.lt"
+];
+
+export function isTunnelUrl(url: string): boolean {
+  const host = getDevServerHost(url);
+  if (!host) return false;
+
+  const lowerHost = host.toLowerCase();
+  return TUNNEL_HOST_SUFFIXES.some((suffix) => lowerHost.endsWith(suffix));
+}
+
+export function resolveScriptUrl(rawUrls: Array<string | undefined>): {
+  scriptUrl?: string;
+  tunnelUrl?: string;
+} {
+  let tunnelUrl: string | undefined;
+
+  for (const rawUrl of rawUrls) {
+    if (!rawUrl) continue;
+    const host = getDevServerHost(rawUrl);
+    if (!host) continue;
+
+    if (isTunnelUrl(rawUrl)) {
+      tunnelUrl ??= rawUrl;
+      continue;
+    }
+
+    return { scriptUrl: rawUrl };
+  }
+
+  return tunnelUrl ? { tunnelUrl } : {};
+}
+
 export function getBrokerCandidates(options: {
   scriptUrl?: string;
   platform?: string;
