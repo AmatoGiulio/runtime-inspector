@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {
   RIP_VERSION,
   createPatch,
@@ -14,7 +14,15 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
+type PendingPatch = {
+  controlId: string;
+  value: unknown;
+  timer: number | undefined;
+  lastSentAt: number;
+};
+
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
+const sliderThrottleMs = 50;
 
 function App() {
   const [status, setStatus] = useState<ConnectionState>("connecting");
@@ -22,6 +30,7 @@ function App() {
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [copied, setCopied] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
+  const pendingPatchesRef = useRef(new Map<string, PendingPatch>());
 
   useEffect(() => {
     let reconnectTimer: number | undefined;
@@ -78,6 +87,7 @@ function App() {
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
+      clearPendingPatches(pendingPatchesRef.current);
       socketRef.current?.close();
     };
   }, []);
@@ -110,6 +120,17 @@ function App() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(createPatch(schema.id, control.id, value)));
     }
+  }
+
+  function updateSliderValue(control: SliderControl, value: number) {
+    if (!schema) return;
+    setValues((current) => ({ ...current, [control.id]: value }));
+    sendPatchThrottled(schema.id, control.id, value, socketRef, pendingPatchesRef);
+  }
+
+  function flushControl(controlId: string) {
+    if (!schema) return;
+    flushPendingPatch(schema.id, controlId, socketRef, pendingPatchesRef);
   }
 
   async function copyCode() {
@@ -150,6 +171,8 @@ function App() {
                       key={control.id}
                       value={getControlValue(control, values)}
                       onChange={(value) => updateValue(control, value)}
+                      onSliderChange={updateSliderValue}
+                      onCommit={flushControl}
                     />
                   ))}
                 </div>
@@ -180,14 +203,25 @@ function App() {
 function ControlRow({
   control,
   value,
-  onChange
+  onChange,
+  onSliderChange,
+  onCommit
 }: {
   control: InspectorControl;
   value: unknown;
   onChange: (value: unknown) => void;
+  onSliderChange: (control: SliderControl, value: number) => void;
+  onCommit: (controlId: string) => void;
 }) {
   if (control.kind === "slider") {
-    return <SliderRow control={control} value={Number(value)} onChange={onChange} />;
+    return (
+      <SliderRow
+        control={control}
+        value={Number(value)}
+        onChange={(nextValue) => onSliderChange(control, nextValue)}
+        onCommit={() => onCommit(control.id)}
+      />
+    );
   }
   if (control.kind === "toggle") {
     return <ToggleRow control={control} value={Boolean(value)} onChange={onChange} />;
@@ -204,11 +238,13 @@ function ControlRow({
 function SliderRow({
   control,
   value,
-  onChange
+  onChange,
+  onCommit
 }: {
   control: SliderControl;
   value: number;
   onChange: (value: number) => void;
+  onCommit: () => void;
 }) {
   return (
     <div className="controlRow">
@@ -222,6 +258,8 @@ function SliderRow({
           type="range"
           value={value}
           onChange={(event) => onChange(Number(event.currentTarget.value))}
+          onKeyUp={onCommit}
+          onPointerUp={onCommit}
         />
         <output>
           {value}
@@ -313,6 +351,83 @@ function collectInitialValues(schema: PanelSchema) {
 function getControlValue(control: InspectorControl, values: Record<string, unknown>) {
   if (!isValueControl(control)) return undefined;
   return values[control.id] ?? control.defaultValue;
+}
+
+function sendPatchThrottled(
+  schemaId: string,
+  controlId: string,
+  value: unknown,
+  socketRef: RefObject<WebSocket | null>,
+  pendingPatchesRef: RefObject<Map<string, PendingPatch>>
+) {
+  const pendingPatches = pendingPatchesRef.current;
+  const existing = pendingPatches.get(controlId);
+  const now = performance.now();
+
+  if (!existing || now - existing.lastSentAt >= sliderThrottleMs) {
+    existing?.timer && window.clearTimeout(existing.timer);
+    sendPatch(schemaId, controlId, value, socketRef);
+    pendingPatches.set(controlId, {
+      controlId,
+      value,
+      timer: undefined,
+      lastSentAt: now
+    });
+    return;
+  }
+
+  if (existing.timer) {
+    window.clearTimeout(existing.timer);
+  }
+
+  existing.value = value;
+  existing.timer = window.setTimeout(() => {
+    sendPatch(schemaId, controlId, existing.value, socketRef);
+    pendingPatches.set(controlId, {
+      controlId,
+      value: existing.value,
+      timer: undefined,
+      lastSentAt: performance.now()
+    });
+  }, sliderThrottleMs - (now - existing.lastSentAt));
+}
+
+function flushPendingPatch(
+  schemaId: string,
+  controlId: string,
+  socketRef: RefObject<WebSocket | null>,
+  pendingPatchesRef: RefObject<Map<string, PendingPatch>>
+) {
+  const pendingPatches = pendingPatchesRef.current;
+  const pending = pendingPatches.get(controlId);
+  if (!pending) return;
+
+  if (pending.timer) {
+    window.clearTimeout(pending.timer);
+  }
+
+  sendPatch(schemaId, controlId, pending.value, socketRef);
+  pendingPatches.delete(controlId);
+}
+
+function clearPendingPatches(pendingPatches: Map<string, PendingPatch>) {
+  for (const pending of pendingPatches.values()) {
+    if (pending.timer) {
+      window.clearTimeout(pending.timer);
+    }
+  }
+  pendingPatches.clear();
+}
+
+function sendPatch(
+  schemaId: string,
+  controlId: string,
+  value: unknown,
+  socketRef: RefObject<WebSocket | null>
+) {
+  if (socketRef.current?.readyState === WebSocket.OPEN) {
+    socketRef.current.send(JSON.stringify(createPatch(schemaId, controlId, value)));
+  }
 }
 
 function createTypeScriptPreset(schema: PanelSchema, values: Record<string, unknown>) {
