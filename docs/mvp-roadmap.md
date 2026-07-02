@@ -19,7 +19,7 @@ Ordered by impact:
 1. **Schema cache in the broker.** Done: the broker stores the last `schema.publish` per runtime and replays it to panels that connect or refresh later.
 2. **Reconnect behavior** on both runtime and panel. Basic reconnect is implemented; next pass should add visible retry diagnostics and configurable backoff.
 3. **Physical device support.** Animations are judged by feel on a real device, not in the simulator. CLI prints LAN URL + QR code (Expo-style); document `adb reverse` for Android USB. Remove the hardcoded `127.0.0.1` assumption from the runtime SDK.
-4. **Copy as code.** The panel turns current values into paste-ready code (e.g. `withSpring(x, { damping: 14, stiffness: 180 })`, `Easing.bezier(...)`). This closes the loop — tuned values must end up in the codebase, not die in the panel. Higher priority than new control UIs.
+4. **Copy as code.** First pass implemented: the panel exports current values as paste-ready TypeScript. Next pass should generate control-aware snippets such as `withSpring(x, { damping: 14, stiffness: 180 })` and `Easing.bezier(...)`.
 5. **Trigger control.** A `trigger` control kind that invokes a callback registered in the runtime (e.g. "replay transition"), so a full tuning session happens from the desktop without touching the device.
 6. **Patch throttling** on high-frequency controls (sliders) — matters once patches travel over Wi-Fi.
 7. Runtime-side Zod validation of incoming messages (broker already validates; runtime currently does raw `JSON.parse`).

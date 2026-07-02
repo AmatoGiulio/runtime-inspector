@@ -90,7 +90,7 @@ h1 {
 }
 
 .groupHeader h2,
-.preset h2,
+.exportPanel h2,
 .empty h2 {
   font-size: 13px;
   font-weight: 650;
@@ -162,15 +162,44 @@ output,
   text-align: right;
 }
 
-.preset {
+.exports {
   background: #15161a;
+  display: grid;
+  gap: 20px;
+  align-content: start;
   padding: 20px;
 }
 
-.preset pre {
+.exportPanel {
+  min-width: 0;
+}
+
+.exportHeader {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.exportHeader button {
+  background: #242832;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  color: #d9dee8;
+  cursor: pointer;
+  font-size: 12px;
+  height: 28px;
+  padding: 0 10px;
+}
+
+.exportHeader button:hover {
+  background: #2d3340;
+}
+
+.exportPanel pre {
   color: #b7beca;
   font-size: 12px;
   line-height: 1.5;
+  margin: 10px 0 0;
   overflow: auto;
   white-space: pre-wrap;
 }
