@@ -36,7 +36,7 @@ export interface PanelState {
   staleSchemaIds: Record<string, boolean>;
   values: Record<string, Record<string, unknown>>;
   lastPatch?: LastPatchInfo;
-  compareSlots: Partial<Record<CompareSlotId, Record<string, unknown>>>;
+  compareSlots: Record<string, Partial<Record<CompareSlotId, Record<string, unknown>>>>;
 }
 
 export interface WebSocketLike {
@@ -61,11 +61,16 @@ export interface CreatePanelSessionOptions {
 }
 
 type PendingPatch = {
+  schemaId: string;
   controlId: string;
   value: unknown;
   timer: ReturnType<typeof setTimeout> | undefined;
   lastSentAt: number;
 };
+
+function pendingKey(schemaId: string, controlId: string): string {
+  return `${schemaId}:${controlId}`;
+}
 
 export interface PanelSession {
   getState(): PanelState;
@@ -362,7 +367,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function sendPatchThrottled(schemaId: string, controlId: string, value: unknown) {
-    const existing = pendingPatches.get(controlId);
+    const key = pendingKey(schemaId, controlId);
+    const existing = pendingPatches.get(key);
     const currentTime = now();
 
     if (!existing || currentTime - existing.lastSentAt >= sliderThrottleMs) {
@@ -370,7 +376,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         clearTimeout(existing.timer);
       }
       sendPatch(schemaId, controlId, value);
-      pendingPatches.set(controlId, {
+      pendingPatches.set(key, {
+        schemaId,
         controlId,
         value,
         timer: undefined,
@@ -386,7 +393,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     existing.value = value;
     existing.timer = setTimeout(() => {
       sendPatch(schemaId, controlId, existing.value);
-      pendingPatches.set(controlId, {
+      pendingPatches.set(key, {
+        schemaId,
         controlId,
         value: existing.value,
         timer: undefined,
@@ -398,7 +406,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   function commitValue(schemaId: string, controlId: string) {
     if (blockIfStale(schemaId)) return;
 
-    const pending = pendingPatches.get(controlId);
+    const key = pendingKey(schemaId, controlId);
+    const pending = pendingPatches.get(key);
     if (!pending) return;
 
     if (pending.timer) {
@@ -406,7 +415,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     }
 
     sendCommit(schemaId, controlId, pending.value);
-    pendingPatches.delete(controlId);
+    pendingPatches.delete(key);
   }
 
   function fireTrigger(schemaId: string, controlId: string) {
@@ -418,10 +427,14 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
   function saveCompareSlot(slot: CompareSlotId, schemaId: string) {
     const values = state.values[schemaId] ?? {};
+    const schemaSlots = state.compareSlots[schemaId] ?? {};
     setState({
       compareSlots: {
         ...state.compareSlots,
-        [slot]: structuredClone(values)
+        [schemaId]: {
+          ...schemaSlots,
+          [slot]: structuredClone(values)
+        }
       }
     });
   }
@@ -429,7 +442,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   function applyCompareSlot(slot: CompareSlotId, schemaId: string) {
     if (blockIfStale(schemaId)) return;
 
-    const snapshot = state.compareSlots[slot];
+    const snapshot = state.compareSlots[schemaId]?.[slot];
     const schema = schemasById.get(schemaId);
     if (!schema || !snapshot) return;
 

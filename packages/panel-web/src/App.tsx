@@ -172,13 +172,13 @@ function App() {
               <h2>A/B Compare</h2>
               <div className="compareGrid">
                 <CompareSlotControls
-                  hasSnapshot={Boolean(state.compareSlots.A)}
+                  hasSnapshot={Boolean(state.compareSlots[schema.id]?.A)}
                   label="A"
                   onApply={() => applyCompareSlot("A")}
                   onSave={() => saveCompareSlot("A")}
                 />
                 <CompareSlotControls
-                  hasSnapshot={Boolean(state.compareSlots.B)}
+                  hasSnapshot={Boolean(state.compareSlots[schema.id]?.B)}
                   label="B"
                   onApply={() => applyCompareSlot("B")}
                   onSave={() => saveCompareSlot("B")}

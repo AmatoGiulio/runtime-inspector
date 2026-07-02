@@ -279,3 +279,130 @@ describe("createPanelSession", () => {
     expect(session.getState().values.demo?.enabled).toBe(true);
   });
 });
+
+describe("createPanelSession with multiple schemas sharing control ids", () => {
+  const schemaA: PanelSchema = {
+    id: "schema-a",
+    title: "Schema A",
+    groups: [
+      {
+        id: "group-1",
+        label: "Group 1",
+        controls: [
+          { id: "scale", kind: "slider", label: "Scale", defaultValue: 1, min: 0, max: 10 },
+          { id: "replay", kind: "trigger", label: "Replay" }
+        ]
+      }
+    ]
+  };
+
+  const schemaB: PanelSchema = {
+    id: "schema-b",
+    title: "Schema B",
+    groups: [
+      {
+        id: "group-1",
+        label: "Group 1",
+        controls: [
+          { id: "scale", kind: "slider", label: "Scale", defaultValue: 1, min: 0, max: 10 },
+          { id: "replay", kind: "trigger", label: "Replay" }
+        ]
+      }
+    ]
+  };
+
+  it("keeps pending throttled patches separate per schema for colliding controlIds", () => {
+    const { session, setNow } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, schemaA);
+    socket.receive({ type: "schema.publish", schema: schemaB });
+
+    setNow(0);
+    session.setValue("schema-a", "scale", 2);
+    setNow(10);
+    session.setValue("schema-b", "scale", 3);
+
+    // Both should have sent an immediate patch (first send per schema/control is not throttled).
+    const patchesAfterFirstSends = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "control.patch")
+      .map((raw) => JSON.parse(raw));
+    expect(patchesAfterFirstSends).toHaveLength(2);
+    expect(patchesAfterFirstSends.find((p) => p.schemaId === "schema-a")?.value).toBe(2);
+    expect(patchesAfterFirstSends.find((p) => p.schemaId === "schema-b")?.value).toBe(3);
+
+    // Now issue throttled updates within the throttle window for both schemas' "scale" control.
+    setNow(15);
+    session.setValue("schema-a", "scale", 4);
+    setNow(20);
+    session.setValue("schema-b", "scale", 5);
+
+    // Neither should have sent yet (still within throttle window), both timers pending independently.
+    const patchesBeforeFlush = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
+    expect(patchesBeforeFlush).toHaveLength(2);
+
+    // Commit both — before the fix, the second schema's pending patch would have clobbered the first
+    // (since pendingPatches was keyed by controlId alone), causing a wrong send or a lost commit.
+    session.commitValue("schema-a", "scale");
+    session.commitValue("schema-b", "scale");
+
+    const commits = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "control.commit")
+      .map((raw) => JSON.parse(raw));
+    expect(commits).toHaveLength(2);
+    expect(commits.find((c) => c.schemaId === "schema-a")?.value).toBe(4);
+    expect(commits.find((c) => c.schemaId === "schema-b")?.value).toBe(5);
+  });
+
+  it("stores and applies compare slot snapshots independently per schema", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, schemaA);
+    socket.receive({ type: "schema.publish", schema: schemaB });
+
+    session.setValue("schema-a", "scale", 6);
+    session.commitValue("schema-a", "scale");
+    session.setValue("schema-b", "scale", 8);
+    session.commitValue("schema-b", "scale");
+
+    session.saveCompareSlot("A", "schema-a");
+    session.saveCompareSlot("A", "schema-b");
+
+    expect(session.getState().compareSlots["schema-a"]?.A?.scale).toBe(6);
+    expect(session.getState().compareSlots["schema-b"]?.A?.scale).toBe(8);
+
+    // Mutate current values so apply is observable.
+    session.setValue("schema-a", "scale", 1);
+    session.commitValue("schema-a", "scale");
+    session.setValue("schema-b", "scale", 2);
+    session.commitValue("schema-b", "scale");
+
+    session.applyCompareSlot("A", "schema-a");
+
+    expect(session.getState().values["schema-a"]?.scale).toBe(6);
+    // Schema B's live values must remain untouched by applying schema A's slot.
+    expect(session.getState().values["schema-b"]?.scale).toBe(2);
+
+    const batchPatches = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "control.batchPatch")
+      .map((raw) => JSON.parse(raw));
+    expect(batchPatches).toHaveLength(1);
+    expect(batchPatches[0].schemaId).toBe("schema-a");
+    expect(batchPatches[0].patches).toEqual([{ controlId: "scale", value: 6 }]);
+  });
+
+  it("keeps values state separated per schema for colliding controlIds (regression)", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, schemaA);
+    socket.receive({ type: "schema.publish", schema: schemaB });
+
+    session.setValue("schema-a", "scale", 7);
+    session.setValue("schema-b", "scale", 9);
+
+    expect(session.getState().values["schema-a"]?.scale).toBe(7);
+    expect(session.getState().values["schema-b"]?.scale).toBe(9);
+  });
+});
