@@ -1,37 +1,54 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming
 } from "react-native-reanimated";
 import {
+  bindValue,
   bindTrigger,
   bindSharedValue,
   definePanel,
   group,
   slider,
+  spring,
   trigger
 } from "@runtime-inspector/react-native";
+
+type SpringConfig = {
+  damping: number;
+  stiffness: number;
+  mass?: number;
+};
 
 export default function App() {
   const scale = useSharedValue(1);
   const blur = useSharedValue(0);
   const opacity = useSharedValue(1);
+  const springConfigRef = useRef<SpringConfig>({
+    damping: 14,
+    stiffness: 180,
+    mass: 1
+  });
 
   useEffect(() => {
     bindSharedValue("card.scale", scale);
     bindSharedValue("card.blur", blur);
     bindSharedValue("card.opacity", opacity);
+    bindValue("card.spring", (value) => {
+      springConfigRef.current = value as SpringConfig;
+    });
     bindTrigger("card.replay", () => {
       scale.value = withTiming(0.92, { duration: 160 });
       opacity.value = withTiming(0.72, { duration: 160 });
       blur.value = withTiming(20, { duration: 160 });
 
       setTimeout(() => {
-        scale.value = withTiming(1, { duration: 240 });
-        opacity.value = withTiming(1, { duration: 240 });
-        blur.value = withTiming(0, { duration: 240 });
+        scale.value = withSpring(1, springConfigRef.current);
+        opacity.value = withSpring(1, springConfigRef.current);
+        blur.value = withSpring(0, springConfigRef.current);
       }, 220);
     });
 
@@ -74,6 +91,17 @@ export default function App() {
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.opacity"
+              }),
+              spring({
+                id: "spring",
+                label: "Return spring",
+                defaultValue: springConfigRef.current,
+                ranges: {
+                  damping: [4, 32],
+                  stiffness: [60, 320],
+                  mass: [0.4, 2.5]
+                },
+                binding: "card.spring"
               }),
               trigger({
                 id: "replay",

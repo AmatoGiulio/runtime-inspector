@@ -159,6 +159,26 @@ h1 {
   grid-template-columns: 1fr 64px;
 }
 
+.springControl {
+  gap: 12px;
+}
+
+.springParameter {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 72px 1fr 54px;
+}
+
+.springParameter span {
+  color: #aeb4bf;
+  font-size: 12px;
+}
+
+.springParameter output {
+  text-align: right;
+}
+
 input[type="range"] {
   accent-color: #45b37f;
   width: 100%;

@@ -27,7 +27,7 @@ Ordered by impact:
 
 ## Phase 3: richer tuning (July/August)
 
-- Spring editor UI with live curve preview.
+- Spring editor UI first pass: render damping/stiffness/mass and bind it to the example replay transition. Next pass: live curve preview.
 - Bezier editor UI.
 - **A/B compare**: hold two parameter sets and switch between them instantly while re-triggering the animation. Motion tuning is comparative by nature; no existing tool offers this. Small superset of the preset model already in the protocol.
 - Control metadata for display density and labels.

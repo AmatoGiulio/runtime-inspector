@@ -7,6 +7,8 @@ import {
   type InspectorControl,
   type PanelSchema,
   type SliderControl,
+  type SpringControl,
+  type SpringValue,
   type ToggleControl,
   type TriggerControl
 } from "@runtime-inspector/protocol";
@@ -248,6 +250,15 @@ function ControlRow({
   if (control.kind === "color") {
     return <ColorRow control={control} value={String(value)} onChange={onChange} />;
   }
+  if (control.kind === "spring") {
+    return (
+      <SpringRow
+        control={control}
+        value={coerceSpringValue(value, control.defaultValue)}
+        onChange={onChange}
+      />
+    );
+  }
   if (control.kind === "trigger") {
     return <TriggerRow control={control} onChange={onChange} />;
   }
@@ -357,6 +368,83 @@ function TriggerRow({
   );
 }
 
+function SpringRow({
+  control,
+  value,
+  onChange
+}: {
+  control: SpringControl;
+  value: SpringValue;
+  onChange: (value: SpringValue) => void;
+}) {
+  const ranges = {
+    damping: control.ranges?.damping ?? [1, 40],
+    stiffness: control.ranges?.stiffness ?? [20, 400],
+    mass: control.ranges?.mass ?? [0.2, 4]
+  };
+
+  return (
+    <div className="controlRow springControl">
+      <label>{control.label}</label>
+      <SpringParameter
+        label="Damping"
+        max={ranges.damping[1]}
+        min={ranges.damping[0]}
+        step={0.5}
+        value={value.damping}
+        onChange={(nextValue) => onChange({ ...value, damping: nextValue })}
+      />
+      <SpringParameter
+        label="Stiffness"
+        max={ranges.stiffness[1]}
+        min={ranges.stiffness[0]}
+        step={1}
+        value={value.stiffness}
+        onChange={(nextValue) => onChange({ ...value, stiffness: nextValue })}
+      />
+      <SpringParameter
+        label="Mass"
+        max={ranges.mass[1]}
+        min={ranges.mass[0]}
+        step={0.1}
+        value={value.mass ?? control.defaultValue.mass ?? 1}
+        onChange={(nextValue) => onChange({ ...value, mass: nextValue })}
+      />
+    </div>
+  );
+}
+
+function SpringParameter({
+  label,
+  max,
+  min,
+  step,
+  value,
+  onChange
+}: {
+  label: string;
+  max: number;
+  min: number;
+  step: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="springParameter">
+      <span>{label}</span>
+      <input
+        max={max}
+        min={min}
+        step={step}
+        type="range"
+        value={value}
+        onChange={(event) => onChange(Number(event.currentTarget.value))}
+      />
+      <output>{formatNumber(value)}</output>
+    </div>
+  );
+}
+
 function collectInitialValues(schema: PanelSchema) {
   return Object.fromEntries(
     schema.groups.flatMap((controlGroup) =>
@@ -370,6 +458,25 @@ function collectInitialValues(schema: PanelSchema) {
 function getControlValue(control: InspectorControl, values: Record<string, unknown>) {
   if (!isValueControl(control)) return undefined;
   return values[control.id] ?? control.defaultValue;
+}
+
+function coerceSpringValue(value: unknown, fallback: SpringValue): SpringValue {
+  if (!value || typeof value !== "object") return fallback;
+
+  const candidate = value as Partial<SpringValue>;
+  return {
+    damping:
+      typeof candidate.damping === "number" ? candidate.damping : fallback.damping,
+    stiffness:
+      typeof candidate.stiffness === "number"
+        ? candidate.stiffness
+        : fallback.stiffness,
+    mass: typeof candidate.mass === "number" ? candidate.mass : fallback.mass
+  };
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function sendPatchThrottled(
