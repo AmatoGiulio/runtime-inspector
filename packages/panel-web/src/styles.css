@@ -129,6 +129,29 @@ h1 {
   font-weight: 600;
 }
 
+.controlDescription {
+  color: #8f97a6;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.triggerButton {
+  background: #2f7a59;
+  border: 1px solid #3f9b72;
+  border-radius: 6px;
+  color: #ecfff6;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  height: 30px;
+  padding: 0 12px;
+}
+
+.triggerButton:hover {
+  background: #368b66;
+}
+
 .sliderGrid {
   align-items: center;
   display: grid;

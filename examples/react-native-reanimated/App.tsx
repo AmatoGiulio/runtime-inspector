@@ -2,10 +2,12 @@ import { useEffect } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import {
+  bindTrigger,
   bindSharedValue,
   definePanel,
   group,
-  slider
+  slider,
+  trigger
 } from "@runtime-inspector/react-native";
 
 export default function App() {
@@ -17,6 +19,17 @@ export default function App() {
     bindSharedValue("card.scale", scale);
     bindSharedValue("card.blur", blur);
     bindSharedValue("card.opacity", opacity);
+    bindTrigger("card.replay", () => {
+      scale.value = 0.92;
+      opacity.value = 0.72;
+      blur.value = 20;
+
+      setTimeout(() => {
+        scale.value = 1;
+        opacity.value = 1;
+        blur.value = 0;
+      }, 180);
+    });
 
     const brokerUrl =
       Platform.OS === "android" ? "ws://10.0.2.2:4577" : "ws://127.0.0.1:4577";
@@ -58,6 +71,12 @@ export default function App() {
                 step: 0.01,
                 defaultValue: 1,
                 binding: "card.opacity"
+              }),
+              trigger({
+                id: "replay",
+                label: "Replay transition",
+                description: "Run the demo transition from the panel.",
+                binding: "card.replay"
               })
             ]
           })

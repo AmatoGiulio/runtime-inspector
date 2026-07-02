@@ -7,7 +7,8 @@ import {
   type InspectorControl,
   type PanelSchema,
   type SliderControl,
-  type ToggleControl
+  type ToggleControl,
+  type TriggerControl
 } from "@runtime-inspector/protocol";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
@@ -103,7 +104,9 @@ function App() {
 
   function updateValue(control: InspectorControl, value: unknown) {
     if (!schema) return;
-    setValues((current) => ({ ...current, [control.id]: value }));
+    if (isValueControl(control)) {
+      setValues((current) => ({ ...current, [control.id]: value }));
+    }
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify(createPatch(schema.id, control.id, value)));
     }
@@ -192,12 +195,10 @@ function ControlRow({
   if (control.kind === "color") {
     return <ColorRow control={control} value={String(value)} onChange={onChange} />;
   }
-  return (
-    <div className="controlRow">
-      <label>{control.label}</label>
-      <span className="unsupported">{control.kind}</span>
-    </div>
-  );
+  if (control.kind === "trigger") {
+    return <TriggerRow control={control} onChange={onChange} />;
+  }
+  return null;
 }
 
 function SliderRow({
@@ -271,6 +272,30 @@ function ColorRow({
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
+    </div>
+  );
+}
+
+function TriggerRow({
+  control,
+  onChange
+}: {
+  control: TriggerControl;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="controlRow inline">
+      <div>
+        <label>{control.label}</label>
+        {control.description ? <p className="controlDescription">{control.description}</p> : null}
+      </div>
+      <button
+        className="triggerButton"
+        type="button"
+        onClick={() => onChange(Date.now())}
+      >
+        Run
+      </button>
     </div>
   );
 }

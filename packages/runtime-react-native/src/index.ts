@@ -31,8 +31,10 @@ export interface SharedValueLike<T> {
 }
 
 type BindingTarget = SharedValueLike<unknown> | ((value: unknown) => void);
+type TriggerHandler = () => void;
 
 const bindingRegistry = new Map<string, BindingTarget>();
+const triggerRegistry = new Map<string, TriggerHandler>();
 let socket: WebSocket | undefined;
 let activeSchema: PanelSchema | undefined;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -105,11 +107,23 @@ export function bindValue(binding: string, setter: (value: unknown) => void) {
   bindingRegistry.set(binding, setter);
 }
 
+export function bindTrigger(binding: string, handler: TriggerHandler) {
+  triggerRegistry.set(binding, handler);
+}
+
 export function applyControlPatch(patch: ControlPatch) {
   if (!activeSchema || patch.schemaId !== activeSchema.id) return;
 
   const control = findControl(activeSchema, patch.controlId);
-  if (!control || !isValueControl(control)) return;
+  if (!control) return;
+
+  if (control.kind === "trigger") {
+    const bindingId = control.binding ?? control.id;
+    triggerRegistry.get(bindingId)?.();
+    return;
+  }
+
+  if (!isValueControl(control)) return;
 
   control.value = patch.value as never;
   const bindingId = control.binding ?? control.id;
