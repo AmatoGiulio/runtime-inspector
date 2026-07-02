@@ -148,4 +148,18 @@ describe("safeParseRIPMessage", () => {
   it("returns undefined for a garbage object", () => {
     expect(safeParseRIPMessage({ not: "valid" })).toBeUndefined();
   });
+
+  it("parses a valid control.patch with an extra unknown field (tolerant reader)", () => {
+    const json = JSON.stringify({
+      ...createPatch("schema", "scale", 1.1),
+      futureField: "some-value-from-a-newer-client"
+    });
+    const message = safeParseRIPMessage(json);
+    expect(message?.type).toBe("control.patch");
+  });
+
+  it("returns undefined for a message with an unknown type", () => {
+    const json = JSON.stringify({ type: "control.teleport", schemaId: "s", controlId: "c", value: 1 });
+    expect(safeParseRIPMessage(json)).toBeUndefined();
+  });
 });

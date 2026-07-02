@@ -1,0 +1,21 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "card-transition",
+    "title": "Card Transition",
+    "groups": [
+      {
+        "id": "easing",
+        "label": "Easing",
+        "controls": [
+          {
+            "id": "bounce",
+            "kind": "spring",
+            "label": "Bounce",
+            "defaultValue": { "damping": 10 }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "control.batchPatch",
+  "schemaId": "card-transition",
+  "patches": [
+    { "controlId": "scale", "value": 1.2, "timestamp": 1751500000006 },
+    { "controlId": "flip", "value": false, "timestamp": 1751500000007 },
+    { "controlId": "bounce", "value": { "damping": 20, "stiffness": 200 }, "timestamp": 1751500000008 }
+  ],
+  "source": "preset",
+  "timestamp": 1751500000009
+}

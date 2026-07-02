@@ -1,0 +1,6 @@
+{
+  "type": "runtime.status",
+  "online": true,
+  "clientId": "runtime-card-transition",
+  "schemaId": "card-transition"
+}

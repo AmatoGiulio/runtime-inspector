@@ -1,0 +1,13 @@
+{
+  "note": "value-level fixture: to be checked via isValidControlValue against a slider control definition, not parseRIPMessage",
+  "controlKind": "slider",
+  "control": {
+    "id": "scale",
+    "kind": "slider",
+    "label": "Scale",
+    "defaultValue": 1,
+    "min": 0,
+    "max": 2
+  },
+  "value": "not-a-number"
+}

@@ -1,0 +1,5 @@
+{
+  "type": "handshake.hello",
+  "protocolVersion": "0.2",
+  "role": "panel"
+}

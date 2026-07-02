@@ -1,0 +1,8 @@
+{
+  "type": "control.patch",
+  "schemaId": "card-transition",
+  "controlId": "replay",
+  "value": true,
+  "source": "panel",
+  "timestamp": 1751500000005
+}

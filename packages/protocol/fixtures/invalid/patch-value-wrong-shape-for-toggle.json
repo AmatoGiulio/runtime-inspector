@@ -1,0 +1,11 @@
+{
+  "note": "value-level fixture: to be checked via isValidControlValue against a toggle control definition, not parseRIPMessage",
+  "controlKind": "toggle",
+  "control": {
+    "id": "flip",
+    "kind": "toggle",
+    "label": "Flip",
+    "defaultValue": false
+  },
+  "value": "true"
+}

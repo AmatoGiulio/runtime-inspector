@@ -1,0 +1,8 @@
+{
+  "type": "control.patch",
+  "schemaId": "card-transition",
+  "controlId": "curve",
+  "value": [0.25, 0.1, 0.25, 1],
+  "source": "panel",
+  "timestamp": 1751500000003
+}

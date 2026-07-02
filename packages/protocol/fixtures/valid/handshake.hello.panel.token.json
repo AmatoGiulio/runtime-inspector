@@ -1,0 +1,8 @@
+{
+  "type": "handshake.hello",
+  "protocolVersion": "0.2",
+  "role": "panel",
+  "clientId": "panel-mcp-1",
+  "clientName": "MCP Agent",
+  "token": "dev-secret-token"
+}

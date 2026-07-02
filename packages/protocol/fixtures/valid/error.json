@@ -1,0 +1,5 @@
+{
+  "type": "error",
+  "code": "VERSION_MISMATCH",
+  "message": "Protocol version mismatch: client sent \"0.1\", broker expects \"0.2\"."
+}

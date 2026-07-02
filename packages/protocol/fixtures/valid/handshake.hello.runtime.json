@@ -1,0 +1,7 @@
+{
+  "type": "handshake.hello",
+  "protocolVersion": "0.2",
+  "role": "runtime",
+  "clientId": "runtime-card-transition",
+  "clientName": "Card Transition Demo"
+}

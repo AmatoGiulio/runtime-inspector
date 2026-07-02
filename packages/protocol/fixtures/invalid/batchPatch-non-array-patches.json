@@ -1,0 +1,8 @@
+{
+  "type": "control.batchPatch",
+  "schemaId": "card-transition",
+  "patches": {
+    "scale": 1.2,
+    "flip": false
+  }
+}

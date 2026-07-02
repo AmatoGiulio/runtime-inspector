@@ -1,0 +1,88 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "card-transition",
+    "title": "Card Transition",
+    "description": "Controls for the card transition demo runtime.",
+    "version": "1",
+    "groups": [
+      {
+        "id": "motion",
+        "label": "Motion",
+        "description": "Basic motion parameters.",
+        "controls": [
+          {
+            "id": "scale",
+            "kind": "slider",
+            "label": "Scale",
+            "description": "Card scale factor.",
+            "defaultValue": 1,
+            "value": 1.08,
+            "min": 0,
+            "max": 2,
+            "step": 0.01,
+            "unit": "x"
+          },
+          {
+            "id": "flip",
+            "kind": "toggle",
+            "label": "Flip",
+            "defaultValue": false,
+            "value": true,
+            "binding": "card.flip"
+          },
+          {
+            "id": "accentColor",
+            "kind": "color",
+            "label": "Accent Color",
+            "defaultValue": "#3366ff",
+            "value": "#ff6633",
+            "format": "hex"
+          }
+        ]
+      },
+      {
+        "id": "easing",
+        "label": "Easing",
+        "controls": [
+          {
+            "id": "curve",
+            "kind": "bezier",
+            "label": "Curve",
+            "defaultValue": [0.42, 0, 1, 1],
+            "value": [0.25, 0.1, 0.25, 1],
+            "presets": [
+              { "label": "ease-in-out", "value": [0.42, 0, 0.58, 1] },
+              { "label": "linear", "value": [0, 0, 1, 1] }
+            ]
+          },
+          {
+            "id": "bounce",
+            "kind": "spring",
+            "label": "Bounce",
+            "defaultValue": { "damping": 10, "stiffness": 100 },
+            "value": { "damping": 14, "stiffness": 180, "mass": 1 },
+            "ranges": {
+              "damping": [1, 50],
+              "stiffness": [10, 500],
+              "mass": [0.1, 5]
+            }
+          }
+        ]
+      },
+      {
+        "id": "actions",
+        "label": "Actions",
+        "controls": [
+          {
+            "id": "replay",
+            "kind": "trigger",
+            "label": "Replay Transition",
+            "description": "Re-runs the card transition animation.",
+            "binding": "card.replay"
+          }
+        ]
+      }
+    ]
+  }
+}

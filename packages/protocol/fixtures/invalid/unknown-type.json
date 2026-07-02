@@ -1,0 +1,6 @@
+{
+  "type": "control.teleport",
+  "schemaId": "card-transition",
+  "controlId": "scale",
+  "value": 1
+}

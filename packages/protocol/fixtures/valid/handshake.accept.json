@@ -1,0 +1,6 @@
+{
+  "type": "handshake.accept",
+  "protocolVersion": "0.2",
+  "brokerId": "broker-2f6b6f6e-9c3f-4b2a-8f2e-1a2b3c4d5e6f",
+  "clientId": "panel-web-1"
+}

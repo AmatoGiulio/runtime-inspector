@@ -1,0 +1,8 @@
+{
+  "type": "control.patch",
+  "schemaId": "card-transition",
+  "controlId": "bounce",
+  "value": { "damping": 14, "stiffness": 180, "mass": 1 },
+  "source": "runtime",
+  "timestamp": 1751500000004
+}

@@ -1,0 +1,21 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "card-transition",
+    "title": "Card Transition",
+    "groups": [
+      {
+        "id": "easing",
+        "label": "Easing",
+        "controls": [
+          {
+            "id": "curve",
+            "kind": "bezier",
+            "label": "Curve",
+            "defaultValue": [0.42, 0, 1]
+          }
+        ]
+      }
+    ]
+  }
+}

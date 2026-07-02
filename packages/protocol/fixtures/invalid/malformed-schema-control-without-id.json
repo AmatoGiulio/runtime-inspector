@@ -1,0 +1,22 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "card-transition",
+    "title": "Card Transition",
+    "groups": [
+      {
+        "id": "motion",
+        "label": "Motion",
+        "controls": [
+          {
+            "kind": "slider",
+            "label": "Scale",
+            "defaultValue": 1,
+            "min": 0,
+            "max": 2
+          }
+        ]
+      }
+    ]
+  }
+}

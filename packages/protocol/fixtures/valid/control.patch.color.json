@@ -1,0 +1,8 @@
+{
+  "type": "control.patch",
+  "schemaId": "card-transition",
+  "controlId": "accentColor",
+  "value": "#ff6633",
+  "source": "preset",
+  "timestamp": 1751500000002
+}
