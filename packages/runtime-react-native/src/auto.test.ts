@@ -239,7 +239,7 @@ describe("__riInspect", () => {
     warnSpy.mockRestore();
   });
 
-  it("__riInspect then a live useTunable claim on the same name suffixes and warns", async () => {
+  it("__riInspect then a live useRuntimeValue claim on the same name suffixes and warns", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
     const { __riInspect, registerRuntimeValue } = await import("./auto");
@@ -256,7 +256,7 @@ describe("__riInspect", () => {
     warnSpy.mockRestore();
   });
 
-  it("a live useTunable claim then __riInspect on the same name suffixes and warns", async () => {
+  it("a live useRuntimeValue claim then __riInspect on the same name suffixes and warns", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
     const { __riInspect, registerRuntimeValue } = await import("./auto");

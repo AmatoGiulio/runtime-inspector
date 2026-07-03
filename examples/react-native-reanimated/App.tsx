@@ -8,12 +8,12 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useInspector, useTunable } from "@runtime-inspector/react-native";
+import { useInspector, useRuntimeValue } from "@runtime-inspector/react-native";
 
 export default function App() {
   // @inspect min=8 max=48
   const cardRadius = useSharedValue(28);
-  const glow = useTunable("glow", 10, { min: 0, max: 48, label: "Glow" });
+  const glow = useRuntimeValue("glow", 10, { min: 0, max: 48, label: "Glow" });
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function schedulePreview() {

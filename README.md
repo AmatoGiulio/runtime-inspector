@@ -37,20 +37,25 @@ const card = useInspector("card-transition", {
 
 ## One value, one line
 
-For a single tunable value, `useTunable` skips the panel/spec ceremony entirely — no id to invent, no group:
+For a single tunable value, `useRuntimeValue` skips the panel/spec ceremony entirely — no id to invent, no group:
 
 ```ts
-const blur = useTunable("blur", 18, { min: 0, max: 40 });
-// blur is a SharedValue-like handle - use it in worklets/styles as usual.
-// It shows up in the shared "auto" panel alongside every other useTunable
+const blur = useRuntimeValue("blur", 18, { min: 0, max: 40 });
+// blur is the runtime-native mutable value - in React Native, a Reanimated
+// SharedValue: use it in worklets/styles as usual.
+// It shows up in the shared "auto" panel alongside every other useRuntimeValue
 // and // @inspect value, with no grouping to set up.
+
+const replay = useAction("replay", () => runReplayAnimation());
+// The panel renders a button in the same "auto" panel. `replay` is the
+// function itself - actions are declared explicitly, not inferred.
 ```
 
-Kind inference is the same table `useInspector` uses (number requires `min`/`max`, boolean → toggle, string → color, spring shape → spring editor, 4-number array → bezier, function → trigger button). It registers on mount and unregisters on unmount, so removing the component removes its control from the panel.
+Kind inference is the same table `useInspector` uses (number requires `min`/`max`, boolean → toggle, string → color, spring shape → spring editor, 4-number array → bezier). Actions are not inferred from a function initial — use `useAction("replay", fn)` instead. It registers on mount and unregisters on unmount, so removing the component removes its control from the panel.
 
 ## Switch it on with a comment
 
-The DX ladder, in order: `// @inspect` (zero API, build-time) → `useTunable` (one line, runtime-level) → `useInspector` (grouped panels, `onChange`, `$targets`) → the explicit API (full control, no Reanimated required).
+The DX ladder, in order: `// @inspect` (zero API, build-time) → `useRuntimeValue` / `useAction` (one line, runtime-level) → `useInspector` (grouped panels, `onChange`, `$targets`) → the explicit API (full control, no Reanimated required).
 
 Annotate an existing `useSharedValue` with an `// @inspect` comment and `@runtime-inspector/babel-plugin` does the rest at build time, dev-only:
 

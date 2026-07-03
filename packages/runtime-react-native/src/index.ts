@@ -277,8 +277,8 @@ export type {
 export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
-export { useTunable } from "./use-tunable";
-export type { TunableOptions, TunableRangeOptions } from "./use-tunable";
+export { useRuntimeValue, useAction } from "./use-runtime-value";
+export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";
 
 function connectRuntime(session: Session) {
   if (

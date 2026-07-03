@@ -39,7 +39,7 @@ export interface InspectMeta {
 }
 
 /** Registration mode: "replace" (lifecycle-less, e.g. __riInspect) overwrites its own prior
- * entry in place on re-registration; "claim" (e.g. useTunable) suffixes on any live collision. */
+ * entry in place on re-registration; "claim" (e.g. useRuntimeValue/useAction) suffixes on any live collision. */
 type RegistrationMode = "replace" | "claim";
 
 /** A Runtime Value registry entry - either a value binding or a trigger. */

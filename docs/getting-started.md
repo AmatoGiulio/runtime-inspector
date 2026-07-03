@@ -55,22 +55,36 @@ The plugin rewrites this (dev-only) into a call to `__riInspect`, which register
 
 This is the right entry point when you want one or two values exposed without touching the surrounding component. Reach for `useInspector` below when you want several related controls grouped under one panel.
 
-### `useTunable` (one value, one line)
+### `useRuntimeValue` (one value, one line)
 
-`useTunable(name, initial, options?)` registers a single Runtime Value directly, with no panel spec and no schema id to invent:
+`useRuntimeValue(name, initial, options?)` registers a single Runtime Value directly, with no panel spec and no schema id to invent:
 
 ```ts
-import { useTunable } from "@runtime-inspector/react-native";
+import { useRuntimeValue } from "@runtime-inspector/react-native";
 
-const blur = useTunable("blur", 18, { min: 0, max: 40 });
-// blur.value in a worklet/style, as usual.
+const blur = useRuntimeValue("blur", 18, { min: 0, max: 40 });
+// blur is the runtime-native mutable value - in React Native, a Reanimated
+// SharedValue: use blur.value in a worklet/style, as usual.
 ```
 
-- **Kind inference** is the same table as `useInspector`/`// @inspect`: number → slider (requires `min`/`max` in `options`, thrown as an actionable error otherwise), boolean → toggle, string → color, `{ damping, stiffness }` → spring, a 4-number array → bezier, and a function initial → a trigger (the panel renders a button, and the function itself is returned unchanged).
+- **Kind inference** is the same table as `useInspector`/`// @inspect`: number → slider (requires `min`/`max` in `options`, thrown as an actionable error otherwise), boolean → toggle, string → color, `{ damping, stiffness }` → spring, a 4-number array → bezier. Actions are declared, not inferred: passing a function throws pointing to `useAction("<name>", fn)` instead.
 - **Options**: `min`, `max`, `step`, `unit`, `label`, `onChange` — `onChange` fires after the handle is written, same as `useInspector`.
-- **Panel placement**: every `useTunable` call lands in the same shared "auto" schema that `// @inspect` publishes to, so scattered one-liners across components collect into a single panel with no grouping to set up. Reach for `useInspector` instead when you want a named, grouped panel.
-- **Lifecycle**: registers on mount, unregisters on unmount, and republishes the shared schema (debounced) either way — unmounting removes the control from the panel. Because unmount releases the name, remounting the same component does not accumulate `name2`, `name3` suffixes; a genuine collision (two live `useTunable` calls with the same name) does get a suffix, with a dev warning, same as `// @inspect`.
+- **Panel placement**: every `useRuntimeValue` call lands in the same shared "auto" schema that `// @inspect` publishes to, so scattered one-liners across components collect into a single panel with no grouping to set up. Reach for `useInspector` instead when you want a named, grouped panel.
+- **Lifecycle**: registers on mount, unregisters on unmount, and republishes the shared schema (debounced) either way — unmounting removes the control from the panel. Because unmount releases the name, remounting the same component does not accumulate `name2`, `name3` suffixes; a genuine collision (two live `useRuntimeValue` calls with the same name) does get a suffix, with a dev warning, same as `// @inspect`.
 - **Production**: dev-only like the rest of the SDK — in release builds the hook still returns a usable handle, it just never registers.
+
+### `useAction` (declared triggers)
+
+`useAction(name, handler, options?)` registers a trigger control in the same shared "auto" schema:
+
+```ts
+import { useAction } from "@runtime-inspector/react-native";
+
+const replay = useAction("replay", () => runReplayAnimation());
+// The panel renders a button. `replay` is the handler itself, unchanged.
+```
+
+Actions are declared, not inferred from a function's shape — the same rationale as the `useRuntimeValue` function-initial error above. Same lifecycle as `useRuntimeValue` (register on mount, dispose on unmount, name release, live-collision suffix + warning). Options: `label`.
 
 ### `useInspector` (recommended for multiple controls)
 
