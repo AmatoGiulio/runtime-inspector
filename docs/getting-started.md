@@ -53,7 +53,7 @@ const cardRadius = useSharedValue(28);
 
 The plugin rewrites this (dev-only) into a call to `__riInspect`, which registers the value in an "auto" schema panel and publishes it — `cardRadius` is still the same shared value, transparently returned, so the rest of the component is untouched. Numeric values need `min`/`max` in the directive (same rule as `useInspector`'s bare-number rejection); `step`, `unit`, and a quoted `label="..."` are optional. In a production build (`api.env() === "production"`), the plugin does nothing and the comment stays inert.
 
-This is the right entry point when you want one or two values exposed without touching the surrounding component. Reach for `useInspector` below when you want several related controls grouped under one panel, or the explicit API when a patch needs a JS-side effect.
+This is the right entry point when you want one or two values exposed without touching the surrounding component. Reach for `useInspector` below when you want several related controls grouped under one panel.
 
 ### `useInspector` (recommended for multiple controls)
 
@@ -88,7 +88,17 @@ Spec value shape decides the control kind:
 
 A bare `number` is rejected — sliders always need an explicit range. The control id and binding are the spec key; the label defaults to the key split into words (`moveX` → `"Move X"`), or the explicit `label` field.
 
-`useInspector` builds the schema and handles once (on mount) and connects/disconnects the panel session across the component's lifecycle, mirroring `definePanel(...).connect()` / `.disconnect()` under the hood.
+`useInspector` builds the schema and handles once (on mount) and connects/disconnects the panel session across the component's lifecycle, mirroring `definePanel(...).connect()` / `.disconnect()` under the hood. It requires `react-native-reanimated` — handles are created with its `makeMutable`, and a missing install throws rather than falling back to a plain object.
+
+Any value entry can take an `onChange` callback, fired with the newly-applied value right after the handle's `.value` is written — this covers side effects (re-running an animation, scheduling a preview) that used to need a manual `bindValue` call alongside the hook. The returned handles also expose `$targets`, a plain object with the last panel-applied value per control, so call sites don't need to keep their own ref in sync:
+
+```ts
+const card = useInspector("card-transition", {
+  scale: { value: 1, min: 0.8, max: 1.2, step: 0.01, onChange: () => console.log("scale changed") }
+});
+
+// card.$targets.scale is the last value the panel applied.
+```
 
 ### Explicit API (advanced)
 
@@ -124,7 +134,7 @@ const panel = definePanel({
 panel.connect();
 ```
 
-`useInspector` is sugar over exactly this API — reach for it when a binding needs a JS-side effect (e.g. re-running an animation, updating a ref) beyond writing directly to a `SharedValue`.
+`useInspector` is sugar over exactly this API — reach for it for the common case, or drop to this explicit form when you need direct control over bindings, multiple hand-wired schemas, or don't have `react-native-reanimated` installed.
 
 ## Monorepo note
 

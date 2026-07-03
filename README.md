@@ -24,15 +24,16 @@ The architectural core is the Runtime Inspector Protocol, not the panel: the web
 const card = useInspector("card-transition", {
   moveX: { value: 0, min: -120, max: 120, unit: "px" },
   color: "#f5f7fb",
-  spring: { damping: 14, stiffness: 180 },
+  spring: { damping: 14, stiffness: 180, onChange: () => runReplayAnimation() },
   replay: () => runReplayAnimation()
 });
 
 // card.moveX, card.color, card.spring are SharedValue-like handles;
 // card.replay is the function itself, registered as a trigger.
+// card.$targets.moveX is the last panel-applied value for that control.
 ```
 
-The explicit API (`definePanel`, `bindSharedValue`, `bindValue`, `bindTrigger`, …) is still there underneath, for cases that need direct control over bindings or side effects.
+`useInspector` requires `react-native-reanimated` as a peer dependency — it creates handles with Reanimated's `makeMutable`. The explicit API (`definePanel`, `bindSharedValue`, `bindValue`, `bindTrigger`, …) is still there underneath and works without Reanimated, for cases that need direct control over bindings or side effects.
 
 ## Switch it on with a comment
 
