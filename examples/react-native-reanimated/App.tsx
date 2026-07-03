@@ -8,12 +8,12 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useInspector } from "@runtime-inspector/react-native";
+import { useInspector, useTunable } from "@runtime-inspector/react-native";
 
 export default function App() {
-  const glow = useSharedValue(10);
   // @inspect min=8 max=48
   const cardRadius = useSharedValue(28);
+  const glow = useTunable("glow", 10, { min: 0, max: 48, label: "Glow" });
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   function schedulePreview() {
@@ -117,6 +117,7 @@ export default function App() {
       <Animated.View style={[styles.backdrop, backdropStyle]} />
       <Text style={styles.eyebrow}>Runtime Inspector</Text>
       <View style={styles.cardStage}>
+        <Animated.View style={[styles.glowLayer, glowStyle]} />
         <Animated.View style={[styles.card, cardStyle]}>
           <Text style={styles.liveBadge}>LIVE</Text>
           <Text style={styles.title}>Obvious Card</Text>

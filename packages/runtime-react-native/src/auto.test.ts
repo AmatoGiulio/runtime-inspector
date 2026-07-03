@@ -122,6 +122,95 @@ describe("__riInspect", () => {
     expect(schema.groups[0].controls).toHaveLength(3);
   });
 
+  it("dispose releases the base name so a later registration is not suffixed", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { registerRuntimeValue } = await import("./auto");
+
+    const dispose = registerRuntimeValue({
+      kind: "value",
+      name: "moveX",
+      sharedValue: { value: 1 },
+      meta: { min: 0, max: 10 },
+      target: 1
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    dispose();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    registerRuntimeValue({
+      kind: "value",
+      name: "moveX",
+      sharedValue: { value: 2 },
+      meta: { min: 0, max: 10 },
+      target: 2
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "moveX")).toBeDefined();
+    expect(controlById(schema, "moveX2")).toBeUndefined();
+  });
+
+  it("dispose removes the control and republishes without it", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { registerRuntimeValue } = await import("./auto");
+
+    const dispose = registerRuntimeValue({
+      kind: "value",
+      name: "temp",
+      sharedValue: { value: 1 },
+      meta: { min: 0, max: 10 },
+      target: 1
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(controlById(definePanelSpy.mock.calls.at(-1)![0], "temp")).toBeDefined();
+
+    dispose();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(controlById(definePanelSpy.mock.calls.at(-1)![0], "temp")).toBeUndefined();
+  });
+
+  it("two live registrations of the same name suffix and warn", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { registerRuntimeValue } = await import("./auto");
+
+    registerRuntimeValue({ kind: "value", name: "dupe", sharedValue: { value: 1 }, meta: { min: 0, max: 1 }, target: 1 });
+    registerRuntimeValue({ kind: "value", name: "dupe", sharedValue: { value: 2 }, meta: { min: 0, max: 1 }, target: 2 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "dupe")).toBeDefined();
+    expect(controlById(schema, "dupe2")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("collides"));
+
+    warnSpy.mockRestore();
+  });
+
+  it("registers and fires a trigger entry via applyControlTrigger", async () => {
+    const { registerRuntimeValue } = await import("./auto");
+    const { applyControlTrigger, definePanel } = await import("./index");
+    void definePanel;
+
+    let fired = false;
+    registerRuntimeValue({
+      kind: "trigger",
+      name: "replay",
+      handler: () => {
+        fired = true;
+      }
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    applyControlTrigger({
+      type: "control.trigger",
+      schemaId: "auto",
+      controlId: "replay"
+    });
+
+    expect(fired).toBe(true);
+  });
+
   it("is a no-op in production - returns the value unchanged and never registers", async () => {
     vi.stubGlobal("__DEV__", false);
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");

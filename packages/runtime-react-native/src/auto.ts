@@ -5,10 +5,12 @@ import type {
   PanelSchema,
   SliderControl,
   SpringControl,
-  ToggleControl
+  ToggleControl,
+  TriggerControl
 } from "@runtime-inspector/protocol";
 import {
-  bindSharedValue,
+  bindTrigger,
+  bindValue,
   bezier as bezierControl,
   color as colorControl,
   definePanel,
@@ -16,6 +18,7 @@ import {
   slider as sliderControl,
   spring as springControl,
   toggle as toggleControl,
+  trigger as triggerControl,
   type RuntimeInspectorOptions,
   type SharedValueLike
 } from "./index";
@@ -35,16 +38,29 @@ export interface InspectMeta {
   label?: string;
 }
 
-interface RegistryEntry {
+/** A Runtime Value registry entry - either a value binding or a trigger. */
+interface ValueEntry {
+  kind: "value";
   name: string;
   sharedValue: SharedValueLike<unknown>;
   meta: InspectMeta;
+  onChange?: (value: unknown) => void;
+  target: unknown;
 }
 
-/** name -> entry, keyed by the (possibly-suffixed) control id used as binding. */
+interface TriggerEntry {
+  kind: "trigger";
+  name: string;
+  meta: InspectMeta;
+  handler: () => void;
+}
+
+type RegistryEntry = ValueEntry | TriggerEntry;
+
+/** name (possibly suffixed) -> entry, keyed by the control id used as binding. */
 const registry = new Map<string, RegistryEntry>();
-/** Tracks base names already used, so collisions get "name2", "name3", ... */
-const nameUsageCount = new Map<string, number>();
+/** Tracks live claims per base name, so a live collision gets "name2", "name3", ... */
+const liveClaims = new Map<string, number>();
 
 let publishTimer: ReturnType<typeof setTimeout> | undefined;
 let panelHandle: { connect: () => void; disconnect: () => void } | undefined;
@@ -54,11 +70,13 @@ let panelHandle: { connect: () => void; disconnect: () => void } | undefined;
  * a `// @inspect ...`-annotated `useSharedValue` declaration (see RFC 0002).
  *
  * No-op in production - returns `sharedValue` unchanged and never touches
- * the registry. In development, registers the value in a module-level
- * "auto" schema (single group, one control per registered value) and
- * (re)publishes it through the normal `definePanel`/`connect()` path,
- * debounced so multiple declarations evaluated back-to-back (e.g. on
- * initial render, or after a hot reload) coalesce into one publish.
+ * the registry. In development, registers the value in the shared Runtime
+ * Value registry (RFC 0003) and (re)publishes the "auto" schema through the
+ * normal `definePanel`/`connect()` path, debounced so multiple declarations
+ * evaluated back-to-back (e.g. on initial render, or after a hot reload)
+ * coalesce into one publish.
+ *
+ * `__riInspect` never disposes its registration - unchanged from RFC 0002.
  */
 export function __riInspect<T>(
   sharedValue: SharedValueLike<T>,
@@ -69,21 +87,72 @@ export function __riInspect<T>(
     return sharedValue;
   }
 
-  const controlId = resolveControlId(name);
-  registry.set(controlId, {
-    name: controlId,
+  registerRuntimeValue({
+    kind: "value",
+    name,
     sharedValue: sharedValue as SharedValueLike<unknown>,
-    meta
+    meta,
+    target: sharedValue.value
   });
-
-  schedulePublish();
 
   return sharedValue;
 }
 
-function resolveControlId(name: string): string {
-  const count = nameUsageCount.get(name) ?? 0;
-  nameUsageCount.set(name, count + 1);
+/** Input to `registerRuntimeValue` - a value entry or a trigger entry. */
+export type RuntimeValueRegistration =
+  | {
+      kind: "value";
+      name: string;
+      sharedValue: SharedValueLike<unknown>;
+      meta?: InspectMeta;
+      onChange?: (value: unknown) => void;
+      target: unknown;
+    }
+  | {
+      kind: "trigger";
+      name: string;
+      meta?: InspectMeta;
+      handler: () => void;
+    };
+
+/**
+ * Registers a Runtime Value (or trigger) into the shared "auto" registry and
+ * schedules a debounced republish. Returns a `dispose()` that removes the
+ * entry, releases the claimed base name (so a later registration of the same
+ * name gets the bare name back, no suffix), and schedules a republish.
+ */
+export function registerRuntimeValue(registration: RuntimeValueRegistration): () => void {
+  const controlId = claimControlId(registration.name);
+
+  const entry: RegistryEntry =
+    registration.kind === "trigger"
+      ? { kind: "trigger", name: controlId, meta: registration.meta ?? {}, handler: registration.handler }
+      : {
+          kind: "value",
+          name: controlId,
+          sharedValue: registration.sharedValue,
+          meta: registration.meta ?? {},
+          onChange: registration.onChange,
+          target: registration.target
+        };
+
+  registry.set(controlId, entry);
+  schedulePublish();
+
+  let disposed = false;
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    registry.delete(controlId);
+    releaseControlId(registration.name);
+    schedulePublish();
+  };
+}
+
+/** Claims a control id for `name`, suffixing only if `name` currently has a live claimant. */
+function claimControlId(name: string): string {
+  const count = liveClaims.get(name) ?? 0;
+  liveClaims.set(name, count + 1);
 
   if (count === 0) {
     return name;
@@ -95,6 +164,15 @@ function resolveControlId(name: string): string {
       `registering it as "${suffixed}" instead. Give the useSharedValue a unique variable name to avoid this.`
   );
   return suffixed;
+}
+
+function releaseControlId(name: string): void {
+  const count = liveClaims.get(name) ?? 0;
+  if (count <= 1) {
+    liveClaims.delete(name);
+  } else {
+    liveClaims.set(name, count - 1);
+  }
 }
 
 function schedulePublish(): void {
@@ -124,10 +202,25 @@ function buildAutoSchema(): PanelSchema {
 
   for (const entry of registry.values()) {
     const binding = `${AUTO_SCHEMA_ID}.${entry.name}`;
+    if (entry.kind === "trigger") {
+      const control: TriggerControl = triggerControl({
+        id: entry.name,
+        label: entry.meta.label ?? deriveLabel(entry.name),
+        binding
+      });
+      controls.push(control);
+      bindTrigger(binding, entry.handler);
+      continue;
+    }
+
     const control = buildAutoControl(entry, binding);
     if (control) {
       controls.push(control);
-      bindSharedValue(binding, entry.sharedValue);
+      bindValue(binding, (v) => {
+        entry.sharedValue.value = v;
+        entry.target = v;
+        entry.onChange?.(v);
+      });
     }
   }
 
@@ -144,7 +237,7 @@ function buildAutoSchema(): PanelSchema {
   };
 }
 
-function buildAutoControl(entry: RegistryEntry, binding: string): InspectorControl | undefined {
+function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl | undefined {
   const { name, sharedValue, meta } = entry;
   const label = meta.label ?? deriveLabel(name);
   const value = sharedValue.value;
@@ -223,7 +316,7 @@ function buildAutoControl(entry: RegistryEntry, binding: string): InspectorContr
 /** Test-only: clears module-level registry state between test runs. */
 export function __resetAutoRegistryForTests(): void {
   registry.clear();
-  nameUsageCount.clear();
+  liveClaims.clear();
   if (publishTimer) {
     clearTimeout(publishTimer);
     publishTimer = undefined;

@@ -55,6 +55,23 @@ The plugin rewrites this (dev-only) into a call to `__riInspect`, which register
 
 This is the right entry point when you want one or two values exposed without touching the surrounding component. Reach for `useInspector` below when you want several related controls grouped under one panel.
 
+### `useTunable` (one value, one line)
+
+`useTunable(name, initial, options?)` registers a single Runtime Value directly, with no panel spec and no schema id to invent:
+
+```ts
+import { useTunable } from "@runtime-inspector/react-native";
+
+const blur = useTunable("blur", 18, { min: 0, max: 40 });
+// blur.value in a worklet/style, as usual.
+```
+
+- **Kind inference** is the same table as `useInspector`/`// @inspect`: number → slider (requires `min`/`max` in `options`, thrown as an actionable error otherwise), boolean → toggle, string → color, `{ damping, stiffness }` → spring, a 4-number array → bezier, and a function initial → a trigger (the panel renders a button, and the function itself is returned unchanged).
+- **Options**: `min`, `max`, `step`, `unit`, `label`, `onChange` — `onChange` fires after the handle is written, same as `useInspector`.
+- **Panel placement**: every `useTunable` call lands in the same shared "auto" schema that `// @inspect` publishes to, so scattered one-liners across components collect into a single panel with no grouping to set up. Reach for `useInspector` instead when you want a named, grouped panel.
+- **Lifecycle**: registers on mount, unregisters on unmount, and republishes the shared schema (debounced) either way — unmounting removes the control from the panel. Because unmount releases the name, remounting the same component does not accumulate `name2`, `name3` suffixes; a genuine collision (two live `useTunable` calls with the same name) does get a suffix, with a dev warning, same as `// @inspect`.
+- **Production**: dev-only like the rest of the SDK — in release builds the hook still returns a usable handle, it just never registers.
+
 ### `useInspector` (recommended for multiple controls)
 
 `useInspector` infers the control kind from the shape of each spec value and returns a mutable `SharedValue`-like handle per key — no manual schema, no manual bindings:

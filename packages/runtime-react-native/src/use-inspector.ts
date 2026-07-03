@@ -410,7 +410,7 @@ function inferControl(
 
 let cachedMakeMutable: MakeMutable | undefined;
 
-function defaultMakeMutable<T>(value: T): SharedValueLike<T> {
+export function defaultMakeMutable<T>(value: T): SharedValueLike<T> {
   if (cachedMakeMutable === undefined) {
     cachedMakeMutable = loadMakeMutable();
   }

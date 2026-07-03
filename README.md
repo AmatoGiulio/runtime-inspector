@@ -35,9 +35,24 @@ const card = useInspector("card-transition", {
 
 `useInspector` requires `react-native-reanimated` as a peer dependency — it creates handles with Reanimated's `makeMutable`. The explicit API (`definePanel`, `bindSharedValue`, `bindValue`, `bindTrigger`, …) is still there underneath and works without Reanimated, for cases that need direct control over bindings or side effects.
 
+## One value, one line
+
+For a single tunable value, `useTunable` skips the panel/spec ceremony entirely — no id to invent, no group:
+
+```ts
+const blur = useTunable("blur", 18, { min: 0, max: 40 });
+// blur is a SharedValue-like handle - use it in worklets/styles as usual.
+// It shows up in the shared "auto" panel alongside every other useTunable
+// and // @inspect value, with no grouping to set up.
+```
+
+Kind inference is the same table `useInspector` uses (number requires `min`/`max`, boolean → toggle, string → color, spring shape → spring editor, 4-number array → bezier, function → trigger button). It registers on mount and unregisters on unmount, so removing the component removes its control from the panel.
+
 ## Switch it on with a comment
 
-The third rung of the DX ladder (explicit API → `useInspector` → **directive**) needs no import and no hook: annotate an existing `useSharedValue` with an `// @inspect` comment and `@runtime-inspector/babel-plugin` does the rest at build time, dev-only:
+The DX ladder, in order: `// @inspect` (zero API, build-time) → `useTunable` (one line, runtime-level) → `useInspector` (grouped panels, `onChange`, `$targets`) → the explicit API (full control, no Reanimated required).
+
+Annotate an existing `useSharedValue` with an `// @inspect` comment and `@runtime-inspector/babel-plugin` does the rest at build time, dev-only:
 
 ```ts
 // @inspect min=-120 max=120 step=1 unit=px label="Move X"

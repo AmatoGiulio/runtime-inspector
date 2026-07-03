@@ -277,6 +277,9 @@ export type {
 export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
+export { useTunable } from "./use-tunable";
+export type { TunableOptions, TunableRangeOptions } from "./use-tunable";
+
 function connectRuntime(session: Session) {
   if (
     session.socket?.readyState === WebSocket.OPEN ||
