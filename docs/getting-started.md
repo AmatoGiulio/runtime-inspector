@@ -170,3 +170,13 @@ panel.connect();
 ## Monorepo note
 
 If the SDK lives in the same pnpm workspace as your app (like this repo's example), make `react`, `react-native`, and `react-native-reanimated` resolve as singletons — pnpm can install a second physical copy of peer dependencies, and two Reanimated instances break shared values created by the SDK (`sv.addListener is not a function`). See `examples/react-native-reanimated/metro.config.js` for the Metro `resolveRequest` override. Apps installing the SDK from npm don't need this.
+
+## Verification
+
+For CI and non-interactive agent sessions, run verification with `CI=true` and keep the package commands serialized:
+
+```bash
+CI=true pnpm verify
+```
+
+On Windows, avoid running `pnpm install`, `pnpm -r test`, and `pnpm -r typecheck` in parallel against the same `node_modules`. pnpm may need to recreate the modules directory after lockfile/runtime changes; without `CI=true` it can abort because there is no TTY for the purge confirmation, and parallel installs can leave React Native packages half-linked.

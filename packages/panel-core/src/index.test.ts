@@ -280,6 +280,75 @@ describe("createPanelSession", () => {
     expect(session.getState().values.demo?.speed).toBe(3);
     expect(session.getState().values.demo?.enabled).toBe(true);
   });
+
+  it("rejects invalid incoming control.patch without mutating state", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    expect(session.getState().values.demo?.enabled).toBe(false);
+
+    socket.receive({ type: "control.patch", schemaId: "demo", controlId: "enabled", value: "yes" });
+
+    expect(session.getState().values.demo?.enabled).toBe(false);
+    expect(session.getState().notice).toBe(
+      'Ignored invalid incoming value for Enabled: toggle "enabled" expects a boolean, got string'
+    );
+  });
+
+  it("rejects invalid incoming control.commit without mutating state", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    expect(session.getState().values.demo?.speed).toBe(1);
+
+    socket.receive({ type: "control.commit", schemaId: "demo", controlId: "speed", value: 99 });
+
+    expect(session.getState().values.demo?.speed).toBe(1);
+    expect(session.getState().notice).toBe(
+      'Ignored invalid incoming value for Speed: slider "speed" expects a finite number between 0 and 10, got 99'
+    );
+  });
+
+  it("rejects an invalid incoming batchPatch atomically", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    socket.receive({
+      type: "control.batchPatch",
+      schemaId: "demo",
+      patches: [
+        { controlId: "speed", value: 4 },
+        { controlId: "enabled", value: "yes" }
+      ]
+    });
+
+    expect(session.getState().values.demo?.speed).toBe(1);
+    expect(session.getState().values.demo?.enabled).toBe(false);
+    expect(session.getState().notice).toBe(
+      'Ignored invalid incoming batch value for Enabled: toggle "enabled" expects a boolean, got string'
+    );
+  });
+
+  it("commits the current value even when no throttled slider patch is pending", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    session.commitValue("demo", "speed");
+
+    const commits = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "control.commit")
+      .map((raw) => JSON.parse(raw));
+    expect(commits).toHaveLength(1);
+    expect(commits[0]).toMatchObject({ schemaId: "demo", controlId: "speed", value: 1 });
+  });
 });
 
 describe("createPanelSession with multiple schemas sharing control ids", () => {

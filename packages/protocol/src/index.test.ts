@@ -54,6 +54,75 @@ describe("Runtime Inspector Protocol", () => {
     ).toThrow();
   });
 
+  it("rejects non-finite numeric schema fields", () => {
+    const schema = {
+      id: "bad-numbers",
+      title: "Bad Numbers",
+      groups: [
+        {
+          id: "motion",
+          label: "Motion",
+          controls: [
+            {
+              id: "scale",
+              kind: "slider",
+              label: "Scale",
+              min: 0,
+              max: Number.POSITIVE_INFINITY,
+              defaultValue: 1
+            }
+          ]
+        }
+      ]
+    };
+
+    expect(() => PanelSchemaSchema.parse(schema)).toThrow();
+  });
+
+  it("rejects non-finite spring and bezier defaults in schemas", () => {
+    expect(() =>
+      PanelSchemaSchema.parse({
+        id: "bad-spring",
+        title: "Bad Spring",
+        groups: [
+          {
+            id: "motion",
+            label: "Motion",
+            controls: [
+              {
+                id: "spring",
+                kind: "spring",
+                label: "Spring",
+                defaultValue: { damping: 10, stiffness: Number.NaN }
+              }
+            ]
+          }
+        ]
+      })
+    ).toThrow();
+
+    expect(() =>
+      PanelSchemaSchema.parse({
+        id: "bad-bezier",
+        title: "Bad Bezier",
+        groups: [
+          {
+            id: "motion",
+            label: "Motion",
+            controls: [
+              {
+                id: "curve",
+                kind: "bezier",
+                label: "Curve",
+                defaultValue: [0, 0, 1, Number.POSITIVE_INFINITY]
+              }
+            ]
+          }
+        ]
+      })
+    ).toThrow();
+  });
+
   it("parses handshake and patch messages", () => {
     const hello = parseRIPMessage({
       type: "handshake.hello",

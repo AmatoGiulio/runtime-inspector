@@ -211,6 +211,61 @@ describe("__riInspect", () => {
     expect(fired).toBe(true);
   });
 
+  it("disposed trigger entries are not reachable after the auto schema republishes", async () => {
+    const { registerRuntimeValue } = await import("./auto");
+    const { applyControlTrigger, definePanel } = await import("./index");
+    void definePanel;
+
+    let fired = false;
+    const dispose = registerRuntimeValue({
+      kind: "trigger",
+      name: "replay",
+      handler: () => {
+        fired = true;
+      }
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    dispose();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    applyControlTrigger({
+      type: "control.trigger",
+      schemaId: "auto",
+      controlId: "replay"
+    });
+
+    expect(fired).toBe(false);
+  });
+
+  it("disposed value entries are not reachable after the auto schema republishes", async () => {
+    const { registerRuntimeValue } = await import("./auto");
+    const { applyControlPatch, definePanel } = await import("./index");
+    void definePanel;
+
+    const sharedValue = { value: 1 };
+    const dispose = registerRuntimeValue({
+      kind: "value",
+      name: "moveX",
+      sharedValue,
+      meta: { min: 0, max: 10 },
+      target: 1
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    dispose();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "auto",
+      controlId: "moveX",
+      value: 5
+    });
+
+    expect(sharedValue.value).toBe(1);
+  });
+
   it("re-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");

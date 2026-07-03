@@ -113,7 +113,6 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   const listeners = new Set<() => void>();
   const schemasById = new Map<string, PanelSchema>();
   const pendingPatches = new Map<string, PendingPatch>();
-  const schemaIdByRuntimeClientId = new Map<string, string>();
 
   let socket: WebSocketLike | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -206,7 +205,6 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       }
       if (message.type === "runtime.status") {
         if (message.schemaId) {
-          schemaIdByRuntimeClientId.set(message.clientId ?? message.schemaId, message.schemaId);
           if (schemasById.has(message.schemaId)) {
             setState({
               staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online }
@@ -215,34 +213,16 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         }
       }
       if (message.type === "control.patch") {
-        const schemaValues = state.values[message.schemaId] ?? {};
-        setState({
-          values: {
-            ...state.values,
-            [message.schemaId]: { ...schemaValues, [message.controlId]: message.value }
-          }
-        });
+        applyIncomingValue(message.schemaId, message.controlId, message.value);
       }
       if (message.type === "control.commit") {
-        const schemaValues = state.values[message.schemaId] ?? {};
-        setState({
-          values: {
-            ...state.values,
-            [message.schemaId]: { ...schemaValues, [message.controlId]: message.value }
-          }
-        });
+        applyIncomingValue(message.schemaId, message.controlId, message.value);
       }
       if (message.type === "control.batchPatch") {
-        const schemaValues = state.values[message.schemaId] ?? {};
-        setState({
-          values: {
-            ...state.values,
-            [message.schemaId]: {
-              ...schemaValues,
-              ...Object.fromEntries(message.patches.map((patch) => [patch.controlId, patch.value]))
-            }
-          }
-        });
+        applyIncomingBatch(
+          message.schemaId,
+          Object.fromEntries(message.patches.map((patch) => [patch.controlId, patch.value]))
+        );
       }
       if (message.type === "error" && message.code === "UNAUTHORIZED") {
         stopReconnecting = true;
@@ -325,6 +305,62 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       if (found) return found;
     }
     return undefined;
+  }
+
+  function validateIncomingValue(schemaId: string, controlId: string, value: unknown) {
+    const control = findControl(schemaId, controlId);
+    if (!control) return undefined;
+    const validation = validateControlValue(control, value);
+    if (!validation.ok) {
+      setState({ notice: `Ignored invalid incoming value for ${control.label}: ${validation.message}` });
+      return undefined;
+    }
+    return control;
+  }
+
+  function applyIncomingValue(schemaId: string, controlId: string, value: unknown) {
+    const control = validateIncomingValue(schemaId, controlId, value);
+    if (!control || !isValueControl(control)) return;
+
+    const schemaValues = state.values[schemaId] ?? {};
+    setState({
+      values: {
+        ...state.values,
+        [schemaId]: { ...schemaValues, [controlId]: value }
+      }
+    });
+  }
+
+  function applyIncomingBatch(schemaId: string, snapshot: Record<string, unknown>) {
+    const schema = schemasById.get(schemaId);
+    if (!schema) return;
+
+    const controlsById = new Map<string, InspectorControl>(
+      schema.groups.flatMap((group) => group.controls.map((control) => [control.id, control] as const))
+    );
+    const nextValues: Record<string, unknown> = {};
+
+    for (const [controlId, value] of Object.entries(snapshot)) {
+      const control = controlsById.get(controlId);
+      if (!control || !isValueControl(control)) continue;
+      const validation = validateControlValue(control, value);
+      if (!validation.ok) {
+        setState({ notice: `Ignored invalid incoming batch value for ${control.label}: ${validation.message}` });
+        return;
+      }
+      nextValues[controlId] = value;
+    }
+
+    const schemaValues = state.values[schemaId] ?? {};
+    setState({
+      values: {
+        ...state.values,
+        [schemaId]: {
+          ...schemaValues,
+          ...nextValues
+        }
+      }
+    });
   }
 
   function markPatch(controlId: string, label: string) {
@@ -410,7 +446,18 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
     const key = pendingKey(schemaId, controlId);
     const pending = pendingPatches.get(key);
-    if (!pending) return;
+    if (!pending) {
+      const control = findControl(schemaId, controlId);
+      if (!control || !isValueControl(control)) return;
+      const value = state.values[schemaId]?.[controlId] ?? control.value ?? control.defaultValue;
+      const validation = validateControlValue(control, value);
+      if (!validation.ok) {
+        setState({ notice: `Invalid commit value for ${control.label}: ${validation.message}` });
+        return;
+      }
+      sendCommit(schemaId, controlId, value);
+      return;
+    }
 
     if (pending.timer) {
       clearTimeout(pending.timer);

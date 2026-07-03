@@ -207,14 +207,16 @@ const baseControlSchema = {
   binding: z.string().optional()
 };
 
+const finiteNumberSchema = z.number().finite();
+
 export const SliderControlSchema = z.object({
   ...baseControlSchema,
   kind: z.literal("slider"),
-  defaultValue: z.number(),
-  value: z.number().optional(),
-  min: z.number(),
-  max: z.number(),
-  step: z.number().positive().optional(),
+  defaultValue: finiteNumberSchema,
+  value: finiteNumberSchema.optional(),
+  min: finiteNumberSchema,
+  max: finiteNumberSchema,
+  step: finiteNumberSchema.positive().optional(),
   unit: z.string().optional()
 });
 
@@ -234,10 +236,10 @@ export const ColorControlSchema = z.object({
 });
 
 export const CubicBezierSchema = z.tuple([
-  z.number(),
-  z.number(),
-  z.number(),
-  z.number()
+  finiteNumberSchema,
+  finiteNumberSchema,
+  finiteNumberSchema,
+  finiteNumberSchema
 ]);
 
 export const BezierControlSchema = z.object({
@@ -251,9 +253,9 @@ export const BezierControlSchema = z.object({
 });
 
 export const SpringValueSchema = z.object({
-  damping: z.number(),
-  stiffness: z.number(),
-  mass: z.number().optional()
+  damping: finiteNumberSchema,
+  stiffness: finiteNumberSchema,
+  mass: finiteNumberSchema.optional()
 });
 
 export const SpringControlSchema = z.object({
@@ -263,9 +265,9 @@ export const SpringControlSchema = z.object({
   value: SpringValueSchema.optional(),
   ranges: z
     .object({
-      damping: z.tuple([z.number(), z.number()]).optional(),
-      stiffness: z.tuple([z.number(), z.number()]).optional(),
-      mass: z.tuple([z.number(), z.number()]).optional()
+      damping: z.tuple([finiteNumberSchema, finiteNumberSchema]).optional(),
+      stiffness: z.tuple([finiteNumberSchema, finiteNumberSchema]).optional(),
+      mass: z.tuple([finiteNumberSchema, finiteNumberSchema]).optional()
     })
     .optional()
 });
