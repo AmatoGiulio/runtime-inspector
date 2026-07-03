@@ -195,6 +195,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       }
       if (message.type === "schema.dispose") {
         schemasById.delete(message.schemaId);
+        clearPendingPatchesForSchema(message.schemaId);
         const { [message.schemaId]: _removedStale, ...restStale } = state.staleSchemaIds;
         const { [message.schemaId]: _removedValues, ...restValues } = state.values;
         setState({
@@ -257,6 +258,16 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     pendingPatches.clear();
   }
 
+  function clearPendingPatchesForSchema(schemaId: string) {
+    for (const [key, pending] of pendingPatches.entries()) {
+      if (pending.schemaId !== schemaId) continue;
+      if (pending.timer) {
+        clearTimeout(pending.timer);
+      }
+      pendingPatches.delete(key);
+    }
+  }
+
   function send(message: unknown) {
     if (socket && socket.readyState === WEBSOCKET_OPEN) {
       socket.send(JSON.stringify(message));
@@ -300,11 +311,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   function findControl(schemaId: string, controlId: string): InspectorControl | undefined {
     const schema = schemasById.get(schemaId);
     if (!schema) return undefined;
-    for (const group of schema.groups) {
-      const found = group.controls.find((control) => control.id === controlId);
-      if (found) return found;
-    }
-    return undefined;
+    return findControlInSchema(schema, controlId);
   }
 
   function validateIncomingValue(schemaId: string, controlId: string, value: unknown) {
@@ -335,9 +342,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     const schema = schemasById.get(schemaId);
     if (!schema) return;
 
-    const controlsById = new Map<string, InspectorControl>(
-      schema.groups.flatMap((group) => group.controls.map((control) => [control.id, control] as const))
-    );
+    const controlsById = controlsByIdForSchema(schema);
     const nextValues: Record<string, unknown> = {};
 
     for (const [controlId, value] of Object.entries(snapshot)) {
@@ -536,9 +541,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 }
 
 function filterValidSnapshot(schema: PanelSchema, snapshot: Record<string, unknown>) {
-  const controlsById = new Map<string, InspectorControl>(
-    schema.groups.flatMap((group) => group.controls.map((control) => [control.id, control] as const))
-  );
+  const controlsById = controlsByIdForSchema(schema);
 
   return Object.fromEntries(
     Object.entries(snapshot).filter(([controlId, value]) => {
@@ -546,6 +549,20 @@ function filterValidSnapshot(schema: PanelSchema, snapshot: Record<string, unkno
       return control ? isValidControlValue(control, value) : false;
     })
   );
+}
+
+function controlsByIdForSchema(schema: PanelSchema) {
+  return new Map<string, InspectorControl>(
+    schema.groups.flatMap((group) => group.controls.map((control) => [control.id, control] as const))
+  );
+}
+
+function findControlInSchema(schema: PanelSchema, controlId: string): InspectorControl | undefined {
+  for (const group of schema.groups) {
+    const found = group.controls.find((control) => control.id === controlId);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function findReplayTrigger(schema: PanelSchema) {

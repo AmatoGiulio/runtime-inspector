@@ -260,6 +260,27 @@ describe("createPanelSession", () => {
     expect(session.getState().staleSchemaIds.demo).toBeUndefined();
   });
 
+  it("clears pending throttled patches when a schema is disposed", () => {
+    const { session, setNow } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    setNow(0);
+    session.setValue("demo", "speed", 2);
+    setNow(10);
+    session.setValue("demo", "speed", 3);
+
+    const patchesBeforeDispose = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
+    expect(patchesBeforeDispose).toHaveLength(1);
+
+    socket.receive({ type: "schema.dispose", schemaId: "demo", source: "runtime" });
+    vi.advanceTimersByTime(100);
+
+    const patchesAfterDispose = socket.sent.filter((raw) => JSON.parse(raw).type === "control.patch");
+    expect(patchesAfterDispose).toHaveLength(1);
+  });
+
   it("updates state on incoming control.patch and control.batchPatch", () => {
     const { session } = createSession();
     session.connect();
