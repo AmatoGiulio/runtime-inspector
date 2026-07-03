@@ -7,8 +7,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
+      "default": "./dist/index.js"
     }
   },
   "peerDependencies": {
@@ -25,7 +24,7 @@
     "@runtime-inspector/protocol": "workspace:*"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --external react --external react-native --external react-native-reanimated",
+    "build": "tsup src/index.ts --format cjs --dts --external react --external react-native --external react-native-reanimated",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
