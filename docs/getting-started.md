@@ -125,3 +125,7 @@ panel.connect();
 ```
 
 `useInspector` is sugar over exactly this API — reach for it when a binding needs a JS-side effect (e.g. re-running an animation, updating a ref) beyond writing directly to a `SharedValue`.
+
+## Monorepo note
+
+If the SDK lives in the same pnpm workspace as your app (like this repo's example), make `react`, `react-native`, and `react-native-reanimated` resolve as singletons — pnpm can install a second physical copy of peer dependencies, and two Reanimated instances break shared values created by the SDK (`sv.addListener is not a function`). See `examples/react-native-reanimated/metro.config.js` for the Metro `resolveRequest` override. Apps installing the SDK from npm don't need this.
