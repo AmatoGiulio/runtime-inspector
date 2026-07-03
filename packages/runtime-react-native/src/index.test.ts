@@ -205,6 +205,63 @@ describe("multi-schema sessions", () => {
     expect(setter).not.toHaveBeenCalled();
   });
 
+  it("re-registers a deliberately disconnected session when connect is called again", async () => {
+    const { definePanel, applyControlPatch, bindValue } = await import("./index");
+
+    const schema = makeSchema("panel-reconnect");
+    const panel = definePanel(schema);
+    const setter = vi.fn();
+    bindValue("panel-reconnect.value", setter);
+
+    panel.disconnect();
+    panel.connect();
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-reconnect",
+      controlId: "value",
+      value: true
+    });
+
+    expect(toggleValue(schema)).toBe(true);
+    expect(setter).toHaveBeenCalledWith(true);
+  });
+
+  it("ignores connect on a stale session after a newer same-id session is defined", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { definePanel, applyControlPatch, bindValue } = await import("./index");
+
+    const oldSchema = makeSchema("panel-stale-handle");
+    const newSchema = makeSchema("panel-stale-handle");
+    const oldPanel = definePanel(oldSchema);
+    definePanel(newSchema);
+
+    const oldSetter = vi.fn();
+    const newSetter = vi.fn();
+    bindValue("panel-stale-handle.value", newSetter);
+    oldPanel.connect();
+    bindValue("old-panel-stale-handle.value", oldSetter);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-stale-handle",
+      controlId: "value",
+      value: true
+    });
+
+    expect(toggleValue(oldSchema)).toBe(false);
+    expect(toggleValue(newSchema)).toBe(true);
+    expect(newSetter).toHaveBeenCalledWith(true);
+    expect(oldSetter).not.toHaveBeenCalled();
+    expect(
+      warnSpy.mock.calls.some((call) =>
+        String(call[0]).includes("Ignoring connect() for stale runtime session")
+      )
+    ).toBe(true);
+
+    warnSpy.mockRestore();
+  });
+
   it("rejects an invalid control value", async () => {
     const { definePanel, applyControlPatch, bindValue } = await import("./index");
 

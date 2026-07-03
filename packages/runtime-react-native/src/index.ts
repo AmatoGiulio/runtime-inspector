@@ -281,6 +281,17 @@ export { useRuntimeValue, useAction } from "./use-runtime-value";
 export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";
 
 function connectRuntime(session: Session) {
+  const registeredSession = sessions.get(session.schema.id);
+  if (registeredSession && registeredSession !== session) {
+    warnDev(
+      `Ignoring connect() for stale runtime session "${session.schema.id}" because a newer session is registered.`
+    );
+    return;
+  }
+  if (!registeredSession) {
+    sessions.set(session.schema.id, session);
+  }
+
   if (
     session.socket?.readyState === WebSocket.OPEN ||
     session.socket?.readyState === WebSocket.CONNECTING
