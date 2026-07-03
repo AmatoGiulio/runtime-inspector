@@ -89,7 +89,7 @@ describe("__riInspect", () => {
     expect(control?.kind).toBe("toggle");
   });
 
-  it("assigns a collision suffix and warns when the same name registers twice", async () => {
+  it("re-registering the same name via __riInspect overwrites silently (no suffix, no warning)", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
     const { __riInspect } = await import("./auto");
@@ -100,8 +100,8 @@ describe("__riInspect", () => {
 
     const schema = definePanelSpy.mock.calls.at(-1)![0];
     expect(controlById(schema, "moveX")).toBeDefined();
-    expect(controlById(schema, "moveX2")).toBeDefined();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("collides"));
+    expect(controlById(schema, "moveX2")).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("collides"));
 
     warnSpy.mockRestore();
   });
@@ -209,6 +209,68 @@ describe("__riInspect", () => {
     });
 
     expect(fired).toBe(true);
+  });
+
+  it("re-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    const sharedValue1 = { value: 8 };
+    __riInspect(sharedValue1, "cardRadius", { min: 8, max: 48 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const sharedValue2 = { value: 16 };
+    __riInspect(sharedValue2, "cardRadius", { min: 8, max: 48 });
+    __riInspect(sharedValue2, "cardRadius", { min: 8, max: 48 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "cardRadius")).toBeDefined();
+    expect(controlById(schema, "cardRadius2")).toBeUndefined();
+    expect(controlById(schema, "cardRadius3")).toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("collides"));
+
+    const { applyControlPatch } = await import("./index");
+    applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "cardRadius", value: 32 });
+    expect(sharedValue2.value).toBe(32);
+    expect(sharedValue1.value).toBe(8);
+
+    warnSpy.mockRestore();
+  });
+
+  it("__riInspect then a live useTunable claim on the same name suffixes and warns", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect, registerRuntimeValue } = await import("./auto");
+
+    __riInspect({ value: 1 }, "x", { min: 0, max: 10 });
+    registerRuntimeValue({ kind: "value", name: "x", sharedValue: { value: 2 }, meta: { min: 0, max: 10 }, target: 2 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "x")).toBeDefined();
+    expect(controlById(schema, "x2")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("collides"));
+
+    warnSpy.mockRestore();
+  });
+
+  it("a live useTunable claim then __riInspect on the same name suffixes and warns", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect, registerRuntimeValue } = await import("./auto");
+
+    registerRuntimeValue({ kind: "value", name: "x", sharedValue: { value: 1 }, meta: { min: 0, max: 10 }, target: 1 });
+    __riInspect({ value: 2 }, "x", { min: 0, max: 10 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "x")).toBeDefined();
+    expect(controlById(schema, "x2")).toBeDefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("collides"));
+
+    warnSpy.mockRestore();
   });
 
   it("is a no-op in production - returns the value unchanged and never registers", async () => {

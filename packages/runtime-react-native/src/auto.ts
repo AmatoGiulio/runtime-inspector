@@ -38,6 +38,10 @@ export interface InspectMeta {
   label?: string;
 }
 
+/** Registration mode: "replace" (lifecycle-less, e.g. __riInspect) overwrites its own prior
+ * entry in place on re-registration; "claim" (e.g. useTunable) suffixes on any live collision. */
+type RegistrationMode = "replace" | "claim";
+
 /** A Runtime Value registry entry - either a value binding or a trigger. */
 interface ValueEntry {
   kind: "value";
@@ -46,6 +50,7 @@ interface ValueEntry {
   meta: InspectMeta;
   onChange?: (value: unknown) => void;
   target: unknown;
+  mode: RegistrationMode;
 }
 
 interface TriggerEntry {
@@ -53,6 +58,7 @@ interface TriggerEntry {
   name: string;
   meta: InspectMeta;
   handler: () => void;
+  mode: RegistrationMode;
 }
 
 type RegistryEntry = ValueEntry | TriggerEntry;
@@ -87,13 +93,16 @@ export function __riInspect<T>(
     return sharedValue;
   }
 
-  registerRuntimeValue({
-    kind: "value",
-    name,
-    sharedValue: sharedValue as SharedValueLike<unknown>,
-    meta,
-    target: sharedValue.value
-  });
+  registerRuntimeValue(
+    {
+      kind: "value",
+      name,
+      sharedValue: sharedValue as SharedValueLike<unknown>,
+      meta,
+      target: sharedValue.value
+    },
+    "replace"
+  );
 
   return sharedValue;
 }
@@ -121,19 +130,53 @@ export type RuntimeValueRegistration =
  * entry, releases the claimed base name (so a later registration of the same
  * name gets the bare name back, no suffix), and schedules a republish.
  */
-export function registerRuntimeValue(registration: RuntimeValueRegistration): () => void {
+export function registerRuntimeValue(
+  registration: RuntimeValueRegistration,
+  mode: RegistrationMode = "claim"
+): () => void {
+  // Replace-mode re-registration under the exact base name: overwrite the existing
+  // replace-mode entry in place (same control id), no new claim, no warning. This is the
+  // __riInspect re-render/hot-reload path - it must be silent and idempotent.
+  const existing = registry.get(registration.name);
+  if (mode === "replace" && existing && existing.mode === "replace") {
+    const entry: RegistryEntry =
+      registration.kind === "trigger"
+        ? { kind: "trigger", name: registration.name, meta: registration.meta ?? {}, handler: registration.handler, mode }
+        : {
+            kind: "value",
+            name: registration.name,
+            sharedValue: registration.sharedValue,
+            meta: registration.meta ?? {},
+            onChange: registration.onChange,
+            target: registration.target,
+            mode
+          };
+    registry.set(registration.name, entry);
+    schedulePublish();
+
+    let disposed = false;
+    return () => {
+      if (disposed) return;
+      disposed = true;
+      registry.delete(registration.name);
+      releaseControlId(registration.name);
+      schedulePublish();
+    };
+  }
+
   const controlId = claimControlId(registration.name);
 
   const entry: RegistryEntry =
     registration.kind === "trigger"
-      ? { kind: "trigger", name: controlId, meta: registration.meta ?? {}, handler: registration.handler }
+      ? { kind: "trigger", name: controlId, meta: registration.meta ?? {}, handler: registration.handler, mode }
       : {
           kind: "value",
           name: controlId,
           sharedValue: registration.sharedValue,
           meta: registration.meta ?? {},
           onChange: registration.onChange,
-          target: registration.target
+          target: registration.target,
+          mode
         };
 
   registry.set(controlId, entry);
