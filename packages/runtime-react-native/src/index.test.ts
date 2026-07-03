@@ -184,6 +184,27 @@ describe("multi-schema sessions", () => {
     expect(socketB?.closeCalls).toBe(0);
   });
 
+  it("removes a deliberately disconnected session from patch routing", async () => {
+    const { definePanel, applyControlPatch, bindValue } = await import("./index");
+
+    const schema = makeSchema("panel-disconnected");
+    const panel = definePanel(schema);
+    const setter = vi.fn();
+    bindValue("panel-disconnected.value", setter);
+
+    panel.disconnect();
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-disconnected",
+      controlId: "value",
+      value: true
+    });
+
+    expect(toggleValue(schema)).toBe(false);
+    expect(setter).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid control value", async () => {
     const { definePanel, applyControlPatch, bindValue } = await import("./index");
 

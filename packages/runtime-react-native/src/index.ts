@@ -411,6 +411,7 @@ function disconnectRuntime(session: Session) {
   session.socket = undefined;
   session.candidateIndex = 0;
   session.lockedUrl = undefined;
+  unregisterSession(session);
 }
 
 function teardownSession(session: Session) {
@@ -422,6 +423,13 @@ function teardownSession(session: Session) {
   sendSchemaDispose(session);
   session.socket?.close();
   session.socket = undefined;
+  unregisterSession(session);
+}
+
+function unregisterSession(session: Session) {
+  if (sessions.get(session.schema.id) === session) {
+    sessions.delete(session.schema.id);
+  }
 }
 
 function scheduleReconnect(session: Session) {
