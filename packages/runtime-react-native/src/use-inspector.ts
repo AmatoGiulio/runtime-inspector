@@ -12,8 +12,8 @@ import type {
   TriggerControl
 } from "@runtime-inspector/protocol";
 import {
-  bindSharedValue,
   bindTrigger,
+  bindValue,
   bezier as bezierControl,
   color as colorControl,
   definePanel,
@@ -40,14 +40,45 @@ export interface SliderSpecEntry {
   step?: number;
   unit?: string;
   label?: string;
+  onChange?: (value: number) => void;
 }
 
 export interface SpringSpecEntry extends SpringValue {
   label?: string;
+  onChange?: (value: SpringValue) => void;
+}
+
+export interface ToggleSpecEntry {
+  value: boolean;
+  label?: string;
+  onChange?: (value: boolean) => void;
+}
+
+export interface ColorSpecEntry {
+  value: string;
+  label?: string;
+  onChange?: (value: string) => void;
+}
+
+export interface BezierSpecEntry {
+  value: CubicBezier;
+  label?: string;
+  onChange?: (value: CubicBezier) => void;
+}
+
+/** A spring value wrapped in `{ value, label?, onChange? }` form. */
+export interface WrappedSpringSpecEntry {
+  value: SpringValue;
+  label?: string;
+  onChange?: (value: SpringValue) => void;
 }
 
 export type InspectorSpecEntry =
   | SliderSpecEntry
+  | ToggleSpecEntry
+  | ColorSpecEntry
+  | BezierSpecEntry
+  | WrappedSpringSpecEntry
   | boolean
   | string
   | SpringSpecEntry
@@ -64,19 +95,33 @@ export type InspectorHandles<TSpec extends InspectorSpec = InspectorSpec> = {
   [K in keyof TSpec]: TSpec[K] extends (...args: never[]) => unknown
     ? TSpec[K]
     : SharedValueLike<InferredValue<TSpec[K]>>;
+} & {
+  $targets: {
+    [K in keyof TSpec as TSpec[K] extends (...args: never[]) => unknown ? never : K]: InferredValue<TSpec[K]>;
+  };
 };
 
-type InferredValue<T> = T extends SliderSpecEntry
+type InferredValue<T> = T extends { value: number }
   ? number
-  : T extends boolean
+  : T extends { value: boolean }
     ? boolean
-    : T extends string
+    : T extends { value: string }
       ? string
-      : T extends SpringSpecEntry
+      : T extends { value: SpringValue }
         ? SpringValue
-        : T extends CubicBezier
+        : T extends { value: CubicBezier }
           ? CubicBezier
-          : never;
+          : T extends SliderSpecEntry
+            ? number
+            : T extends boolean
+              ? boolean
+              : T extends string
+                ? string
+                : T extends SpringSpecEntry
+                  ? SpringValue
+                  : T extends CubicBezier
+                    ? CubicBezier
+                    : never;
 
 /** camelCase -> "Camel Case", with the first letter capitalized. */
 export function deriveLabel(key: string): string {
@@ -111,6 +156,27 @@ function isSpringEntry(value: unknown): value is SpringSpecEntry {
 
 function isBezierEntry(value: unknown): value is unknown[] {
   return Array.isArray(value);
+}
+
+/**
+ * A "wrapper" entry is a non-array object carrying a `value` property whose
+ * value is itself the thing to infer a kind from (boolean/string/spring
+ * object/bezier tuple). The slider shape (`{ value: number, min, max }`) is
+ * NOT a wrapper - it already IS the number's spec-object form, with `min`/
+ * `max` alongside `value` at the same level, so it's excluded here and
+ * handled directly by `isSliderEntry` in `inferControl`.
+ */
+function isWrapperEntry(entry: unknown): entry is { value: unknown; label?: string; onChange?: (value: never) => void } {
+  return (
+    typeof entry === "object" &&
+    entry !== null &&
+    !Array.isArray(entry) &&
+    "value" in entry &&
+    // A bare spring shape (`{ damping, stiffness }`) has no `value` key, so
+    // it never reaches here - no ambiguity with the wrapped spring form.
+    !isSpringEntry(entry) &&
+    !isSliderEntry(entry)
+  );
 }
 
 /**
@@ -157,13 +223,22 @@ export function buildInspector(
   const makeMutable: MakeMutable = options.makeMutable ?? defaultMakeMutable;
   const controls: InspectorControl[] = [];
   const handles: Record<string, unknown> = {};
+  const targets: Record<string, unknown> = {};
 
   for (const [key, entry] of Object.entries(spec)) {
+    if (key.startsWith("$")) {
+      throw new Error(
+        `useInspector: control key "${key}" starts with "$", which is reserved for the returned $targets object. ` +
+          `Rename this key.`
+      );
+    }
     const binding = `${id}.${key}`;
-    const built = inferControl(key, entry, binding, makeMutable);
+    const built = inferControl(key, entry, binding, makeMutable, targets);
     controls.push(built.control);
     handles[key] = built.handle;
   }
+
+  handles.$targets = targets;
 
   const schema: PanelSchema = {
     id,
@@ -182,13 +257,26 @@ export function buildInspector(
 
 function inferControl(
   key: string,
-  entry: unknown,
+  rawEntry: unknown,
   binding: string,
-  makeMutable: MakeMutable
+  makeMutable: MakeMutable,
+  targets: Record<string, unknown>
 ): BuiltEntry {
-  const label = (typeof entry === "object" && entry !== null && !Array.isArray(entry)
-    ? (entry as { label?: string }).label
-    : undefined) ?? deriveLabel(key);
+  // A wrapper (`{ value, label?, onChange? }`) is inferred from the shape of
+  // its `value` property; a bare entry is inferred from its own shape. Both
+  // paths share the code below via `entry` (the value to infer a kind from)
+  // and `label`/`onChange` (pulled from the wrapper when present).
+  const wrapper = isWrapperEntry(rawEntry) ? rawEntry : undefined;
+  const entry: unknown = wrapper ? wrapper.value : rawEntry;
+  // The slider shape (`{ value, min, max, onChange? }`) already carries
+  // `label`/`onChange` at its own top level - it's excluded from
+  // `isWrapperEntry`, so pull them straight off `rawEntry` there too.
+  const bareLabelOnChangeSource =
+    typeof rawEntry === "object" && rawEntry !== null && !Array.isArray(rawEntry)
+      ? (rawEntry as { label?: string; onChange?: (value: never) => void })
+      : undefined;
+  const onChange = wrapper?.onChange ?? bareLabelOnChangeSource?.onChange;
+  const label = (wrapper ? wrapper.label : bareLabelOnChangeSource?.label) ?? deriveLabel(key);
 
   if (typeof entry === "number") {
     throw new Error(
@@ -215,7 +303,12 @@ function inferControl(
       defaultValue: entry,
       binding
     });
-    bindSharedValue(binding, handle);
+    targets[key] = entry;
+    bindValue(binding, (v) => {
+      handle.value = v as boolean;
+      targets[key] = v;
+      (onChange as ((value: boolean) => void) | undefined)?.(v as boolean);
+    });
     return { control, handle };
   }
 
@@ -227,7 +320,12 @@ function inferControl(
       defaultValue: entry,
       binding
     });
-    bindSharedValue(binding, handle);
+    targets[key] = entry;
+    bindValue(binding, (v) => {
+      handle.value = v as string;
+      targets[key] = v;
+      (onChange as ((value: string) => void) | undefined)?.(v as string);
+    });
     return { control, handle };
   }
 
@@ -251,7 +349,12 @@ function inferControl(
       defaultValue: value,
       binding
     });
-    bindSharedValue(binding, handle);
+    targets[key] = value;
+    bindValue(binding, (v) => {
+      handle.value = v as CubicBezier;
+      targets[key] = v;
+      (onChange as ((value: CubicBezier) => void) | undefined)?.(v as CubicBezier);
+    });
     return { control, handle };
   }
 
@@ -268,23 +371,34 @@ function inferControl(
       defaultValue: value,
       binding
     });
-    bindSharedValue(binding, handle);
+    targets[key] = value;
+    bindValue(binding, (v) => {
+      handle.value = v as SpringValue;
+      targets[key] = v;
+      (onChange as ((value: SpringValue) => void) | undefined)?.(v as SpringValue);
+    });
     return { control, handle };
   }
 
   if (isSliderEntry(entry)) {
-    const handle = makeMutable(entry.value);
+    const sliderEntry = entry;
+    const handle = makeMutable(sliderEntry.value);
     const control: SliderControl = sliderControl({
       id: key,
       label,
-      defaultValue: entry.value,
-      min: entry.min,
-      max: entry.max,
-      ...(entry.step !== undefined ? { step: entry.step } : {}),
-      ...(entry.unit !== undefined ? { unit: entry.unit } : {}),
+      defaultValue: sliderEntry.value,
+      min: sliderEntry.min,
+      max: sliderEntry.max,
+      ...(sliderEntry.step !== undefined ? { step: sliderEntry.step } : {}),
+      ...(sliderEntry.unit !== undefined ? { unit: sliderEntry.unit } : {}),
       binding
     });
-    bindSharedValue(binding, handle);
+    targets[key] = sliderEntry.value;
+    bindValue(binding, (v) => {
+      handle.value = v as number;
+      targets[key] = v;
+      (onChange as ((value: number) => void) | undefined)?.(v as number);
+    });
     return { control, handle };
   }
 
@@ -295,7 +409,6 @@ function inferControl(
 }
 
 let cachedMakeMutable: MakeMutable | undefined;
-let warnedNoReanimated = false;
 
 function defaultMakeMutable<T>(value: T): SharedValueLike<T> {
   if (cachedMakeMutable === undefined) {
@@ -304,15 +417,11 @@ function defaultMakeMutable<T>(value: T): SharedValueLike<T> {
   if (cachedMakeMutable) {
     return cachedMakeMutable(value);
   }
-  if (!warnedNoReanimated) {
-    warnedNoReanimated = true;
-    console.warn(
-      "[Runtime Inspector] react-native-reanimated's makeMutable is unavailable - falling back to a plain " +
-        "{ value } object. Worklet-driven styles that read this handle will not update on the UI thread; " +
-        "install react-native-reanimated to restore that behavior."
-    );
-  }
-  return { value };
+  throw new Error(
+    "[Runtime Inspector] react-native-reanimated is required by useInspector: its makeMutable export was not " +
+      "found. Install react-native-reanimated, or use the explicit API (definePanel + bindValue) for " +
+      "non-animated values."
+  );
 }
 
 function loadMakeMutable(): MakeMutable | undefined {
