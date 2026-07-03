@@ -140,6 +140,25 @@ describe("createBrokerClient", () => {
 
     expect(client.isStale("test-schema")).toBe(true);
   });
+
+  it("blocks setValue, batchSet, and fireTrigger while a schema is stale", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    await client.connect();
+    await wait(50);
+
+    runtime.close();
+    await wait(50);
+
+    expect(client.isStale("test-schema")).toBe(true);
+    expect(() => client!.setValue("test-schema", "speed", 5)).toThrow(/Schema "test-schema" is stale/);
+    expect(() => client!.batchSet("test-schema", { speed: 5 })).toThrow(/Schema "test-schema" is stale/);
+    expect(() => client!.fireTrigger("test-schema", "replay")).toThrow(/Schema "test-schema" is stale/);
+    expect(client.getValues("test-schema").speed).toBe(1);
+  });
 });
 
 function openRuntime(url: string, schema: unknown) {

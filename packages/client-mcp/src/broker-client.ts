@@ -158,6 +158,12 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     return staleSchemaIds.has(schemaId);
   }
 
+  function assertSchemaLive(schemaId: string): void {
+    if (staleSchemaIds.has(schemaId)) {
+      throw new Error(`Schema "${schemaId}" is stale because its runtime disconnected. Wait for it to reconnect before sending controls.`);
+    }
+  }
+
   function findControl(schemaId: string, controlId: string): InspectorControl {
     const schema = schemas.get(schemaId);
     if (!schema) {
@@ -181,6 +187,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
 
   function setValue(schemaId: string, controlId: string, value: unknown) {
     const control = findControl(schemaId, controlId);
+    assertSchemaLive(schemaId);
     const result = validateControlValue(control, value);
     if (!result.ok) {
       throw new Error(
@@ -207,6 +214,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
   }
 
   function batchSet(schemaId: string, patchValues: Record<string, unknown>) {
+    assertSchemaLive(schemaId);
     const entries = Object.entries(patchValues);
     for (const [controlId, value] of entries) {
       const control = findControl(schemaId, controlId);
@@ -237,6 +245,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
 
   function fireTrigger(schemaId: string, controlId: string) {
     const control = findControl(schemaId, controlId);
+    assertSchemaLive(schemaId);
     if (control.kind !== "trigger") {
       throw new Error(`Control "${controlId}" is not a trigger (kind "${control.kind}").`);
     }
