@@ -24,7 +24,7 @@ If discovery fails on an unusual network, copy the printed `EXPO_PUBLIC_RI_BROKE
 EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577 pnpm --filter @runtime-inspector/example-react-native-reanimated start
 ```
 
-Open `http://127.0.0.1:4578`.
+Open `http://127.0.0.1:4600`.
 
 For Android over USB without LAN, you can keep the default emulator URL by running:
 

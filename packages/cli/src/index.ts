@@ -16,9 +16,9 @@ if (command !== "dev") {
 }
 
 const requestedBrokerPort = Number(process.env.RUNTIME_INSPECTOR_PORT ?? 4577);
-const requestedPanelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 4578);
+const requestedPanelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 4600);
 const brokerPort = await findAvailablePort(requestedBrokerPort);
-const panelPort = await findAvailablePort(requestedPanelPort);
+const panelPort = await findAvailablePort(requestedPanelPort, [brokerPort]);
 const lanAddress = getLanAddress();
 const token = randomBytes(4).toString("hex");
 const broker = startBroker({ host: "0.0.0.0", port: brokerPort, token });
@@ -82,8 +82,9 @@ function getLanAddress() {
   return undefined;
 }
 
-async function findAvailablePort(startPort: number) {
+async function findAvailablePort(startPort: number, skip: number[] = []) {
   for (let port = startPort; port < startPort + 20; port += 1) {
+    if (skip.includes(port)) continue;
     if (await isPortAvailable(port)) {
       return port;
     }

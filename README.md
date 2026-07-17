@@ -101,7 +101,7 @@ pnpm dev
 This starts:
 
 - broker: `ws://127.0.0.1:4577`
-- web panel: `http://127.0.0.1:4578?token=<session token>`
+- web panel: `http://127.0.0.1:4600?token=<session token>`
 
 The CLI prints local and LAN URLs plus a QR code for the panel. If either port is busy, it picks the next available port and prints the URLs to use. Open the panel through the printed URL — the token in it authorizes the panel with the broker.
 
