@@ -46,6 +46,7 @@ Ordered by impact:
 
 ## Later
 
+- Source write-back ("Apply to code"): anchors captured by the babel plugin, applied by a workspace-role client — see [RFC 0004](../rfcs/0004-source-anchors-write-back.md).
 - Desktop and VSCode clients.
 - Native module path if JS transport becomes limiting.
 - Recording and timeline tools.
