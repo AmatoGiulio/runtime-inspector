@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeWebSocket } from "./test-utils";
 
 function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, id: string) {
   return schema.groups[0].controls.find((control) => control.id === id);
@@ -6,6 +7,8 @@ function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, 
 
 describe("__riInspect", () => {
   beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
     vi.useFakeTimers();
   });
 
@@ -13,6 +16,7 @@ describe("__riInspect", () => {
     const { __resetAutoRegistryForTests } = await import("./auto");
     __resetAutoRegistryForTests();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 

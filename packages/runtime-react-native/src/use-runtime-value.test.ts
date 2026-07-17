@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeWebSocket } from "./test-utils";
 
 function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, id: string) {
   return schema.groups[0].controls.find((control) => control.id === id);
@@ -12,6 +13,8 @@ const DEBOUNCE_MS = 100;
 
 describe("buildRuntimeValue", () => {
   beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
     vi.useFakeTimers();
   });
 
@@ -19,6 +22,7 @@ describe("buildRuntimeValue", () => {
     const { __resetAutoRegistryForTests } = await import("./auto");
     __resetAutoRegistryForTests();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -162,6 +166,8 @@ describe("useRuntimeValue - production", () => {
 
 describe("useAction", () => {
   beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
     vi.useFakeTimers();
   });
 
@@ -169,6 +175,7 @@ describe("useAction", () => {
     const { __resetAutoRegistryForTests } = await import("./auto");
     __resetAutoRegistryForTests();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
