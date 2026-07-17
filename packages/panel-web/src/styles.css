@@ -396,6 +396,56 @@ output,
   padding: 28px 20px;
 }
 
+.controlRowContainer {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+}
+
+.controlRowContainer .controlRow {
+  flex: 1;
+  min-width: 0;
+}
+
+.applyToCodeButton {
+  align-self: center;
+  background: #242832;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  color: #d9dee8;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.applyToCodeButton:hover:not(:disabled) {
+  background: #2d3340;
+}
+
+.applyToCodeButton:disabled {
+  color: #697080;
+  cursor: not-allowed;
+}
+
+.applyAllButton {
+  background: #242832;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  color: #d9dee8;
+  cursor: pointer;
+  font-size: 12px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 10px;
+}
+
+.applyAllButton:hover {
+  background: #2d3340;
+}
+
 @media (max-width: 840px) {
   .layout {
     grid-template-columns: 1fr;

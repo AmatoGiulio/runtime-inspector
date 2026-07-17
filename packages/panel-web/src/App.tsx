@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore, type ReactElement } from "react";
 import { createPanelSession, sampleSpringCurve } from "@runtime-inspector/panel-core";
 import {
   type BezierControl,
@@ -7,6 +7,7 @@ import {
   type InspectorControl,
   type PanelSchema,
   type SliderControl,
+  type SourceApplyResultEntry,
   type SpringControl,
   type SpringValue,
   type ToggleControl,
@@ -38,9 +39,11 @@ function App() {
           <h1>Runtime Inspector</h1>
           <p>
             {state.notice ??
-              (state.schemas.length > 0
-                ? `${state.schemas.length} schema${state.schemas.length === 1 ? "" : "s"} published`
-                : "Waiting for runtime schema")}
+              (state.lastApplyResult
+                ? formatApplyResults(state.lastApplyResult.results)
+                : state.schemas.length > 0
+                  ? `${state.schemas.length} schema${state.schemas.length === 1 ? "" : "s"} published`
+                  : "Waiting for runtime schema")}
           </p>
         </div>
         <div className="topbarMeta">
@@ -133,6 +136,16 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
     session.applyCompareSlot(slot, schema.id);
   }
 
+  function applySourceForControl(controlId: string) {
+    session.applySource(schema.id, [controlId]);
+  }
+
+  function applyAllSource() {
+    session.applySource(schema.id);
+  }
+
+  const hasAnchoredControl = useMemo(() => schemaHasAnchoredControl(schema), [schema]);
+
   return (
     <section className="schemaSection">
       <div className="schemaSectionHeader">
@@ -141,6 +154,11 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
           {controlStats.live} live / {controlStats.advanced} replay
         </span>
         {isStale ? <span className="status disconnected">stale</span> : null}
+        {hasAnchoredControl ? (
+          <button className="applyAllButton" type="button" onClick={applyAllSource}>
+            Apply all to code
+          </button>
+        ) : null}
       </div>
       <div className="layout">
         <section className="groups">
@@ -165,6 +183,7 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
                     onChange={(value) => updateValue(control, value)}
                     onSliderChange={updateSliderValue}
                     onCommit={flushControl}
+                    onApplySource={applySourceForControl}
                   />
                 ))}
               </div>
@@ -238,7 +257,8 @@ function ControlRow({
   value,
   onChange,
   onSliderChange,
-  onCommit
+  onCommit,
+  onApplySource
 }: {
   control: InspectorControl;
   disabled?: boolean;
@@ -246,9 +266,12 @@ function ControlRow({
   onChange: (value: unknown) => void;
   onSliderChange: (control: SliderControl, value: number) => void;
   onCommit: (controlId: string) => void;
+  onApplySource: (controlId: string) => void;
 }) {
+  let row: ReactElement | null = null;
+
   if (control.kind === "slider") {
-    return (
+    row = (
       <SliderRow
         control={control}
         disabled={disabled}
@@ -257,15 +280,12 @@ function ControlRow({
         onCommit={() => onCommit(control.id)}
       />
     );
-  }
-  if (control.kind === "toggle") {
-    return <ToggleRow control={control} disabled={disabled} value={Boolean(value)} onChange={onChange} />;
-  }
-  if (control.kind === "color") {
-    return <ColorRow control={control} disabled={disabled} value={String(value)} onChange={onChange} />;
-  }
-  if (control.kind === "bezier") {
-    return (
+  } else if (control.kind === "toggle") {
+    row = <ToggleRow control={control} disabled={disabled} value={Boolean(value)} onChange={onChange} />;
+  } else if (control.kind === "color") {
+    row = <ColorRow control={control} disabled={disabled} value={String(value)} onChange={onChange} />;
+  } else if (control.kind === "bezier") {
+    row = (
       <BezierRow
         control={control}
         disabled={disabled}
@@ -273,9 +293,8 @@ function ControlRow({
         onChange={onChange}
       />
     );
-  }
-  if (control.kind === "spring") {
-    return (
+  } else if (control.kind === "spring") {
+    row = (
       <SpringRow
         control={control}
         disabled={disabled}
@@ -283,11 +302,29 @@ function ControlRow({
         onChange={onChange}
       />
     );
+  } else if (control.kind === "trigger") {
+    row = <TriggerRow control={control} disabled={disabled} onChange={onChange} />;
   }
-  if (control.kind === "trigger") {
-    return <TriggerRow control={control} disabled={disabled} onChange={onChange} />;
-  }
-  return null;
+
+  if (!row) return null;
+
+  const canApplySource = control.kind !== "trigger" && Boolean(control.source);
+
+  return (
+    <div className="controlRowContainer">
+      {row}
+      {canApplySource ? (
+        <button
+          className="applyToCodeButton"
+          disabled={disabled}
+          type="button"
+          onClick={() => onApplySource(control.id)}
+        >
+          Apply to code
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function SliderRow({
@@ -606,6 +643,21 @@ function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatApplyEntry(entry: SourceApplyResultEntry): string {
+  if (entry.ok) return `${entry.controlId} → ${entry.written} written`;
+  return `${entry.controlId}: ${entry.code}${entry.message ? ` — ${entry.message}` : ""}`;
+}
+
+function formatApplyResults(results: SourceApplyResultEntry[]): string {
+  return results.map(formatApplyEntry).join(" · ");
+}
+
+function schemaHasAnchoredControl(schema: PanelSchema): boolean {
+  return schema.groups.some((group) =>
+    group.controls.some((control) => control.kind !== "trigger" && Boolean(control.source))
+  );
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

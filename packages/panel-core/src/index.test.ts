@@ -57,6 +57,38 @@ const testSchema: PanelSchema = {
   ]
 };
 
+const anchor = {
+  file: "src/Demo.tsx",
+  line: 10,
+  column: 2,
+  enclosure: ["Demo"],
+  name: "speed",
+  init: "1"
+};
+
+const anchoredSchema: PanelSchema = {
+  id: "anchored-demo",
+  title: "Anchored Demo",
+  groups: [
+    {
+      id: "group-1",
+      label: "Group 1",
+      controls: [
+        { id: "speed", kind: "slider", label: "Speed", defaultValue: 1, min: 0, max: 10, source: anchor },
+        {
+          id: "enabled",
+          kind: "toggle",
+          label: "Enabled",
+          defaultValue: false,
+          source: { ...anchor, name: "enabled", init: "false" }
+        },
+        { id: "unanchored", kind: "slider", label: "Unanchored", defaultValue: 5, min: 0, max: 10 },
+        { id: "replayTrigger", kind: "trigger", label: "Replay" }
+      ]
+    }
+  ]
+};
+
 function createSession(overrides: Partial<Parameters<typeof createPanelSession>[0]> = {}) {
   let nowValue = 0;
   const session = createPanelSession({
@@ -369,6 +401,105 @@ describe("createPanelSession", () => {
       .map((raw) => JSON.parse(raw));
     expect(commits).toHaveLength(1);
     expect(commits[0]).toMatchObject({ schemaId: "demo", controlId: "speed", value: 1 });
+  });
+});
+
+describe("createPanelSession applySource", () => {
+  it("sends source.apply for all anchored controls with current session values", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    session.setValue("anchored-demo", "speed", 7);
+
+    session.applySource("anchored-demo");
+
+    const applies = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "source.apply")
+      .map((raw) => JSON.parse(raw));
+    expect(applies).toHaveLength(1);
+    expect(applies[0].schemaId).toBe("anchored-demo");
+    expect(applies[0].requests).toEqual([
+      { controlId: "speed", kind: "slider", anchor, value: 7 },
+      {
+        controlId: "enabled",
+        kind: "toggle",
+        anchor: { ...anchor, name: "enabled", init: "false" },
+        value: false
+      }
+    ]);
+  });
+
+  it("filters to the given controlIds", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    session.applySource("anchored-demo", ["enabled"]);
+
+    const applies = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "source.apply")
+      .map((raw) => JSON.parse(raw));
+    expect(applies).toHaveLength(1);
+    expect(applies[0].requests).toEqual([
+      {
+        controlId: "enabled",
+        kind: "toggle",
+        anchor: { ...anchor, name: "enabled", init: "false" },
+        value: false
+      }
+    ]);
+  });
+
+  it("sends nothing when no requested control is anchored", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    session.applySource("anchored-demo", ["unanchored"]);
+    session.applySource("anchored-demo", ["replayTrigger"]);
+
+    const applies = socket.sent.filter((raw) => JSON.parse(raw).type === "source.apply");
+    expect(applies).toHaveLength(0);
+  });
+
+  it("updates lastApplyResult on source.applyResult", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "anchored-demo",
+      results: [{ controlId: "speed", ok: true, written: "42", previous: "1" }]
+    });
+
+    expect(session.getState().lastApplyResult?.schemaId).toBe("anchored-demo");
+    expect(session.getState().lastApplyResult?.results).toEqual([
+      { controlId: "speed", ok: true, written: "42", previous: "1" }
+    ]);
+  });
+
+  it("surfaces an actionable notice for EXPRESSION_MISMATCH", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "anchored-demo",
+      results: [{ controlId: "speed", ok: false, code: "EXPRESSION_MISMATCH", message: "expr changed" }]
+    });
+
+    expect(session.getState().notice).toBe("file changed since launch — hot-reload and retry");
+    expect(session.getState().lastApplyResult?.results).toEqual([
+      { controlId: "speed", ok: false, code: "EXPRESSION_MISMATCH", message: "expr changed" }
+    ]);
   });
 });
 
