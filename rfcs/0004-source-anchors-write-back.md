@@ -1,6 +1,6 @@
 # RFC 0004 — Source anchors and write-back ("Apply to code")
 
-- Status: draft
+- Status: implemented (first pass: `// @inspect` + `useSharedValue`; hook injection and the MCP `apply_to_source` tool are follow-ups)
 - Author: architect session, 2026-07-17
 - Affects: `babel-plugin`, `protocol` (additive), `transport-ws`, `cli` (new workspace client), `panel-core`, `panel-web`, `client-mcp` (optional tool), docs
 - Breaking: no (additive: one optional control field, one new client role, one new message pair; tolerant readers ignore all three)
