@@ -2,6 +2,12 @@
   "name": "@runtime-inspector/babel-plugin",
   "version": "0.1.0",
   "description": "Babel plugin: dev-only auto-binding of useSharedValue via an @inspect directive comment.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/babel-plugin"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -10,6 +16,10 @@
       "require": "./dist/index.js",
       "import": "./dist/index.mjs"
     }
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts",

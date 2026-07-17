@@ -2,9 +2,19 @@
   "name": "@runtime-inspector/cli",
   "version": "0.1.0",
   "description": "Runtime Inspector command line tools.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
     "runtime-inspector": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",

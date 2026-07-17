@@ -2,6 +2,12 @@
   "name": "@runtime-inspector/client-mcp",
   "version": "0.1.0",
   "description": "MCP server that lets an AI agent tune a running app through the Runtime Inspector broker.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/client-mcp"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,6 +19,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",

@@ -105,7 +105,7 @@ Sent by a `runtime` client to describe the controls it exposes. Contains a `Pane
 }
 ```
 
-The web panel currently renders `slider`, `toggle`, and `color`. Other control kinds are typed in the protocol and reserved for the next implementation pass.
+The web panel renders all control kinds defined by the protocol: `slider`, `toggle`, `color`, `bezier` (with curve preview), `spring` (editor with curve preview), and `trigger`.
 
 ### `schema.dispose`
 
