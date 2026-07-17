@@ -1,6 +1,6 @@
 # Runtime Inspector Protocol (RIP)
 
-The Runtime Inspector Protocol is a set of transport-independent JSON messages exchanged between a `runtime` client (an app instrumenting itself) and a `panel` client (a human or machine controller), relayed by a broker. The current transport is a local WebSocket. Current version: **0.3**.
+The Runtime Inspector Protocol is a set of transport-independent JSON messages exchanged between a `runtime` client (an app instrumenting itself), a `panel` client (a human or machine controller), and — since RFC 0004 — a `workspace` client (a filesystem-capable client that writes tuned values back into source), all relayed by a broker. The current transport is a local WebSocket. Current version: **0.3**.
 
 ## Message taxonomy
 
@@ -26,6 +26,8 @@ Classification of every current message type:
 | `control.commit` | State |
 | `runtime.status` | Lifecycle event |
 | `error` | Lifecycle event |
+| `source.apply` | Command |
+| `source.applyResult` | Lifecycle event |
 
 **Taxonomy violation resolved in 0.3.** Prior to 0.3, `trigger` controls ("do this callback now", e.g. "replay transition") were fired via `control.patch` — the same message type used for value updates (slider, toggle, color, bezier, spring), and drag-preview patches were indistinguishable from a human's decided value. Protocol 0.3 introduces two dedicated messages to resolve this:
 
@@ -38,7 +40,7 @@ Classification of every current message type:
 
 ### `handshake.hello`
 
-Sent by any client to identify itself and negotiate protocol version. `role` is `"runtime"` or `"panel"`. `token` is required only for `panel`-role clients when the broker was started with a token.
+Sent by any client to identify itself and negotiate protocol version. `role` is `"runtime"`, `"panel"`, or `"workspace"`. `token` is required for `panel`- and `workspace`-role clients when the broker was started with a token.
 
 ```json
 {
@@ -50,7 +52,13 @@ Sent by any client to identify itself and negotiate protocol version. `role` is 
 }
 ```
 
-Fields: `protocolVersion` (must match broker's `RIP_VERSION` or the broker rejects with `VERSION_MISMATCH`), `role`, `clientId` (unique per client), `clientName` (optional, display only), `token` (optional, required for panels when broker enforces one).
+Fields: `protocolVersion` (must match broker's `RIP_VERSION` or the broker rejects with `VERSION_MISMATCH`), `role`, `clientId` (unique per client), `clientName` (optional, display only), `token` (optional, required for `panel` and `workspace` clients when broker enforces one).
+
+#### Roles
+
+- **`runtime`** — an app instrumenting itself. Publishes `schema.publish`/`schema.dispose`, receives control updates. Never token-checked (see Security).
+- **`panel`** — a controller: the web panel, a CLI, or an AI agent via `client-mcp`. Sends `control.patch`/`control.batchPatch`/`control.trigger`/`control.commit`/`source.apply`, receives schemas, `runtime.status`, and `source.applyResult`.
+- **`workspace`** *(since RFC 0004)* — a client with filesystem access to the project, responsible for applying a tuned value back into source. In `runtime-inspector dev` this is the CLI process itself, connected to its own broker; a future editor extension could be a `workspace` client instead, applying edits through the editor's own undo stack. The broker stays dumb (route, don't interpret): it only forwards `source.apply` to `workspace` clients and `source.applyResult` back to `panel` clients. Authenticates with the session token exactly like `panel`.
 
 ### `handshake.accept`
 
@@ -106,6 +114,29 @@ Sent by a `runtime` client to describe the controls it exposes. Contains a `Pane
 ```
 
 The web panel renders all control kinds defined by the protocol: `slider`, `toggle`, `color`, `bezier` (with curve preview), `spring` (editor with curve preview), and `trigger`.
+
+Every non-`trigger` control may carry an optional `source: SourceAnchor` field *(since RFC 0004, additive)*, populated by the runtime SDK when the Babel plugin captured the declaration the control was generated from:
+
+```json
+{
+  "id": "moveX",
+  "kind": "slider",
+  "label": "Move X",
+  "defaultValue": 0,
+  "min": -120,
+  "max": 120,
+  "source": {
+    "file": "src/Card.tsx",
+    "line": 42,
+    "column": 8,
+    "enclosure": ["Card"],
+    "name": "moveX",
+    "init": "0"
+  }
+}
+```
+
+`file` is relative to the Babel root/cwd; `line`/`column` are a tiebreaker only, never trusted offsets — re-location always re-parses the current file. `enclosure` is the enclosing function/component chain, outermost first. `init` is the exact source text of the original initializer argument, used as the safety check before overwriting (see `source.apply` below). A control without a `source` field simply has no anchor: panels show no "Apply to code" affordance for it. Panels that predate this field ignore it (tolerant reader).
 
 ### `schema.dispose`
 
@@ -239,6 +270,63 @@ Sent by the broker (or a client) to report a protocol-level failure.
 
 Known codes today: `INVALID_MESSAGE`, `VERSION_MISMATCH`, `UNAUTHORIZED`.
 
+### `source.apply`
+
+*(Since RFC 0004, additive.)* Sent by a `panel` client to a `workspace` client (family: Command) to write one or more tuned values back into their anchored source declarations. Carries the typed protocol value, not a pre-serialized expression: the workspace owns serialization so the written syntax always matches the target context (see `serializeValueExpression` in `@runtime-inspector/protocol`).
+
+```json
+{
+  "type": "source.apply",
+  "schemaId": "card-transition",
+  "requests": [
+    {
+      "controlId": "moveX",
+      "anchor": {
+        "file": "src/Card.tsx",
+        "line": 42,
+        "column": 8,
+        "enclosure": ["Card"],
+        "name": "moveX",
+        "init": "0"
+      },
+      "value": 42
+    }
+  ]
+}
+```
+
+`requests` is a non-empty array so a schema-level "Apply all" can be sent as a single command. At-most-once delivery: never cached, never replayed.
+
+### `source.applyResult`
+
+*(Since RFC 0004, additive.)* Sent by a `workspace` client back to `panel` clients (family: Event) with a per-request outcome for a `source.apply`.
+
+```json
+{
+  "type": "source.applyResult",
+  "schemaId": "card-transition",
+  "results": [
+    { "controlId": "moveX", "ok": true, "written": "42", "previous": "0" },
+    { "controlId": "damping", "ok": false, "code": "EXPRESSION_MISMATCH" }
+  ]
+}
+```
+
+Each result entry is either `{ controlId, ok: true, written, previous }` (the new and prior initializer text, for the panel's notice area and as the CLI's only "undo" story alongside git) or `{ controlId, ok: false, code, message? }`. Never cached, never replayed.
+
+#### `source.apply` error taxonomy
+
+| Code | Meaning |
+| --- | --- |
+| `PARSE_FAILURE` | current file no longer parses |
+| `DECLARATION_MISSING` | no declaration matches name + enclosure |
+| `DECLARATION_MOVED` | matches exist but none at the recorded line/column when disambiguation was needed |
+| `DECLARATION_AMBIGUOUS` | multiple matches even after the line/column tiebreaker |
+| `EXPRESSION_MISMATCH` | current initializer text differs from the anchor's `init` (manual edit since the schema was published) — never overwrite silently |
+| `WRITE_FAILURE` | filesystem error |
+
+`EXPRESSION_MISMATCH` is the load-bearing guard: the workspace only replaces an expression it can prove is the one the running app was built from. A hot-reload after the edit republishes the schema with a fresh anchor, clearing the mismatch naturally.
+
 ## Broker rules
 
 Derived from `packages/transport-ws/src/index.ts`.
@@ -255,6 +343,8 @@ Derived from `packages/transport-ws/src/index.ts`.
 | `control.commit` | opposite role (runtime) | no | no |
 | `runtime.status` | broadcast to all panels, from broker (on runtime connect/disconnect) | no | no |
 | `error` | sender only, from broker | no | no |
+| `source.apply` | `workspace` clients only (from a `panel`) | no | no |
+| `source.applyResult` | `panel` clients only (from a `workspace`) | no | no |
 
 **Stale replay:** when a late-joining panel is replayed a cached `schema.publish` whose publishing runtime is currently disconnected, the broker follows it with the current `runtime.status` (`online: false`) so the panel immediately knows to render it stale.
 
@@ -262,7 +352,8 @@ Additional broker behavior:
 
 - The schema cache entry for a runtime is deleted **only** by an explicit `schema.dispose` from that runtime, or when a different schema with the same id is republished. A silent disconnect (socket close without a preceding `schema.dispose`) keeps the cache entry — see the `runtime.status` section above.
 - `control.trigger` is never cached or replayed, by design: replaying a command on late-panel-join would re-execute it, which is exactly the taxonomy violation 0.3 fixes.
-- All non-handshake messages are relayed strictly to clients of the **opposite** role (`forwardToOppositeRole`); a message from a `panel` never reaches another `panel`, and vice versa.
+- All `runtime`/`panel` messages (everything except `source.apply`/`source.applyResult`) are relayed strictly between clients of the **opposite** role, `runtime` and `panel` only (`forwardToOppositeRole`); a message from a `panel` never reaches another `panel`, a `runtime`, or a `workspace`, and vice versa.
+- `source.apply` and `source.applyResult` are routed explicitly by target role rather than by "opposite role": `source.apply` from a `panel` is forwarded only to `workspace` clients (never to `runtime`), and `source.applyResult` from a `workspace` is forwarded only to `panel` clients. Neither is ever cached or replayed to a late joiner, like `control.trigger`.
 - Unparseable JSON is answered with an `error` (`INVALID_MESSAGE`) and otherwise dropped — it is never forwarded.
 
 ## Compatibility policy
@@ -280,7 +371,7 @@ Additional broker behavior:
 
 ## Security
 
-- `panel`-role clients may be required to present a `token` in `handshake.hello` (set via the broker's `token` option). A missing or mismatched token gets an `error` with code `UNAUTHORIZED` and the socket is closed.
+- `panel`- and `workspace`-role clients may be required to present a `token` in `handshake.hello` (set via the broker's `token` option). A missing or mismatched token gets an `error` with code `UNAUTHORIZED` and the socket is closed.
 - `runtime`-role clients are never token-checked. This is by design: Runtime Inspector is a LAN-only dev tool, and requiring runtime-side auth would add friction with no meaningful security benefit in that threat model.
 
 ## Clients

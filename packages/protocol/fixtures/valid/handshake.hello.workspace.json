@@ -1,0 +1,8 @@
+{
+  "type": "handshake.hello",
+  "protocolVersion": "0.3",
+  "role": "workspace",
+  "clientId": "workspace-cli-1",
+  "clientName": "runtime-inspector dev",
+  "token": "dev-secret-token"
+}

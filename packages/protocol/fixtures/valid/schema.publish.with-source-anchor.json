@@ -1,0 +1,31 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "card-transition",
+    "title": "Card Transition",
+    "groups": [
+      {
+        "id": "motion",
+        "label": "Motion",
+        "controls": [
+          {
+            "id": "moveX",
+            "kind": "slider",
+            "label": "Move X",
+            "defaultValue": 0,
+            "min": -120,
+            "max": 120,
+            "source": {
+              "file": "src/Card.tsx",
+              "line": 42,
+              "column": 8,
+              "enclosure": ["Card"],
+              "name": "moveX",
+              "init": "0"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

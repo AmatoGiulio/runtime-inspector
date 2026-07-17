@@ -7,6 +7,7 @@ import {
   isValidControlValue,
   parseRIPMessage,
   safeParseRIPMessage,
+  serializeValueExpression,
   validateControlValue,
   type InspectorControl,
   type SliderControl
@@ -327,5 +328,61 @@ describe("safeParseRIPMessage", () => {
   it("returns undefined for a message with an unknown type", () => {
     const json = JSON.stringify({ type: "control.teleport", schemaId: "s", controlId: "c", value: 1 });
     expect(safeParseRIPMessage(json)).toBeUndefined();
+  });
+});
+
+describe("serializeValueExpression", () => {
+  it("serializes a slider/number value as a numeric literal", () => {
+    expect(serializeValueExpression("slider", 42)).toBe("42");
+    expect(serializeValueExpression("slider", -0.5)).toBe("-0.5");
+  });
+
+  it("serializes a toggle value as true/false", () => {
+    expect(serializeValueExpression("toggle", true)).toBe("true");
+    expect(serializeValueExpression("toggle", false)).toBe("false");
+  });
+
+  it("serializes a color value as a double-quoted string", () => {
+    expect(serializeValueExpression("color", "#ff0000")).toBe('"#ff0000"');
+  });
+
+  it("serializes a bezier value as a 4-element array literal", () => {
+    expect(serializeValueExpression("bezier", [0.4, 0, 0.2, 1])).toBe("[0.4, 0, 0.2, 1]");
+  });
+
+  it("serializes a spring value without mass", () => {
+    expect(serializeValueExpression("spring", { damping: 10, stiffness: 100 })).toBe(
+      "{ damping: 10, stiffness: 100 }"
+    );
+  });
+
+  it("serializes a spring value with mass", () => {
+    expect(serializeValueExpression("spring", { damping: 10, stiffness: 100, mass: 1.5 })).toBe(
+      "{ damping: 10, stiffness: 100, mass: 1.5 }"
+    );
+  });
+
+  it("throws for a trigger kind", () => {
+    expect(() => serializeValueExpression("trigger", undefined)).toThrow(/trigger/i);
+  });
+
+  it("throws for a slider value that is not a finite number", () => {
+    expect(() => serializeValueExpression("slider", "not-a-number")).toThrow(/slider/i);
+  });
+
+  it("throws for a toggle value that is not a boolean", () => {
+    expect(() => serializeValueExpression("toggle", "true")).toThrow(/toggle/i);
+  });
+
+  it("throws for a color value that is not a string", () => {
+    expect(() => serializeValueExpression("color", 123)).toThrow(/color/i);
+  });
+
+  it("throws for a bezier value with the wrong shape", () => {
+    expect(() => serializeValueExpression("bezier", [0, 0, 1])).toThrow(/bezier/i);
+  });
+
+  it("throws for a spring value missing required fields", () => {
+    expect(() => serializeValueExpression("spring", { damping: 10 })).toThrow(/spring/i);
   });
 });

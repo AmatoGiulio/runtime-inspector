@@ -71,11 +71,15 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
           return;
         }
 
-        if (token && message.role === "panel" && message.token !== token) {
+        if (
+          token &&
+          (message.role === "panel" || message.role === "workspace") &&
+          message.token !== token
+        ) {
           send(socket, {
             type: "error",
             code: "UNAUTHORIZED",
-            message: "Missing or invalid panel token."
+            message: `Missing or invalid ${message.role} token.`
           });
           socket.close();
           return;
@@ -108,7 +112,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         schemasByRuntime.delete(record.id);
       }
 
-      forwardToOppositeRole(clients, record, message);
+      routeMessage(clients, record, message);
     });
 
     socket.on("close", () => {
@@ -179,15 +183,56 @@ function broadcastRuntimeStatus(
   }
 }
 
+/**
+ * Routing table for messages that are not handled by an explicit special
+ * case above (schema.publish/dispose caching, source.apply/applyResult):
+ * every existing message type is bidirectional between `runtime` and
+ * `panel` only — `workspace` clients never receive or send them. Mirrors
+ * the routing/caching table in docs/protocol.md.
+ */
+function routeMessage(
+  clients: Map<WebSocket, ClientRecord>,
+  sender: ClientRecord,
+  message: RIPMessage
+) {
+  if (message.type === "source.apply") {
+    // panel -> workspace, at-most-once, never cached, never replayed.
+    forwardToRole(clients, sender, message, "workspace");
+    return;
+  }
+
+  if (message.type === "source.applyResult") {
+    // workspace -> panel, at-most-once, never cached, never replayed.
+    forwardToRole(clients, sender, message, "panel");
+    return;
+  }
+
+  forwardToOppositeRole(clients, sender, message);
+}
+
 function forwardToOppositeRole(
   clients: Map<WebSocket, ClientRecord>,
   sender: ClientRecord,
   message: RIPMessage
 ) {
+  if (sender.role !== "runtime" && sender.role !== "panel") return;
   for (const target of clients.values()) {
     if (target.socket === sender.socket) continue;
-    if (!sender.role || !target.role) continue;
+    if (target.role !== "runtime" && target.role !== "panel") continue;
     if (target.role === sender.role) continue;
+    send(target.socket, message);
+  }
+}
+
+function forwardToRole(
+  clients: Map<WebSocket, ClientRecord>,
+  sender: ClientRecord,
+  message: RIPMessage,
+  targetRole: RIPRole
+) {
+  for (const target of clients.values()) {
+    if (target.socket === sender.socket) continue;
+    if (target.role !== targetRole) continue;
     send(target.socket, message);
   }
 }

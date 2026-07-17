@@ -101,7 +101,7 @@ Error taxonomy (mirrors the validation-code pattern from `validateControlValue`)
 6. Serialize the new value to a TS expression (shared helper, see below) and splice it by byte range — no reprint of the whole file, no formatting churn outside the replaced range.
 7. Write, report `previous`/`written` in the result.
 
-Value→expression serialization lives in `@runtime-inspector/protocol` as a pure helper (`serializeValueExpression(kind, value)`), next to value validation: it is value-shape-driven, has no session logic, and is needed by the CLI today and any other workspace client tomorrow. `panel-core`'s copy-as-code migrates to it to avoid two serializers drifting apart.
+Value→expression serialization lives in `@runtime-inspector/protocol` as a pure helper (`serializeValueExpression(kind, value)`), next to value validation: it is value-shape-driven, has no session logic, and is needed by the CLI today and any other workspace client tomorrow. `panel-core`'s copy-as-code intentionally does **not** migrate to it: copy-as-code emits Reanimated-flavored presentation snippets (`Easing.bezier(...)` calls, multi-line objects) meant for a human to paste, while `serializeValueExpression` emits the literal initializer expression the write-back splices in place — same values, different jobs, and forcing one format onto the other would degrade both.
 
 ## Part 4 — Panel UX
 

@@ -414,6 +414,256 @@ describe("Runtime Inspector protocol 0.3 broker rules", () => {
   });
 });
 
+describe("Runtime Inspector workspace role (RFC 0004)", () => {
+  it("rejects a workspace hello without a token when the broker requires one", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string; code?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-no-token"
+      })
+    );
+
+    await closed;
+
+    expect(messages.some((message) => message.type === "error" && message.code === "UNAUTHORIZED")).toBe(
+      true
+    );
+  });
+
+  it("accepts a workspace hello with the correct token", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+    const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+
+    socket.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-token",
+        token: "secret"
+      })
+    );
+
+    await wait(50);
+    socket.close();
+
+    expect(messages.some((message) => message.type === "handshake.accept")).toBe(true);
+  });
+
+  it("forwards source.apply from a panel to the workspace client, never to a runtime", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const runtime = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const runtimeMessages: Array<{ type?: string }> = [];
+    runtime.on("message", (data) => runtimeMessages.push(JSON.parse(data.toString())));
+    runtime.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "runtime",
+        clientId: "runtime-apply"
+      })
+    );
+
+    const workspace = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const workspaceMessages: Array<{ type?: string; requests?: unknown }> = [];
+    workspace.on("message", (data) => workspaceMessages.push(JSON.parse(data.toString())));
+    workspace.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-apply"
+      })
+    );
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-apply"
+      })
+    );
+    await wait(30);
+
+    panel.send(
+      JSON.stringify({
+        type: "source.apply",
+        schemaId: "test-schema",
+        requests: [
+          {
+            controlId: "moveX",
+            anchor: {
+              file: "src/Card.tsx",
+              line: 42,
+              column: 8,
+              enclosure: ["Card"],
+              name: "moveX",
+              init: "0"
+            },
+            value: 42
+          }
+        ]
+      })
+    );
+    await wait(50);
+
+    runtime.close();
+    workspace.close();
+    panel.close();
+
+    expect(workspaceMessages.some((message) => message.type === "source.apply")).toBe(true);
+    expect(runtimeMessages.some((message) => message.type === "source.apply")).toBe(false);
+  });
+
+  it("forwards source.applyResult from a workspace client to panels", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const workspace = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    workspace.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-result"
+      })
+    );
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const panelMessages: Array<{ type?: string }> = [];
+    panel.on("message", (data) => panelMessages.push(JSON.parse(data.toString())));
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-result"
+      })
+    );
+    await wait(30);
+
+    workspace.send(
+      JSON.stringify({
+        type: "source.applyResult",
+        schemaId: "test-schema",
+        results: [{ controlId: "moveX", ok: true, written: "42", previous: "0" }]
+      })
+    );
+    await wait(50);
+
+    workspace.close();
+    panel.close();
+
+    expect(panelMessages.some((message) => message.type === "source.applyResult")).toBe(true);
+  });
+
+  it("never replays source.apply or source.applyResult to a late-joining client", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-early"
+      })
+    );
+
+    const workspace = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    workspace.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-early"
+      })
+    );
+    await wait(30);
+
+    panel.send(
+      JSON.stringify({
+        type: "source.apply",
+        schemaId: "test-schema",
+        requests: [
+          {
+            controlId: "moveX",
+            anchor: {
+              file: "src/Card.tsx",
+              line: 42,
+              column: 8,
+              enclosure: ["Card"],
+              name: "moveX",
+              init: "0"
+            },
+            value: 42
+          }
+        ]
+      })
+    );
+    await wait(30);
+
+    workspace.send(
+      JSON.stringify({
+        type: "source.applyResult",
+        schemaId: "test-schema",
+        results: [{ controlId: "moveX", ok: true, written: "42", previous: "0" }]
+      })
+    );
+    await wait(50);
+
+    const lateWorkspace = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const lateWorkspaceMessages: Array<{ type?: string }> = [];
+    lateWorkspace.on("message", (data) => lateWorkspaceMessages.push(JSON.parse(data.toString())));
+    lateWorkspace.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-late"
+      })
+    );
+
+    const latePanel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const latePanelMessages: Array<{ type?: string }> = [];
+    latePanel.on("message", (data) => latePanelMessages.push(JSON.parse(data.toString())));
+    latePanel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-late"
+      })
+    );
+    await wait(50);
+
+    panel.close();
+    workspace.close();
+    lateWorkspace.close();
+    latePanel.close();
+
+    expect(lateWorkspaceMessages.some((message) => message.type === "source.apply")).toBe(false);
+    expect(latePanelMessages.some((message) => message.type === "source.applyResult")).toBe(false);
+  });
+});
+
 function openSocket(url: string) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(url);
