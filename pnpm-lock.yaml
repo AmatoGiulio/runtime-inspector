@@ -78,6 +78,12 @@ importers:
 
   packages/cli:
     dependencies:
+      '@babel/parser':
+        specifier: ^7.26.0
+        version: 7.29.7
+      '@runtime-inspector/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@runtime-inspector/transport-ws':
         specifier: workspace:*
         version: link:../transport-ws
@@ -87,13 +93,22 @@ importers:
       qrcode-terminal:
         specifier: ^0.12.0
         version: 0.12.0
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.0
     devDependencies:
       '@types/qrcode-terminal':
         specifier: ^0.12.2
         version: 0.12.2
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(postcss@8.5.16)(tsx@4.22.4)(typescript@5.9.3)
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@22.20.0)(vite@6.4.3(@types/node@22.20.0)(lightningcss@1.27.0)(terser@5.48.0)(tsx@4.22.4))
 
   packages/client-mcp:
     dependencies:

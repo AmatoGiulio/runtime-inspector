@@ -172,8 +172,16 @@ export interface SchemaDispose {
   source?: "runtime";
 }
 
+/**
+ * Control kinds that carry a value expression and can be serialized by
+ * `serializeValueExpression`. Excludes `trigger`, which has no value to
+ * write back into source.
+ */
+export type SerializableControlKind = Exclude<ControlKind, "trigger">;
+
 export interface SourceApplyRequest {
   controlId: string;
+  kind: SerializableControlKind;
   anchor: SourceAnchor;
   value: unknown;
 }
@@ -414,8 +422,17 @@ export const SchemaDisposeSchema = z.object({
   source: z.literal("runtime").optional()
 });
 
+const serializableControlKindSchema = z.union([
+  z.literal("slider"),
+  z.literal("toggle"),
+  z.literal("color"),
+  z.literal("bezier"),
+  z.literal("spring")
+]);
+
 export const SourceApplyRequestSchema = z.object({
   controlId: z.string().min(1),
+  kind: serializableControlKindSchema,
   anchor: SourceAnchorSchema,
   value: z.unknown()
 });

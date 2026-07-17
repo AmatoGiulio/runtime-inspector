@@ -508,6 +508,7 @@ describe("Runtime Inspector workspace role (RFC 0004)", () => {
         requests: [
           {
             controlId: "moveX",
+            kind: "slider",
             anchor: {
               file: "src/Card.tsx",
               line: 42,
@@ -605,6 +606,7 @@ describe("Runtime Inspector workspace role (RFC 0004)", () => {
         requests: [
           {
             controlId: "moveX",
+            kind: "slider",
             anchor: {
               file: "src/Card.tsx",
               line: 42,

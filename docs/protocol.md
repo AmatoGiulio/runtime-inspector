@@ -281,6 +281,7 @@ Known codes today: `INVALID_MESSAGE`, `VERSION_MISMATCH`, `UNAUTHORIZED`.
   "requests": [
     {
       "controlId": "moveX",
+      "kind": "slider",
       "anchor": {
         "file": "src/Card.tsx",
         "line": 42,
@@ -296,6 +297,8 @@ Known codes today: `INVALID_MESSAGE`, `VERSION_MISMATCH`, `UNAUTHORIZED`.
 ```
 
 `requests` is a non-empty array so a schema-level "Apply all" can be sent as a single command. At-most-once delivery: never cached, never replayed.
+
+Each request carries `kind: SerializableControlKind` — the control's kind (`slider | toggle | color | bezier | spring`), needed by the workspace to call `serializeValueExpression(kind, value)`. `trigger` is excluded: a trigger has no value expression to write back, and the panel never offers "Apply to code" for one.
 
 ### `source.applyResult`
 

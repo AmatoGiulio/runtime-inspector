@@ -4,6 +4,7 @@
   "requests": [
     {
       "controlId": "moveX",
+      "kind": "slider",
       "anchor": {
         "file": "src/Card.tsx",
         "line": 42,

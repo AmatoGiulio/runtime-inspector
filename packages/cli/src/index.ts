@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { execa } from "execa";
 import qrcode from "qrcode-terminal";
 import { startBroker } from "@runtime-inspector/transport-ws";
+import { startWorkspaceClient } from "./workspace.js";
 
 const command = process.argv[2];
 
@@ -48,6 +49,14 @@ if (lanPanelUrl) {
 }
 console.log(`MCP agent client:              RI_BROKER_URL=${localBrokerUrl} RI_TOKEN=${token} runtime-inspector-mcp`);
 
+const workspace = startWorkspaceClient({
+  brokerUrl: localBrokerUrl,
+  token,
+  rootDir: process.cwd(),
+  log: (message) => console.log(`Runtime Inspector workspace: ${message}`)
+});
+console.log(`Runtime Inspector workspace: write-back enabled (${process.cwd()})`);
+
 const panel = execa("pnpm", ["dev"], {
   cwd: panelDir,
   stdio: "inherit",
@@ -61,6 +70,7 @@ const panel = execa("pnpm", ["dev"], {
 
 const shutdown = async () => {
   panel.kill("SIGTERM");
+  workspace.close();
   await broker.close();
   process.exit(0);
 };
