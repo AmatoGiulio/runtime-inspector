@@ -1,5 +1,5 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { createPanelSession } from "@runtime-inspector/panel-core";
+import { createPanelSession, sampleSpringCurve } from "@runtime-inspector/panel-core";
 import {
   type BezierControl,
   type ColorControl,
@@ -426,6 +426,7 @@ function SpringRow({
     <div className="controlRow springControl">
       <label>{control.label}</label>
       {control.description ? <p className="controlDescription">{control.description}</p> : null}
+      <SpringPreview value={value} />
       <SpringParameter
         disabled={disabled}
         label="Damping"
@@ -508,6 +509,37 @@ function BezierPreview({ value }: { value: CubicBezier }) {
       <path className="bezierCurve" d={path} />
       <circle className="bezierPoint" cx={controlA.x} cy={controlA.y} r="4" />
       <circle className="bezierPoint" cx={controlB.x} cy={controlB.y} r="4" />
+    </svg>
+  );
+}
+
+function SpringPreview({ value }: { value: SpringValue }) {
+  const curve = useMemo(() => sampleSpringCurve(value), [value]);
+
+  const xs = curve.points.map((p) => p.x);
+  const minX = Math.min(0, ...xs);
+  const maxX = Math.max(1, ...xs);
+  const span = maxX - minX;
+  const padding = span * 0.06;
+  const rangeMin = minX - padding;
+  const rangeMax = maxX + padding;
+
+  const mapX = (t: number) => 4 + (t / curve.duration) * (156 - 4);
+  const mapY = (x: number) => 96 - ((x - rangeMin) / (rangeMax - rangeMin)) * (96 - 4);
+
+  const path = curve.points
+    .map((p, index) => `${index === 0 ? "M" : "L"} ${mapX(p.t)} ${mapY(p.x)}`)
+    .join(" ");
+
+  const guideY = mapY(1);
+
+  return (
+    <svg className="springPreview" viewBox="0 0 160 100" role="img" aria-label="Spring curve preview">
+      <line className="springGuide" x1={4} x2={156} y1={guideY} y2={guideY} />
+      <path className="springCurve" d={path} />
+      <text className="springDuration" x={156} y={14} textAnchor="end">
+        {curve.duration.toFixed(2)}s
+      </text>
     </svg>
   );
 }

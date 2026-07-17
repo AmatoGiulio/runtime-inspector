@@ -14,6 +14,8 @@ import {
   type TriggerControl
 } from "@runtime-inspector/protocol";
 
+export { sampleSpringCurve, type SpringCurve } from "./spring-curve";
+
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "rejected";
 
 export type CompareSlotId = "A" | "B";

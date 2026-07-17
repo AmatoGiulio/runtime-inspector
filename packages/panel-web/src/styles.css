@@ -244,6 +244,32 @@ h1 {
   stroke-width: 2;
 }
 
+.springPreview {
+  background: #181b21;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  height: 108px;
+  width: 100%;
+}
+
+.springGuide {
+  stroke: #4b5565;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+
+.springCurve {
+  fill: none;
+  stroke: #56c78f;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.springDuration {
+  fill: #aeb4bf;
+  font-size: 10px;
+}
+
 .springParameter {
   align-items: center;
   display: grid;
