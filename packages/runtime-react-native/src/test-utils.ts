@@ -1,6 +1,7 @@
 export class FakeWebSocket {
   static OPEN = 1;
   static CONNECTING = 0;
+  static CLOSING = 2;
   static CLOSED = 3;
 
   static instances: FakeWebSocket[] = [];

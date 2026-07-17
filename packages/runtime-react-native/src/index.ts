@@ -383,6 +383,12 @@ function connectRuntime(session: Session) {
   };
 
   socket.onerror = () => {
+    if (
+      socket.readyState === WebSocket.CLOSING ||
+      socket.readyState === WebSocket.CLOSED
+    ) {
+      return;
+    }
     socket.close();
   };
 }

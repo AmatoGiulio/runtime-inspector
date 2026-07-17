@@ -395,6 +395,35 @@ describe("protocol 0.3 semantic messages", () => {
   });
 });
 
+describe("socket error handling", () => {
+  it("does not recurse when close() re-emits onerror on an already-closing socket", async () => {
+    class RecursiveCloseWebSocket extends FakeWebSocket {
+      close() {
+        super.close();
+        // Simulate environments (e.g. undici) where close() on a socket
+        // already in an error state re-emits the error event.
+        this.onerror?.();
+      }
+    }
+
+    vi.stubGlobal("WebSocket", RecursiveCloseWebSocket as unknown as typeof WebSocket);
+
+    const { definePanel } = await import("./index");
+
+    const schema = makeSchema("panel-onerror");
+    const panel = definePanel(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1] as RecursiveCloseWebSocket;
+    socket.open();
+
+    expect(() => socket.onerror?.()).not.toThrow();
+    expect(socket.closeCalls).toBe(1);
+
+    panel.disconnect();
+  });
+});
+
 describe("discovery diagnostics", () => {
   it("warns exactly once after a full cycle of failed candidates", async () => {
     vi.useFakeTimers();
