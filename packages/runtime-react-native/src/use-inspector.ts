@@ -238,7 +238,16 @@ export function buildInspector(
     handles[key] = built.handle;
   }
 
-  handles.$targets = targets;
+  // Exposed as a snapshot-returning getter, not the mutable store itself: a
+  // worklet that captures the handles object (e.g. useAnimatedStyle reading
+  // `card.opacity.value`) shareable-converts and freezes whatever `$targets`
+  // yields. With a getter, only a per-read copy is ever captured/frozen, so
+  // panel patches keep mutating the internal store without Reanimated's
+  // "tried to modify key" warning — and without silently stale targets.
+  Object.defineProperty(handles, "$targets", {
+    enumerable: true,
+    get: () => ({ ...targets })
+  });
 
   const schema: PanelSchema = {
     id,

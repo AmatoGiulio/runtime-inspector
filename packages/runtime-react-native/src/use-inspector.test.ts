@@ -272,6 +272,33 @@ describe("buildInspector - $targets", () => {
     expect(order).toEqual(["onChange"]);
   });
 
+  it("keeps updating after a $targets snapshot is captured and frozen (worklet shareable-conversion)", async () => {
+    const { buildInspector } = await import("./use-inspector");
+    const { applyControlPatch, definePanel } = await import("./index");
+
+    const { schema, handles } = buildInspector(
+      "panel-frozen-targets",
+      { opacity: { value: 1, min: 0, max: 1 } },
+      { makeMutable: fakeMakeMutable }
+    );
+    definePanel(schema);
+
+    // Reanimated freezes whatever object a worklet captures; with the
+    // snapshot getter that only ever affects a per-read copy.
+    const captured = handles.$targets;
+    Object.freeze(captured);
+
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "panel-frozen-targets",
+      controlId: "opacity",
+      value: 0.5
+    });
+
+    expect(captured.opacity).toBe(1);
+    expect(handles.$targets.opacity).toBe(0.5);
+  });
+
   it("writes the handle before invoking onChange (observable ordering)", async () => {
     const { buildInspector } = await import("./use-inspector");
     const { applyControlPatch, definePanel } = await import("./index");
