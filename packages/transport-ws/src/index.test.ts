@@ -664,6 +664,54 @@ describe("Runtime Inspector workspace role (RFC 0004)", () => {
     expect(lateWorkspaceMessages.some((message) => message.type === "source.apply")).toBe(false);
     expect(latePanelMessages.some((message) => message.type === "source.applyResult")).toBe(false);
   });
+
+  it("never forwards source.apply from a client that has not completed the handshake", async () => {
+    broker = startBroker({ port: 0, token: "secret" });
+    await waitForBrokerPort(broker);
+
+    const workspace = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const workspaceMessages: Array<{ type?: string }> = [];
+    workspace.on("message", (data) => workspaceMessages.push(JSON.parse(data.toString())));
+    workspace.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "workspace",
+        clientId: "workspace-guard",
+        token: "secret"
+      })
+    );
+    await wait(30);
+
+    const intruder = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    intruder.send(
+      JSON.stringify({
+        type: "source.apply",
+        schemaId: "auto",
+        requests: [
+          {
+            controlId: "radius",
+            kind: "slider",
+            anchor: {
+              file: "App.tsx",
+              line: 1,
+              column: 0,
+              enclosure: ["App"],
+              name: "radius",
+              init: "0"
+            },
+            value: 99
+          }
+        ]
+      })
+    );
+    await wait(50);
+
+    workspace.close();
+    intruder.close();
+
+    expect(workspaceMessages.some((message) => message.type === "source.apply")).toBe(false);
+  });
 });
 
 function openSocket(url: string) {

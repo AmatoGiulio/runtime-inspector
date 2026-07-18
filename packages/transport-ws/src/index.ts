@@ -197,12 +197,17 @@ function routeMessage(
 ) {
   if (message.type === "source.apply") {
     // panel -> workspace, at-most-once, never cached, never replayed.
+    // Sender must be an authenticated panel: source.apply writes files, so a
+    // client that never completed the token-checked handshake (role unset)
+    // must not reach the workspace.
+    if (sender.role !== "panel") return;
     forwardToRole(clients, sender, message, "workspace");
     return;
   }
 
   if (message.type === "source.applyResult") {
     // workspace -> panel, at-most-once, never cached, never replayed.
+    if (sender.role !== "workspace") return;
     forwardToRole(clients, sender, message, "panel");
     return;
   }
