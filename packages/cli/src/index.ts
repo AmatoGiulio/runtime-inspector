@@ -49,13 +49,20 @@ if (lanPanelUrl) {
 }
 console.log(`MCP agent client:              RI_BROKER_URL=${localBrokerUrl} RI_TOKEN=${token} runtime-inspector-mcp`);
 
+// Source anchors are relative to the app's Babel root, so write-back must
+// resolve them against the app project root — the CLI's cwd by default, or
+// RUNTIME_INSPECTOR_WORKSPACE_ROOT when the CLI runs from elsewhere (e.g.
+// this monorepo's root `dev` script, whose cwd is packages/cli).
+const workspaceRoot = process.env.RUNTIME_INSPECTOR_WORKSPACE_ROOT
+  ? resolve(process.cwd(), process.env.RUNTIME_INSPECTOR_WORKSPACE_ROOT)
+  : process.cwd();
 const workspace = startWorkspaceClient({
   brokerUrl: localBrokerUrl,
   token,
-  rootDir: process.cwd(),
+  rootDir: workspaceRoot,
   log: (message) => console.log(`Runtime Inspector workspace: ${message}`)
 });
-console.log(`Runtime Inspector workspace: write-back enabled (${process.cwd()})`);
+console.log(`Runtime Inspector workspace: write-back enabled (${workspaceRoot})`);
 
 const panel = execa("pnpm", ["dev"], {
   cwd: panelDir,

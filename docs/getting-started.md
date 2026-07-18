@@ -12,7 +12,11 @@ Start Runtime Inspector:
 pnpm dev
 ```
 
-The CLI prints local and LAN URLs. Physical devices auto-discover the broker via Metro, so no configuration is needed:
+The CLI prints local and LAN URLs. Physical devices auto-discover the broker via Metro, so no configuration is needed.
+
+"Apply to code" write-back resolves source anchors against the CLI's working directory, which is the app project root when you run `runtime-inspector dev` from your app. If the CLI runs from somewhere else, point it at the app root with `RUNTIME_INSPECTOR_WORKSPACE_ROOT=<path>` — this repo's root `pnpm dev` script does exactly that for the example app.
+
+Start the example app:
 
 ```bash
 pnpm --filter @runtime-inspector/example-react-native-reanimated start
