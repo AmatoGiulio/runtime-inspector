@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@runtime-inspector/panel-core": "workspace:*",
+    "@runtime-inspector/panel-react": "workspace:*",
     "@runtime-inspector/protocol": "workspace:*",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.3",

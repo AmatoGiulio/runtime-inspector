@@ -1,0 +1,187 @@
+.controlRow {
+  align-items: center;
+  background: #202228;
+  border: 1px solid #2c3039;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-height: 58px;
+  padding: 12px;
+}
+
+.controlRow.inline {
+  grid-template-columns: 1fr auto;
+}
+
+.controlRow label {
+  color: #d7dbe2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.controlDescription {
+  color: #8f97a6;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.triggerButton {
+  background: #2f7a59;
+  border: 1px solid #3f9b72;
+  border-radius: 6px;
+  color: #ecfff6;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  height: 30px;
+  padding: 0 12px;
+}
+
+.triggerButton:hover {
+  background: #368b66;
+}
+
+.sliderGrid {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 64px;
+}
+
+.springControl {
+  gap: 12px;
+}
+
+.bezierControl {
+  gap: 12px;
+}
+
+.bezierPreview {
+  background: #181b21;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  height: 108px;
+  width: 100%;
+}
+
+.bezierGuide {
+  stroke: #4b5565;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+
+.bezierCurve {
+  fill: none;
+  stroke: #56c78f;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.bezierPoint {
+  fill: #56c78f;
+  stroke: #101318;
+  stroke-width: 2;
+}
+
+.springPreview {
+  background: #181b21;
+  border: 1px solid #303642;
+  border-radius: 6px;
+  height: 108px;
+  width: 100%;
+}
+
+.springGuide {
+  stroke: #4b5565;
+  stroke-dasharray: 4 4;
+  stroke-width: 1.5;
+}
+
+.springCurve {
+  fill: none;
+  stroke: #56c78f;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.springDuration {
+  fill: #aeb4bf;
+  font-size: 10px;
+}
+
+.springParameter {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 72px 1fr 54px;
+}
+
+.springParameter span {
+  color: #aeb4bf;
+  font-size: 12px;
+}
+
+.springParameter output {
+  text-align: right;
+}
+
+input[type="range"] {
+  accent-color: #45b37f;
+  width: 100%;
+}
+
+input[type="checkbox"] {
+  accent-color: #45b37f;
+  height: 18px;
+  width: 18px;
+}
+
+input[type="color"] {
+  background: transparent;
+  border: 0;
+  height: 28px;
+  padding: 0;
+  width: 42px;
+}
+
+output,
+.unsupported {
+  color: #aeb4bf;
+  font-size: 12px;
+  text-align: right;
+}
+
+.controlRowContainer {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
+}
+
+.controlRowContainer .controlRow {
+  flex: 1;
+  min-width: 0;
+}
+
+.applyToCodeButton {
+  align-self: center;
+  background: #242832;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  color: #d9dee8;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.applyToCodeButton:hover:not(:disabled) {
+  background: #2d3340;
+}
+
+.applyToCodeButton:disabled {
+  color: #697080;
+  cursor: not-allowed;
+}
