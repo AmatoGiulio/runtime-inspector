@@ -48,6 +48,7 @@ if (lanPanelUrl) {
   qrcode.generate(lanPanelUrl, { small: true });
 }
 console.log(`MCP agent client:              RI_BROKER_URL=${localBrokerUrl} RI_TOKEN=${token} runtime-inspector-mcp`);
+console.log(`Runtime Inspector DevTools:    rozenite panel -> broker ${localBrokerUrl}, token ${token}`);
 
 // Source anchors are relative to the app's Babel root, so write-back must
 // resolve them against the app project root — the CLI's cwd by default, or

@@ -82,6 +82,7 @@ The plugin rewrites the declaration to `__riInspect(useSharedValue(0), "moveX", 
 - `@runtime-inspector/react-native`: React Native runtime SDK with zero-config broker discovery.
 - `@runtime-inspector/babel-plugin`: dev-only Babel plugin that auto-binds `// @inspect`-annotated `useSharedValue`s (see [RFC 0002](rfcs/0002-babel-plugin-auto-binding.md)).
 - `@runtime-inspector/panel-web`: Vite web panel that renders schema controls.
+- `@runtime-inspector/client-rozenite`: Rozenite plugin that renders the panel inside React Native DevTools.
 - `@runtime-inspector/client-mcp`: MCP server exposing the broker to AI agents.
 - `@runtime-inspector/cli`: `runtime-inspector dev` command.
 - `examples/react-native-reanimated`: Expo/Reanimated example.
