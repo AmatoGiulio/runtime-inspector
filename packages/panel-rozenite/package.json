@@ -1,0 +1,36 @@
+{
+  "name": "@runtime-inspector/panel-rozenite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runtime Inspector client for React Native DevTools via Rozenite.",
+  "type": "module",
+  "main": "./dist/react-native/react-native.js",
+  "module": "./dist/react-native/react-native.js",
+  "types": "./dist/react-native/react-native.d.ts",
+  "scripts": {
+    "build": "rozenite build",
+    "dev": "rozenite dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@runtime-inspector/panel-core": "workspace:*",
+    "@runtime-inspector/protocol": "workspace:*",
+    "@runtime-inspector/react-native": "workspace:*",
+    "@rozenite/plugin-bridge": "2.4.0",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@rozenite/testing": "2.4.0",
+    "@rozenite/vite-plugin": "2.4.0",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "react-dom": "^19.0.0",
+    "rozenite": "2.4.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}
