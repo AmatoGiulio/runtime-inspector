@@ -1,5 +1,5 @@
 import type { RozeniteDevToolsClient } from "@rozenite/plugin-bridge";
-import { RIP_VERSION, safeParseRIPMessage } from "@runtime-inspector/protocol";
+import { RIP_VERSION, parseRIPMessage } from "@runtime-inspector/protocol";
 import { attachRuntimeInspectorProtocolClient } from "@runtime-inspector/react-native";
 import {
   RIP_EVENT,
@@ -22,9 +22,10 @@ export function registerRuntimeInspectorDeviceBridge(
   });
 
   const ripSubscription = client.onMessage(RIP_EVENT, ({ message }) => {
-    const parsed = safeParseRIPMessage(message);
-    if (parsed) {
-      runtimeClient.receive(parsed);
+    try {
+      runtimeClient.receive(parseRIPMessage(message));
+    } catch {
+      // Ignore malformed transport payloads. RIP validation stays authoritative.
     }
   });
 
