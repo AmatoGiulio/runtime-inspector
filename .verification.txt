@@ -1,0 +1,1107 @@
+=== pnpm build ===
+
+> runtime-inspector@0.1.0 build /home/runner/work/runtime-inspector/runtime-inspector
+> pnpm -r build
+
+Scope: 10 of 11 workspace projects
+packages/babel-plugin build$ tsup src/index.ts --format esm,cjs --dts
+packages/protocol build$ tsup src/index.ts --format esm --dts
+packages/protocol build: [34mCLI[39m Building entry: src/index.ts
+packages/protocol build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/protocol build: [34mCLI[39m tsup v8.5.1
+packages/babel-plugin build: [34mCLI[39m Building entry: src/index.ts
+packages/babel-plugin build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/babel-plugin build: [34mCLI[39m tsup v8.5.1
+packages/protocol build: [34mCLI[39m Target: es2022
+packages/protocol build: [34mESM[39m Build start
+packages/babel-plugin build: [34mCLI[39m Target: es2022
+packages/babel-plugin build: [34mESM[39m Build start
+packages/babel-plugin build: [34mCJS[39m Build start
+packages/protocol build: [32mESM[39m [1mdist/index.js [22m[32m10.59 KB[39m
+packages/protocol build: [32mESM[39m ⚡️ Build success in 45ms
+packages/babel-plugin build: [32mCJS[39m [1mdist/index.js [22m[32m6.70 KB[39m
+packages/babel-plugin build: [32mCJS[39m ⚡️ Build success in 51ms
+packages/babel-plugin build: [32mESM[39m [1mdist/index.mjs [22m[32m5.81 KB[39m
+packages/babel-plugin build: [32mESM[39m ⚡️ Build success in 51ms
+packages/protocol build: [34mDTS[39m Build start
+packages/babel-plugin build: [34mDTS[39m Build start
+packages/babel-plugin build: [32mDTS[39m ⚡️ Build success in 3293ms
+packages/babel-plugin build: [32mDTS[39m [1mdist/index.d.mts [22m[32m1.07 KB[39m
+packages/babel-plugin build: [32mDTS[39m [1mdist/index.d.ts  [22m[32m1.07 KB[39m
+packages/protocol build: [32mDTS[39m ⚡️ Build success in 3347ms
+packages/protocol build: [32mDTS[39m [1mdist/index.d.ts [22m[32m116.73 KB[39m
+packages/babel-plugin build: Done
+packages/protocol build: Done
+packages/panel-core build$ tsup src/index.ts --format esm --dts
+packages/runtime-react-native build$ tsup src/index.ts --format cjs --dts --external react --external react-native --external react-native-reanimated
+packages/transport-ws build$ tsup src/index.ts --format esm --dts
+packages/runtime-react-native build: [34mCLI[39m Building entry: src/index.ts
+packages/runtime-react-native build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/runtime-react-native build: [34mCLI[39m tsup v8.5.1
+packages/runtime-react-native build: [34mCLI[39m Target: es2022
+packages/runtime-react-native build: [34mCJS[39m Build start
+packages/runtime-react-native build: [32mCJS[39m [1mdist/index.js [22m[32m30.45 KB[39m
+packages/panel-core build: [34mCLI[39m Building entry: src/index.ts
+packages/runtime-react-native build: [32mCJS[39m ⚡️ Build success in 47ms
+packages/panel-core build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/panel-core build: [34mCLI[39m tsup v8.5.1
+packages/panel-core build: [34mCLI[39m Target: es2022
+packages/panel-core build: [34mESM[39m Build start
+packages/panel-core build: [32mESM[39m [1mdist/index.js [22m[32m15.60 KB[39m
+packages/panel-core build: [32mESM[39m ⚡️ Build success in 29ms
+packages/transport-ws build: [34mCLI[39m Building entry: src/index.ts
+packages/transport-ws build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/transport-ws build: [34mCLI[39m tsup v8.5.1
+packages/transport-ws build: [34mCLI[39m Target: es2022
+packages/transport-ws build: [34mESM[39m Build start
+packages/transport-ws build: [32mESM[39m [1mdist/index.js [22m[32m4.45 KB[39m
+packages/transport-ws build: [32mESM[39m ⚡️ Build success in 28ms
+packages/panel-core build: [34mDTS[39m Build start
+packages/runtime-react-native build: [34mDTS[39m Build start
+packages/transport-ws build: [34mDTS[39m Build start
+packages/transport-ws build: [32mDTS[39m ⚡️ Build success in 4383ms
+packages/transport-ws build: [32mDTS[39m [1mdist/index.d.ts [22m[32m362.00 B[39m
+packages/panel-core build: [32mDTS[39m ⚡️ Build success in 4588ms
+packages/panel-core build: [32mDTS[39m [1mdist/index.d.ts [22m[32m2.58 KB[39m
+packages/transport-ws build: Done
+packages/panel-core build: Done
+packages/runtime-react-native build: [32mDTS[39m ⚡️ Build success in 5053ms
+packages/runtime-react-native build: [32mDTS[39m [1mdist/index.d.ts [22m[32m9.62 KB[39m
+packages/runtime-react-native build: Done
+packages/cli build$ tsup src/index.ts --format esm --dts
+packages/client-mcp build$ tsup src/index.ts --format esm --dts
+packages/panel-rozenite build$ rozenite build
+packages/panel-web build$ vite build
+packages/panel-rozenite build: [90m┌[39m  Rozenite
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [33m▲[39m  [33mUpdated package.json builder-managed fields: main, exports[39m
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [32m◇[39m  Cleaning output directory...
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [32m◇[39m  Output directory cleaned
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [32m◇[39m  Building panels...
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [32m◇[39m  Building React Native entry point...
+packages/panel-web build: [36mvite v6.4.3 [32mbuilding for production...[36m[39m
+packages/cli build: [34mCLI[39m Building entry: src/index.ts
+packages/cli build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/cli build: [34mCLI[39m tsup v8.5.1
+packages/cli build: [34mCLI[39m Target: es2022
+packages/cli build: [34mESM[39m Build start
+packages/cli build: [32mESM[39m [1mdist/index.js [22m[32m3.43 KB[39m
+packages/cli build: [32mESM[39m ⚡️ Build success in 74ms
+packages/panel-web build: transforming...
+packages/client-mcp build: [34mCLI[39m Building entry: src/index.ts
+packages/client-mcp build: [34mCLI[39m Using tsconfig: tsconfig.json
+packages/client-mcp build: [34mCLI[39m tsup v8.5.1
+packages/client-mcp build: [34mCLI[39m Target: es2022
+packages/client-mcp build: [34mESM[39m Build start
+packages/client-mcp build: [32mESM[39m [1mdist/index.js [22m[32m13.09 KB[39m
+packages/client-mcp build: [32mESM[39m ⚡️ Build success in 87ms
+packages/cli build: [34mDTS[39m Build start
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [31m■[39m  [31mFailed to build panels[39m
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [31m■[39m  [31mCancelled building the React Native entry point[39m
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [31m■[39m  [31m[36mvite v6.4.3 [32mbuilding for production...[36m[31m[39m
+packages/panel-rozenite build: [90m│[39m  [31mtransforming...[39m
+packages/panel-rozenite build: [90m│[39m  [31m[32m✓[31m 4 modules transformed.[39m
+packages/panel-rozenite build: [90m│[39m  [31m[31m✗[31m Build failed in 216ms[39m
+packages/panel-rozenite build: [90m│[39m  [31m[31merror during build:[39m
+packages/panel-rozenite build: [90m│[39m  [31m[31m[vite:load-fallback] Could not load react-native-web (imported by devtools/panel.html?html-proxy&index=1.js): ENOENT: no such file or directory, open 'react-native-web'[31m[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async open (node:internal/fs/promises:639:25)[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async Object.readFile (node:internal/fs/promises:1252:14)[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async Object.handler (file:///home/runner/work/runtime-inspector/runtime-inspector/node_modules/.pnpm/vite@6.4.3_@types+node@22.20.0_jiti@2.7.0_lightningcss@1.32.0_terser@5.48.0_tsx@4.22.4/node_modules/vite/dist/node/chunks/dep-Dm0c1Wj2.js:46002:27)[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async PluginDriver.hookFirstAndGetPlugin (file:///home/runner/work/runtime-inspector/runtime-inspector/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:22908:28)[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async file:///home/runner/work/runtime-inspector/runtime-inspector/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:21894:33[39m
+packages/panel-rozenite build: [90m│[39m  [31m    at async Queue.work (file:///home/runner/work/runtime-inspector/runtime-inspector/node_modules/.pnpm/rollup@4.62.2/node_modules/rollup/dist/es/shared/node-entry.js:23136:32)[31m[39m
+packages/panel-rozenite build: [90m│[39m
+packages/panel-rozenite build: [90m└[39m  Build failed
+packages/panel-rozenite build: Failed
+/home/runner/work/runtime-inspector/runtime-inspector/packages/panel-rozenite:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @runtime-inspector/panel-rozenite@0.1.0 build: `rozenite build`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+BUILD_EXIT=1
+=== pnpm typecheck ===
+
+> runtime-inspector@0.1.0 typecheck /home/runner/work/runtime-inspector/runtime-inspector
+> pnpm -r typecheck
+
+Scope: 10 of 11 workspace projects
+packages/babel-plugin typecheck$ tsc --noEmit
+packages/protocol typecheck$ tsc --noEmit
+packages/protocol typecheck: Done
+packages/babel-plugin typecheck: Done
+packages/panel-core typecheck$ tsc --noEmit
+packages/runtime-react-native typecheck$ tsc --noEmit
+packages/transport-ws typecheck$ tsc --noEmit
+packages/transport-ws typecheck: Done
+packages/panel-core typecheck: Done
+packages/runtime-react-native typecheck: Done
+packages/cli typecheck$ tsc --noEmit
+packages/client-mcp typecheck$ tsc --noEmit
+packages/panel-rozenite typecheck$ tsc --noEmit
+packages/panel-web typecheck$ tsc --noEmit
+packages/cli typecheck: Done
+packages/client-mcp typecheck: Done
+packages/panel-web typecheck: Done
+packages/panel-rozenite typecheck: Done
+examples/react-native-reanimated typecheck$ tsc --noEmit
+examples/react-native-reanimated typecheck: Done
+TYPECHECK_EXIT=0
+=== pnpm test ===
+
+> runtime-inspector@0.1.0 test /home/runner/work/runtime-inspector/runtime-inspector
+> pnpm -r test
+
+Scope: 10 of 11 workspace projects
+packages/babel-plugin test$ vitest run
+packages/protocol test$ vitest run
+packages/protocol test: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/home/runner/work/runtime-inspector/runtime-inspector/packages/protocol[39m
+packages/babel-plugin test: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/home/runner/work/runtime-inspector/runtime-inspector/packages/babel-plugin[39m
+packages/protocol test:  [32m✓[39m src/index.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+packages/protocol test:  [32m✓[39m src/conformance.test.ts [2m([22m[2m51 tests[22m[2m)[22m[32m 33[2mms[22m[39m
+packages/protocol test: [2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+packages/protocol test: [2m      Tests [22m [1m[32m80 passed[39m[22m[90m (80)[39m
+packages/protocol test: [2m   Start at [22m 12:37:53
+packages/protocol test: [2m   Duration [22m 442ms[2m (transform 280ms, setup 0ms, import 388ms, tests 49ms, environment 0ms)[22m
+packages/protocol test: Done
+packages/babel-plugin test:  [32m✓[39m src/index.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 107[2mms[22m[39m
+packages/babel-plugin test: [2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+packages/babel-plugin test: [2m      Tests [22m [1m[32m8 passed[39m[22m[90m (8)[39m
+packages/babel-plugin test: [2m   Start at [22m 12:37:53
+packages/babel-plugin test: [2m   Duration [22m 645ms[2m (transform 95ms, setup 0ms, import 328ms, tests 107ms, environment 0ms)[22m
+packages/babel-plugin test: Done
+packages/panel-core test$ vitest run
+packages/runtime-react-native test$ vitest run
+packages/transport-ws test$ vitest run
+packages/panel-core test: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/home/runner/work/runtime-inspector/runtime-inspector/packages/panel-core[39m
+packages/transport-ws test: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/home/runner/work/runtime-inspector/runtime-inspector/packages/transport-ws[39m
+packages/runtime-react-native test: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native[39m
+packages/panel-core test:  [32m✓[39m src/index.test.ts [2m([22m[2m17 tests[22m[2m)[22m[32m 190[2mms[22m[39m
+packages/panel-core test: [2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+packages/panel-core test: [2m      Tests [22m [1m[32m17 passed[39m[22m[90m (17)[39m
+packages/panel-core test: [2m   Start at [22m 12:37:55
+packages/panel-core test: [2m   Duration [22m 917ms[2m (transform 349ms, setup 0ms, import 424ms, tests 190ms, environment 0ms)[22m
+packages/panel-core test: Done
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mmulti-schema sessions[2m > [22m[2mtears down the previous session's socket and timers on hot reload
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mmulti-schema sessions[2m > [22m[2mdisconnect on one session does not affect another session's socket
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4578
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4578
+packages/runtime-react-native test:  [32m✓[39m src/use-inspector.test.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 424[2mms[22m[39m
+packages/runtime-react-native test:      [33m[2m✓[22m[39m splits camelCase and capitalizes the first letter [33m 378[2mms[22m[39m
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mmulti-schema sessions[2m > [22m[2mre-registers a deliberately disconnected session when connect is called again
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mmulti-schema sessions[2m > [22m[2mrejects an invalid control value
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Ignoring invalid value for toggle control "value" (WRONG_TYPE): toggle "value" expects a boolean, got string
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mmulti-schema sessions[2m > [22m[2mrejects an out-of-range slider control patch
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Ignoring invalid value for slider control "value" (OUT_OF_RANGE): slider "value" expects a finite number between 0 and 10, got 9999
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mregisters a slider control and publishes after the debounce window
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mprotocol 0.3 semantic messages[2m > [22m[2msends schema.dispose before closing the socket on disconnect()
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/index.test.ts[2m > [22m[2mprotocol 0.3 semantic messages[2m > [22m[2msends schema.dispose during hot-reload teardown
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test:  [32m✓[39m src/index.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 411[2mms[22m[39m
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2minfers a slider control with the declared range
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mderives a default label from the variable name when no label is given
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2minfers a toggle from a boolean value with no min/max needed
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdebounces multiple registrations within the window into a single publish
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdispose releases the base name so a later registration is not suffixed
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdispose releases the base name so a later registration is not suffixed
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdispose releases the base name so a later registration is not suffixed
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdispose removes the control and republishes without it
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2mmount/register makes the control appear in the auto schema after debounce
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdispose removes the control and republishes without it
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2munmount disposes and republishes the schema without the control
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2munmount disposes and republishes the schema without the control
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/protocol-client.test.ts[2m > [22m[2mattachRuntimeInspectorProtocolClient[2m > [22m[2mreplays all active schemas after a valid panel handshake
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2mremount with the same name does not accumulate a suffix
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/protocol-client.test.ts[2m > [22m[2mattachRuntimeInspectorProtocolClient[2m > [22m[2mroutes patch, commit, batch patch and trigger through the normal runtime bindings
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/protocol-client.test.ts[2m > [22m[2mattachRuntimeInspectorProtocolClient[2m > [22m[2mrejects a mismatched protocol version before exposing runtime state
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test:  [32m✓[39m src/protocol-client.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 154[2mms[22m[39m
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2mremount with the same name does not accumulate a suffix
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mregisters and fires a trigger entry via applyControlTrigger
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2mremount with the same name does not accumulate a suffix
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdisposed trigger entries are not reachable after the auto schema republishes
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdisposed trigger entries are not reachable after the auto schema republishes
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2mbuildRuntimeValue[2m > [22m[2mpanel patch writes the handle and fires onChange
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdisposed value entries are not reachable after the auto schema republishes
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2museAction[2m > [22m[2mregisters a trigger control in the published schema after debounce
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/auto.test.ts[2m > [22m[2m__riInspect[2m > [22m[2mdisposed value entries are not reachable after the auto schema republishes
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2museAction[2m > [22m[2mapplyControlTrigger fires the registered handler
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2museAction[2m > [22m[2mlatest-handler semantics: a stable wrapper always calls the newest closure
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test:  [32m✓[39m src/discovery.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2museAction[2m > [22m[2mdispose on unmount removes the control
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test: [90mstderr[2m | src/use-runtime-value.test.ts[2m > [22m[2museAction[2m > [22m[2mdispose on unmount removes the control
+packages/runtime-react-native test: [22m[39m[Runtime Inspector] Discovery: scriptUrl=undefined tunnelUrl=undefined platform=ios candidates=ws://127.0.0.1:4577
+packages/runtime-react-native test: [Runtime Inspector] Connecting to ws://127.0.0.1:4577
+packages/runtime-react-native test:  [32m✓[39m src/use-runtime-value.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 633[2mms[22m[39m
+packages/runtime-react-native test:  [32m✓[39m src/auto.test.ts [2m([22m[2m17 tests[22m[2m)[22m[33m 1201[2mms[22m[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Errors [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1m
+packages/runtime-react-native test: Vitest caught 34 unhandled errors during the test run.
+packages/runtime-react-native test: This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m851:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mregisters a slider control and publishes after the debounce window[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m new Event node:internal/event_target:[2m119:7[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m new ErrorEvent node:internal/deps/undici/undici:[2m11741:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1minfers a slider control with the declared range[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m new Event node:internal/event_target:[2m119:7[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m new ErrorEvent node:internal/deps/undici/undici:[2m11741:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mderives a default label from the variable name when no label is given[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m Object.webidl.util.ConvertToInt node:internal/deps/undici/undici:[2m3839:40[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m webidl.converters.unsigned long node:internal/deps/undici/undici:[2m4072:29[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m Object.ErrorEventInit node:internal/deps/undici/undici:[2m4011:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m new ErrorEvent node:internal/deps/undici/undici:[2m11744:43[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1minfers a toggle from a boolean value with no min/max needed[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mre-registering the same name via __riInspect overwrites silently (no suffix, no warning)[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdebounces multiple registrations within the window into a single publish[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose releases the base name so a later registration is not suffixed[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose releases the base name so a later registration is not suffixed[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose releases the base name so a later registration is not suffixed[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose removes the control and republishes without it[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m851:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mmount/register makes the control appear in the auto schema after debounce[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m new Event node:internal/event_target:[2m119:7[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m new ErrorEvent node:internal/deps/undici/undici:[2m11741:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1munmount disposes and republishes the schema without the control[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1munmount disposes and republishes the schema without the control[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose removes the control and republishes without it[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m Object.webidl.util.ConvertToInt node:internal/deps/undici/undici:[2m3839:40[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m webidl.converters.unsigned long node:internal/deps/undici/undici:[2m4072:29[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m Object.ErrorEventInit node:internal/deps/undici/undici:[2m4011:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m new ErrorEvent node:internal/deps/undici/undici:[2m11744:43[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent.error node:internal/deps/undici/undici:[2m12087:48[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12005:21[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mremount with the same name does not accumulate a suffix[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mtwo live registrations of the same name suffix and warn[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m process.nextTick node:internal/process/task_queues:[2m112:3[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m emitUncaughtException node:internal/event_target:[2m1118:11[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m851:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mremount with the same name does not accumulate a suffix[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mregisters and fires a trigger entry via applyControlTrigger[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mremount with the same name does not accumulate a suffix[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdisposed trigger entries are not reachable after the auto schema republishes[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mtwo live registrations of the same name suffix and warn[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdisposed trigger entries are not reachable after the auto schema republishes[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mpanel patch writes the handle and fires onChange[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdisposed value entries are not reachable after the auto schema republishes[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mregisters a trigger control in the published schema after debounce[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mapplyControlTrigger fires the registered handler[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdisposed value entries are not reachable after the auto schema republishes[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mre-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mlatest-handler semantics: a stable wrapper always calls the newest closure[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mre-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose on unmount removes the control[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1m__riInspect then a live useRuntimeValue claim on the same name suffixes and warns[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/use-runtime-value.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1mdispose on unmount removes the control[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯[39m[1m[41m Uncaught Exception [49m[22m[31m⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [31m[1mRangeError[22m: Maximum call stack size exceeded[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13093:12[22m[39m
+packages/runtime-react-native test: [36m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test:     [90m455|[39m
+packages/runtime-react-native test:     [90m456|[39m   socket[33m.[39monerror [33m=[39m () [33m=>[39m {
+packages/runtime-react-native test:     [90m457|[39m     socket[33m.[39m[34mclose[39m()[33m;[39m
+packages/runtime-react-native test:     [90m   |[39m            [31m^[39m
+packages/runtime-react-native test:     [90m458|[39m   }[33m;[39m
+packages/runtime-react-native test:     [90m459|[39m }
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.dispatchEvent node:internal/event_target:[2m776:26[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m fireEvent node:internal/deps/undici/undici:[2m12006:14[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m failWebsocketConnection node:internal/deps/undici/undici:[2m12087:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m closeWebSocketConnection node:internal/deps/undici/undici:[2m12362:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.close node:internal/deps/undici/undici:[2m13117:9[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.socket.onerror src/index.ts:[2m457:12[22m[39m
+packages/runtime-react-native test: [90m [2m❯[22m WebSocket.[nodejs.internal.kHybridDispatch] node:internal/event_target:[2m843:20[22m[39m
+packages/runtime-react-native test: [31mThis error originated in "[1msrc/auto.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+packages/runtime-react-native test: [31mThe latest test that might've caused the error is "[1ma live useRuntimeValue claim then __riInspect on the same name suffixes and warns[22m". It might mean one of the following:
+packages/runtime-react-native test: - The error was thrown, while Vitest was running this test.
+packages/runtime-react-native test: - If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+packages/runtime-react-native test: [31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+packages/runtime-react-native test: [2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+packages/runtime-react-native test: [2m      Tests [22m [1m[32m105 passed[39m[22m[90m (105)[39m
+packages/runtime-react-native test: [2m     Errors [22m [1m[31m34 errors[39m[22m
+packages/runtime-react-native test: [2m   Start at [22m 12:37:55
+packages/runtime-react-native test: [2m   Duration [22m 1.76s[2m (transform 736ms, setup 0ms, import 503ms, tests 2.84s, environment 1ms)[22m
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "registers a slider control and publishes after the debounce window". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "infers a slider control with the declared range". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "derives a default label from the variable name when no label is given". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "infers a toggle from a boolean value with no min/max needed". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "re-registering the same name via __riInspect overwrites silently (no suffix, no warning)". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "debounces multiple registrations within the window into a single publish". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose releases the base name so a later registration is not suffixed". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose releases the base name so a later registration is not suffixed". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose releases the base name so a later registration is not suffixed". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose removes the control and republishes without it". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "mount/register makes the control appear in the auto schema after debounce". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "unmount disposes and republishes the schema without the control". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "unmount disposes and republishes the schema without the control". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose removes the control and republishes without it". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "remount with the same name does not accumulate a suffix". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "two live registrations of the same name suffix and warn". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "remount with the same name does not accumulate a suffix". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "registers and fires a trigger entry via applyControlTrigger". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "remount with the same name does not accumulate a suffix". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "disposed trigger entries are not reachable after the auto schema republishes". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "two live registrations of the same name suffix and warn". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "disposed trigger entries are not reachable after the auto schema republishes". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "panel patch writes the handle and fires onChange". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "disposed value entries are not reachable after the auto schema republishes". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "registers a trigger control in the published schema after debounce". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "applyControlTrigger fires the registered handler". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "disposed value entries are not reachable after the auto schema republishes". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "re-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "latest-handler semantics: a stable wrapper always calls the newest closure". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "re-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose on unmount removes the control". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "__riInspect then a live useRuntimeValue claim on the same name suffixes and warns". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/use-runtime-value.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "dispose on unmount removes the control". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: ::error file=/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native/src/index.ts,title=Unhandled error,line=457,column=12::RangeError: Maximum call stack size exceeded%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A ❯ WebSocket.socket.onerror src/index.ts:457:12%0A%0AThis error originated in "src/auto.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.%0AThe latest test that might've caused the error is "a live useRuntimeValue claim then __riInspect on the same name suffixes and warns". It might mean one of the following:%0A- The error was thrown, while Vitest was running this test.%0A- If the error occurred after the test had been completed, this was the last documented test before it was thrown.%0A
+packages/runtime-react-native test: Failed
+/home/runner/work/runtime-inspector/runtime-inspector/packages/runtime-react-native:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @runtime-inspector/react-native@0.1.0 test: `vitest run`
+Exit status 1
+ ELIFECYCLE  Test failed. See above for more details.
+TEST_EXIT=1
