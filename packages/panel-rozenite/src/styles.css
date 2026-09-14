@@ -1,0 +1,34 @@
+:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #e7e7ea; background: #111215; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #111215; }
+button, input { font: inherit; }
+button { color: inherit; background: #1b1d22; border: 1px solid #30333b; border-radius: 7px; padding: 6px 9px; cursor: pointer; }
+button:hover:not(:disabled) { background: #24272e; }
+button:disabled { opacity: .42; cursor: default; }
+.ri-shell { width: 100%; min-height: 100%; padding: 18px; background: #111215; }
+.ri-header, .ri-schema-heading, .ri-export-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.ri-header { padding-bottom: 16px; border-bottom: 1px solid #272a31; }
+.ri-eyebrow { color: #8b91a0; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+h1, h2, h3, p { margin: 0; } h1 { margin-top: 3px; font-size: 20px; } h2 { font-size: 17px; } h3 { font-size: 13px; }
+code { color: #8b91a0; font-size: 11px; }
+.ri-status { border: 1px solid #30333b; border-radius: 999px; padding: 4px 8px; font-size: 11px; text-transform: capitalize; }
+.ri-status-connected { border-color: #345c47; color: #86d0a5; } .ri-status-stale, .ri-status-rejected { border-color: #74533a; color: #e7b27d; }
+.ri-notice, .ri-stale-banner { margin-top: 12px; padding: 9px 10px; border-radius: 7px; background: #201d18; border: 1px solid #453728; color: #dfbd94; font-size: 12px; }
+.ri-tabs { display: flex; gap: 6px; padding: 12px 0; overflow-x: auto; }
+.ri-tabs button.active { background: #2a2e37; border-color: #555c6a; }
+.ri-stale-dot { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 999px; background: currentColor; opacity: .7; }
+.ri-schema { padding-top: 16px; } .ri-schema.stale .ri-controls { opacity: .62; }
+.ri-schema-heading { align-items: flex-start; }
+.ri-toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.ri-group { margin-top: 18px; border: 1px solid #272a31; border-radius: 10px; overflow: hidden; background: #15171b; }
+.ri-group-heading { padding: 11px 13px; border-bottom: 1px solid #272a31; } .ri-group-heading p { margin-top: 4px; font-size: 12px; color: #8b91a0; }
+.ri-controls { padding: 2px 12px; }
+.ri-row { min-height: 52px; display: grid; grid-template-columns: minmax(120px, 1fr) minmax(180px, 1.6fr); gap: 18px; align-items: center; border-bottom: 1px solid #23262c; }
+.ri-row:last-child { border-bottom: 0; } .ri-row strong { display: block; font-size: 12px; font-weight: 600; } .ri-row span { display: block; margin-top: 2px; color: #8b91a0; font-size: 11px; }
+.ri-row-control { display: flex; justify-content: flex-end; align-items: center; } input[type="range"] { width: 100%; } input[type="color"] { width: 42px; height: 28px; padding: 2px; border: 1px solid #30333b; border-radius: 6px; background: #1b1d22; }
+.ri-trigger { min-width: 74px; }
+.ri-composite { padding: 12px 0; border-bottom: 1px solid #23262c; } .ri-composite-title { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; } .ri-composite-title span { color: #8b91a0; font-size: 10px; font-weight: 400; text-transform: uppercase; letter-spacing: .08em; }
+.ri-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 9px; } .ri-grid-four { grid-template-columns: repeat(4, 1fr); } .ri-grid label { color: #8b91a0; font-size: 10px; } .ri-grid input { width: 100%; margin-top: 3px; color: #e7e7ea; background: #101114; border: 1px solid #30333b; border-radius: 6px; padding: 6px; }
+.ri-export { margin-top: 16px; border: 1px solid #30333b; border-radius: 10px; overflow: hidden; background: #0d0e10; } .ri-export-heading { padding: 9px 11px; border-bottom: 1px solid #272a31; } .ri-export-heading strong { margin-right: auto; font-size: 12px; } pre { margin: 0; padding: 12px; max-height: 280px; overflow: auto; font-size: 11px; line-height: 1.55; }
+.ri-empty { width: 100%; padding: 32px 18px; color: #8b91a0; font-size: 13px; }
+@media (max-width: 700px) { .ri-header, .ri-schema-heading { align-items: flex-start; flex-direction: column; } .ri-toolbar { justify-content: flex-start; } .ri-row { grid-template-columns: 1fr; gap: 7px; padding: 10px 0; } .ri-row-control { justify-content: flex-start; } .ri-grid, .ri-grid-four { grid-template-columns: repeat(2, 1fr); } }
