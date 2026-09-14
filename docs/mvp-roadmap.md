@@ -1,115 +1,116 @@
 # MVP Roadmap
 
-Current product goal: **make React Native runtime tuning fast enough to feel like part of the normal development loop**, on a physical device, with a protocol that can power more than one client.
+Current product goal: **make React Native runtime tuning fast enough to feel like part of the normal development loop, while keeping clients interchangeable through one protocol.**
 
-The original summer success metric still holds as a useful bar: from `runtime-inspector dev` to a working control on a real device in about 60 seconds, zero-config in the common Expo/RN case.
+This file is forward-looking. For exact current implementation state, use [implementation-status.md](implementation-status.md).
 
 ## Shipped foundation
 
-The original MVP loop is implemented and hardened enough that the next work should build on it rather than replace it:
+The foundation is implemented and should be extended rather than replaced:
 
-- Monorepo package structure.
-- Protocol types, validation, and conformance fixtures.
-- Local WebSocket broker.
-- React Native runtime SDK.
-- Web reference panel.
-- Expo/Reanimated example.
-- Broker schema cache and replay.
-- Runtime and panel reconnect behavior.
-- Physical-device LAN support with Metro-host discovery and fallback candidates.
-- Per-session panel token and protocol-version enforcement.
-- Runtime-side value validation.
-- Explicit stale-schema/runtime status.
-- Patch throttling and commit semantics.
-- Trigger controls for actions such as replaying a transition.
-- Copy-as-code export.
-- A/B compare with batch application and replay.
-- Slider, toggle, color, spring, bezier, and trigger controls.
-- `panel-core` extracted from the web UI so clients can share session logic.
-- Protocol 0.3 semantic messages: `control.trigger`, `control.commit`, `schema.dispose`, stale runtime behavior.
-- Multi-schema-safe runtime sessions.
-- Dev-only `// @inspect` Babel auto-binding.
-- `useRuntimeValue` and `useAction` Runtime Value APIs.
-- MCP client for AI-agent control (`get_schema`, `set_control_value`, `batch_set`, `trigger`).
+- protocol 0.3 types, validation, semantic messages, and conformance fixtures;
+- local WebSocket broker;
+- React Native runtime SDK;
+- Web reference panel;
+- `panel-core` shared session/value/stale/A-B/export behavior;
+- broker schema cache and replay;
+- multi-schema runtime sessions and deliberate schema disposal;
+- runtime/panel reconnect and stale-schema handling;
+- physical-device LAN/Metro discovery, QR output, and explicit broker override;
+- per-session panel token and protocol-version enforcement;
+- runtime-side control value validation;
+- patch throttling and commit semantics;
+- trigger/action semantics;
+- slider, toggle, color, spring, bezier, and trigger rendering;
+- copy-as-code;
+- A/B comparison;
+- `useInspector`;
+- `useRuntimeValue` / `useAction`;
+- dev-only `// @inspect` Babel auto-binding;
+- MCP client with `get_schema`, `set_control_value`, `batch_set`, and trigger support;
+- first Rozenite / React Native DevTools client using the direct Rozenite bridge and the existing RIP model.
 
-## Current architecture boundary
+## Architecture boundary
 
-The architecture is now intentionally split into three layers:
+Runtime Inspector remains split into three concerns:
 
-1. **Runtime SDK** — declares controls and applies incoming values/actions.
-2. **Runtime Inspector Protocol** — the stable contract between runtime and clients.
-3. **Clients** — web panel today, MCP agent client today, React Native DevTools/Rozenite next.
+1. **Runtime SDK** — declares controls/actions and applies incoming messages to runtime bindings.
+2. **Runtime Inspector Protocol** — transport-independent contract and validation.
+3. **Clients/transports** — Web + broker, MCP + broker, Rozenite + DevTools bridge.
 
-That boundary matters: the next milestone should validate the interchangeable-client design instead of adding another parallel control system.
+The Rozenite vertical slice required **zero RIP changes** and reuses `panel-core`. That is the architectural result the previous roadmap was trying to prove.
 
-## Next milestone — React Native DevTools / Rozenite
+## Current milestone — validate the DevTools path on a real device
 
-Build a Rozenite plugin on top of `panel-core` and the existing protocol.
+The Rozenite client is now implemented in code and covered by automated bridge/session tests. The next milestone is no longer “build Rozenite”; it is **prove the complete graphical DevTools path in real use**.
 
-Goals:
+Highest-value validation:
 
-- surface Runtime Inspector directly inside React Native DevTools;
-- reuse the same schema/value/trigger semantics as the web panel;
-- preserve A/B compare, commits, stale state, and export behavior where they make sense in the DevTools host;
-- keep the web panel as a reference/standalone client rather than making it a dependency;
-- prove that the protocol is genuinely client-agnostic.
+1. run the existing Expo/Reanimated example with Rozenite enabled;
+2. open the Runtime Inspector tab in React Native DevTools;
+3. verify multiple schemas and live/stale state;
+4. tune slider/toggle/color/spring/bezier values on a physical device;
+5. verify patch during interaction and commit at the end;
+6. fire replay/trigger actions;
+7. reload Metro/app and verify stale → republished recovery;
+8. exercise A/B and copy-as-code from DevTools.
 
-This integration is **planned, not shipped yet**.
+Do not add new product surfaces until this path has been exercised and any actual integration friction is known.
 
-## Product polish after the DevTools client
+## Immediate engineering cleanup
+
+The repository baseline currently exposes a separate test-harness problem in the React Native WebSocket path: some fake WebSocket error flows recurse through `onerror -> close() -> onerror` until stack overflow. Build/typecheck are not blocked by it, and Rozenite/direct-runtime targeted tests are independent, but the global test gate should be restored to green as a focused cleanup.
+
+This is higher priority than speculative refactoring because it restores trustworthy whole-repository verification.
+
+## Product polish after device validation
 
 Ordered by leverage:
 
-1. **Spring editor polish** — improve the visualization and interaction beyond the current first-pass editor.
-2. **Reconnect/diagnostic UX** — make retry/backoff state and discovery failures more visible and actionable.
-3. **Control presentation metadata** — improve density, grouping, labels, and more complex panel schemas without changing protocol fundamentals unnecessarily.
-4. **Color/value ergonomics** — expand formats only where real usage justifies it.
-5. **Physical-device demo pass** — demonstrate live tuning by feel, replay, A/B, copy-as-code, and agent-driven control in one short flow.
-
-## MCP / agent direction
-
-The MCP client is already implemented and connects as an ordinary panel-role client over the same broker. It can:
-
-- inspect available schemas;
-- set a single control value;
-- apply a batch of values;
-- trigger runtime actions;
-- respect stale runtime state.
-
-The important claim is not that agent control is unique. The useful property is that **agents and human-facing panels use the same runtime contract**, so improvements to the protocol benefit both.
+1. **DevTools interaction polish** — only fixes discovered from real Rozenite/device usage.
+2. **Spring/bezier presentation polish** — richer visualization without moving semantics out of `panel-core`.
+3. **Reconnect/diagnostic UX** — clearer transport/session state and actionable failures.
+4. **Control density/grouping ergonomics** — improve large schemas without inventing protocol features prematurely.
+5. **Demo pass** — one short physical-device flow covering tuning, replay, A/B, copy-as-code, and MCP/agent control.
 
 ## DX ladder
 
-Runtime Inspector currently offers multiple entry points onto the same Runtime Value model:
+Preserve one declaration model regardless of client:
 
-- `// @inspect` — lowest ceremony for an existing `useSharedValue`;
-- `useRuntimeValue` / `useAction` — one-line runtime values/actions;
-- `useInspector` — grouped declarative panels with richer metadata and callbacks;
-- explicit binding APIs — full control / non-Reanimated escape hatch.
+- `useRuntimeValue` / `useAction` — one runtime value/action;
+- `useInspector` — grouped/advanced controls;
+- explicit binding APIs — full control / non-Reanimated escape hatch;
+- `// @inspect` — lowest-friction path for existing SharedValue declarations.
 
-Future work should preserve this ladder instead of introducing a separate DevTools-only declaration API.
+A DevTools client must not require a parallel Rozenite-specific declaration API.
 
-## Later
+## Architecture watchpoints
 
-Only after the current protocol + Rozenite path proves itself in real use:
+Two seams are worth observing rather than refactoring preemptively:
+
+- `panel-core`'s injected transport is still named `WebSocketLike`, even though Rozenite can adapt to it cleanly. A third genuinely different transport may justify a neutral transport interface.
+- the runtime direct-client attachment relies on sharing the same runtime module instance as the declarations it observes. Metro/workspace singleton resolution therefore remains important in monorepo development.
+
+Neither point currently justifies a broad rewrite.
+
+## Later, only with evidence
 
 - standalone desktop client;
 - VSCode client;
-- native/Nitro transport path if measured JS transport limits justify it;
+- Nitro/native transport if measured JS transport limits require it;
 - recording/timeline tooling;
-- plugin system;
-- hierarchical control addressing (`control.path`) if real schemas require it;
-- designer/dev remote collaboration via tunnel;
+- generic plugin system;
+- hierarchical addressing if real schemas require it;
+- remote collaboration/tunneling;
 - production networking/authentication.
 
-## Explicit non-goals for the current milestone
+## Explicit non-goals now
 
-- no protocol rewrite just to fit Rozenite;
+- no protocol rewrite for Rozenite;
 - no Nitro module without a measured bottleneck;
 - no desktop app;
 - no VSCode extension;
 - no recording engine;
-- no general plugin ecosystem;
-- no production remote-control networking.
-
-The immediate test is simpler: **can the existing Runtime Inspector model feel native inside React Native DevTools without weakening the protocol-first architecture?**
+- no generic plugin ecosystem;
+- no production remote-control networking;
+- no monetization work.
