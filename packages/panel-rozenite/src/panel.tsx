@@ -35,7 +35,7 @@ export default function RuntimeInspectorPanel() {
     });
     setSession(nextSession);
     setState(nextSession.getState());
-    const unsubscribe = nextSession.subscribe(setState);
+    const unsubscribe = nextSession.subscribe(() => setState(nextSession.getState()));
     nextSession.connect();
 
     return () => {
