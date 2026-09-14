@@ -27,25 +27,17 @@ jobs:
         run: |
           set +e
           status=0
-          : > .verification.log
-          echo '=== pnpm build ===' | tee -a .verification.log
-          pnpm build 2>&1 | tee -a .verification.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then status=$code; fi
-          echo "BUILD_EXIT=$code" | tee -a .verification.log
-          echo '=== pnpm typecheck ===' | tee -a .verification.log
-          pnpm typecheck 2>&1 | tee -a .verification.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then status=$code; fi
-          echo "TYPECHECK_EXIT=$code" | tee -a .verification.log
-          echo '=== pnpm test ===' | tee -a .verification.log
-          pnpm test 2>&1 | tee -a .verification.log
-          code=${PIPESTATUS[0]}
-          if [ "$code" -ne 0 ]; then status=$code; fi
-          echo "TEST_EXIT=$code" | tee -a .verification.log
+          : > .verification.txt
+          for command in build typecheck test; do
+            echo "=== pnpm $command ===" | tee -a .verification.txt
+            pnpm "$command" 2>&1 | tee -a .verification.txt
+            code=${PIPESTATUS[0]}
+            if [ "$code" -ne 0 ]; then status=$code; fi
+            echo "${command^^}_EXIT=$code" | tee -a .verification.txt
+          done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .verification.log
+          git add -f .verification.txt
           git commit -m "Capture verification output [skip ci]"
           git push
           exit "$status"
