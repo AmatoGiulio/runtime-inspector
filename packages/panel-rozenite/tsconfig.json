@@ -3,6 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "noEmit": true,
+    "paths": {},
     "types": ["vitest/globals"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "react-native.ts", "rozenite.config.ts", "vite.config.ts"]

@@ -41,5 +41,8 @@ async function initialize() {
 }
 
 function isDev() {
-  return typeof __DEV__ === "undefined" ? process.env.NODE_ENV !== "production" : __DEV__;
+  const nodeEnv = (globalThis as typeof globalThis & {
+    process?: { env?: { NODE_ENV?: string } };
+  }).process?.env?.NODE_ENV;
+  return typeof __DEV__ === "undefined" ? nodeEnv !== "production" : __DEV__;
 }
