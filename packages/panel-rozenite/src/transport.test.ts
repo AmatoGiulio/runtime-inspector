@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getRozeniteDevToolsClient } from "@rozenite/plugin-bridge";
-import { connectFakePair, waitForMessage } from "@rozenite/testing";
+import { connectFakePair } from "@rozenite/testing";
 import { createPanelSession } from "@runtime-inspector/panel-core";
 import type { PanelSchema, RIPMessage } from "@runtime-inspector/protocol";
 import { createRozenitePanelSocket } from "./transport";
@@ -134,7 +134,7 @@ describe("RozenitePanelSocket + panel-core", () => {
     await vi.waitFor(() => expect(session.getState().schemas).toHaveLength(2));
 
     deviceClient.send(RUNTIME_READY_EVENT, { protocolVersion: "0.3", generationId: "generation-1" });
-    await waitForMessage(deviceClient, RIP_EVENT, { timeoutMs: 1000 }, ({ message }) => message.type === "handshake.hello").catch(() => undefined);
+    await Promise.resolve();
     deviceClient.send(RUNTIME_READY_EVENT, { protocolVersion: "0.3", generationId: "generation-2" });
 
     await vi.waitFor(() => {
