@@ -6,7 +6,7 @@ on:
       - rozenite-client
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -21,7 +21,16 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --no-frozen-lockfile
+      - name: Persist lockfile
+        run: |
+          if ! git diff --quiet -- pnpm-lock.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pnpm-lock.yaml
+            git commit -m "Update pnpm lockfile [skip ci]"
+            git push
+          fi
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
