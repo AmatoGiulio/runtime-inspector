@@ -1,11 +1,9 @@
-import type { RozeniteConfig } from "@rozenite/vite-plugin";
-
 export default {
+  integrations: ["react-native"],
   panels: [
     {
       name: "Runtime Inspector",
       source: "./src/panel.tsx"
     }
-  ],
-  integrations: ["react-native"]
-} satisfies RozeniteConfig;
+  ]
+};
