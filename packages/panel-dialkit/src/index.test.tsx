@@ -4,6 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { InspectorControlRow, type InspectorControlProps } from "./index";
 
+// jsdom has no ResizeObserver; DialKit folders and the easing editor observe their size.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -83,7 +90,7 @@ describe("controlled DialKit renderer", () => {
     );
     expect(p.session.setValue).toHaveBeenCalledTimes(1);
   });
-  it("preserves spring siblings, rejects an empty draft, and commits on blur", () => {
+  it("tunes spring fields with DialKit sliders, preserving siblings, and commits once per gesture", () => {
     const p = props({
       id: "spring",
       label: "Spring",
@@ -91,38 +98,40 @@ describe("controlled DialKit renderer", () => {
       defaultValue: { damping: 10, stiffness: 100, mass: 2 },
     });
     render(<InspectorControlRow {...p} />);
-    fireEvent.change(screen.getByLabelText("damping"), {
-      target: { value: "" },
-    });
-    expect(p.session.setValue).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByLabelText("damping"), {
-      target: { value: "15" },
-    });
+    const damping = screen.getByRole("slider", { name: /damping/i });
+    fireEvent.keyDown(damping, { key: "ArrowRight" });
     expect(p.session.setValue).toHaveBeenCalledExactlyOnceWith(
       "first",
       "spring",
-      { damping: 15, stiffness: 100, mass: 2 },
+      { damping: 10.5, stiffness: 100, mass: 2 },
     );
-    fireEvent.blur(screen.getByLabelText("damping"));
+    expect(p.session.commitValue).not.toHaveBeenCalled();
+    fireEvent.keyUp(damping, { key: "ArrowRight" });
     expect(p.session.commitValue).toHaveBeenCalledExactlyOnceWith(
       "first",
       "spring",
     );
   });
-  it("preserves bezier tuple shape and sends out-of-range values to core validation unchanged", () => {
+  it("preserves bezier tuple shape and widens display ranges to show an out-of-range value", () => {
     const p = props({
       id: "curve",
       label: "Curve",
       kind: "bezier",
       defaultValue: [0.2, 0.3, 0.4, 0.5],
     });
-    render(<InspectorControlRow {...p} />);
-    fireEvent.change(screen.getByLabelText("x1"), { target: { value: "2" } });
+    const view = render(<InspectorControlRow {...p} />);
+    fireEvent.keyDown(screen.getByRole("slider", { name: /x1/ }), {
+      key: "ArrowRight",
+    });
     expect(p.session.setValue).toHaveBeenCalledWith(
       "first",
       "curve",
-      [2, 0.3, 0.4, 0.5],
+      [0.21, 0.3, 0.4, 0.5],
     );
+    view.rerender(<InspectorControlRow {...p} value={[0.2, 3, 0.4, 0.5]} />);
+    const y1 = screen.getByRole("slider", { name: /y1/ });
+    expect(y1.getAttribute("aria-valuenow")).toBe("3");
+    expect(y1.getAttribute("aria-valuemax")).toBe("3");
   });
   it("removes a color popover when stale and remounts with current values on recovery", () => {
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([
