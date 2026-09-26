@@ -1,0 +1,99 @@
+@import "dialkit/styles.css";
+.ri-dial-control {
+  min-width: 0;
+  padding: 10px 0;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.ri-dial-description {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #a8a8ad;
+}
+.ri-dial-composite {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #39393f;
+  border-radius: 10px;
+}
+.ri-dial-composite legend {
+  font-size: 13px;
+  padding: 0 5px;
+}
+.ri-dial-composite label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+.ri-dial-composite input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: #252529;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.ri-dial-control :focus-visible {
+  outline: 2px solid #b4b4fa;
+  outline-offset: 3px;
+}
+.ri-dial-trigger {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ri-dial-frozen {
+  display: grid;
+  gap: 8px;
+  opacity: 0.55;
+  font-size: 13px;
+}
+.ri-dial-frozen output {
+  overflow-wrap: anywhere;
+}
+
+/* Keep DialKit's rounded/clamped text editor inaccessible; exact entry uses RIP validation. */
+.ri-dial-control .dialkit-slider-value {
+  pointer-events: none;
+}
+.ri-dial-exact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #aaa;
+}
+.ri-dial-exact input {
+  width: 90px;
+  padding: 5px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid #444;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.ri-dial-bezier {
+  width: 160px;
+  height: 100px;
+  grid-column: 1 / -1;
+  overflow: visible;
+}
+.ri-dial-bezier line {
+  stroke: #777;
+}
+.ri-dial-bezier path {
+  fill: none;
+  stroke: #b4b4fa;
+  stroke-width: 2;
+}

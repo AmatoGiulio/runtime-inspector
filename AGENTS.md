@@ -39,6 +39,7 @@ Read [docs/orchestration.md](docs/orchestration.md) before making broad multi-pa
 - `packages/transport-ws` owns the local WebSocket broker/transport and routing.
 - `packages/runtime-react-native` owns runtime declarations, binding application, broker discovery, `useRuntimeValue`, `useAction`, `useInspector`, `__riInspect`, and the small direct-protocol client seam used by transport integrations.
 - `packages/panel-core` owns framework-agnostic client/session behavior: schemas, cached values, throttling, patch/commit/trigger semantics, stale-schema protection, A/B comparison, and export.
+- `packages/panel-dialkit` owns shared controlled DialKit rendering only; session state and RIP semantics stay in `panel-core`.
 - `packages/panel-web` owns only Web rendering over `panel-core`.
 - `packages/panel-rozenite` owns the Rozenite/React Native DevTools renderer and bridge adapter over `panel-core`; it must not become a second core.
 - `packages/client-mcp` owns the MCP server exposing RIP controls to AI agents through the broker.

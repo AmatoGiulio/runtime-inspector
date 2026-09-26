@@ -1,0 +1,26 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "composite": false,
+    "incremental": false,
+    "noEmitOnError": true,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "verbatimModuleSyntax": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "customConditions": null,
+    "rootDir": "..",
+    "outDir": "../dist/react-native"
+  },
+  "files": [
+    "../react-native.ts"
+  ],
+  "include": [
+    "../*.d.ts",
+    "../src/**/*.d.ts"
+  ]
+}

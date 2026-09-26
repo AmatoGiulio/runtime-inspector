@@ -57,11 +57,9 @@ Highest-value validation:
 
 Do not add new product surfaces until this path has been exercised and any actual integration friction is known.
 
-## Immediate engineering cleanup
+## Engineering cleanup completed
 
-The repository baseline currently exposes a separate test-harness problem in the React Native WebSocket path: some fake WebSocket error flows recurse through `onerror -> close() -> onerror` until stack overflow. Build/typecheck are not blocked by it, and Rozenite/direct-runtime targeted tests are independent, but the global test gate should be restored to green as a focused cleanup.
-
-This is higher priority than speculative refactoring because it restores trustworthy whole-repository verification.
+The runtime WebSocket error handler now guards reentrant errors during close, with a reconnect regression test. Runtime declaration tests use an offline socket so they cannot accidentally open native Node WebSocket connections. The former stack-overflow test failure is resolved.
 
 ## Product polish after device validation
 

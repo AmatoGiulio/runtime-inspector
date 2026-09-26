@@ -96,6 +96,7 @@ useRuntimeValue / useAction -> useInspector -> explicit binding API
 - `@runtime-inspector/react-native` — runtime declarations, bindings, hooks, broker discovery, and the direct RIP-client seam used by local transports.
 - `@runtime-inspector/babel-plugin` — dev-only `// @inspect` transform.
 - `@runtime-inspector/panel-web` — thin Vite/React renderer over `panel-core`.
+- `@runtime-inspector/panel-dialkit` — shared controlled DialKit renderer for Web and DevTools; see [integration details](docs/dialkit.md).
 - `@runtime-inspector/panel-rozenite` — React Native DevTools/Rozenite renderer and bridge adapter over `panel-core`.
 - `@runtime-inspector/client-mcp` — MCP client exposing the running app to AI agents.
 - `@runtime-inspector/cli` — local broker/panel startup, LAN/QR discovery, ports, and session token.
@@ -169,7 +170,7 @@ pnpm typecheck
 pnpm test
 ```
 
-The repository baseline currently has a known failing test-path issue in the React Native runtime's WebSocket test doubles (`onerror -> close() -> onerror` recursion). It predates the Rozenite client; it is recorded explicitly in [Implementation status](docs/implementation-status.md) rather than being hidden as a new-client regression.
+Runtime WebSocket error handling is covered by a reentrant-close regression test. Runtime unit tests use an offline socket by default so declaration tests do not connect to a real broker. See [Implementation status](docs/implementation-status.md) for validation boundaries.
 
 ## Non-goals for this phase
 

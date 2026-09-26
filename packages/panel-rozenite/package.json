@@ -28,7 +28,8 @@
     "@runtime-inspector/protocol": "workspace:*",
     "@runtime-inspector/react-native": "workspace:*",
     "@rozenite/plugin-bridge": "2.4.0",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "@runtime-inspector/panel-dialkit": "workspace:*"
   },
   "devDependencies": {
     "@rozenite/testing": "2.4.0",

@@ -1,17 +1,8 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { createPanelSession } from "@runtime-inspector/panel-core";
-import {
-  type BezierControl,
-  type ColorControl,
-  type CubicBezier,
-  type InspectorControl,
-  type PanelSchema,
-  type SliderControl,
-  type SpringControl,
-  type SpringValue,
-  type ToggleControl,
-  type TriggerControl
-} from "@runtime-inspector/protocol";
+import type { PanelSchema } from "@runtime-inspector/protocol";
+import { InspectorControlRow } from "@runtime-inspector/panel-dialkit";
+import "@runtime-inspector/panel-dialkit/styles.css";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
@@ -102,22 +93,6 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
     );
   }, [schema]);
 
-  function updateValue(control: InspectorControl, value: unknown) {
-    if (control.kind === "trigger") {
-      session.fireTrigger(schema.id, control.id);
-      return;
-    }
-    session.setValue(schema.id, control.id, value);
-  }
-
-  function updateSliderValue(control: SliderControl, value: number) {
-    session.setValue(schema.id, control.id, value);
-  }
-
-  function flushControl(controlId: string) {
-    session.commitValue(schema.id, controlId);
-  }
-
   async function copyCode() {
     if (!codeExport) return;
     await navigator.clipboard.writeText(codeExport);
@@ -157,14 +132,13 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
               </div>
               <div className="controls">
                 {controlGroup.controls.map((control) => (
-                  <ControlRow
+                  <InspectorControlRow
+                    session={session}
+                    schemaId={schema.id}
                     control={control}
                     disabled={isStale}
                     key={control.id}
-                    value={getControlValue(control, values)}
-                    onChange={(value) => updateValue(control, value)}
-                    onSliderChange={updateSliderValue}
-                    onCommit={flushControl}
+                    value={values[control.id]}
                   />
                 ))}
               </div>
@@ -176,13 +150,13 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
             <h2>A/B Compare</h2>
             <div className="compareGrid">
               <CompareSlotControls
-                hasSnapshot={Boolean(state.compareSlots[schema.id]?.A)}
+                hasSnapshot={!isStale && Boolean(state.compareSlots[schema.id]?.A)}
                 label="A"
                 onApply={() => applyCompareSlot("A")}
                 onSave={() => saveCompareSlot("A")}
               />
               <CompareSlotControls
-                hasSnapshot={Boolean(state.compareSlots[schema.id]?.B)}
+                hasSnapshot={!isStale && Boolean(state.compareSlots[schema.id]?.B)}
                 label="B"
                 onApply={() => applyCompareSlot("B")}
                 onSave={() => saveCompareSlot("B")}
@@ -230,350 +204,6 @@ function CompareSlotControls({
       </button>
     </div>
   );
-}
-
-function ControlRow({
-  control,
-  disabled = false,
-  value,
-  onChange,
-  onSliderChange,
-  onCommit
-}: {
-  control: InspectorControl;
-  disabled?: boolean;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  onSliderChange: (control: SliderControl, value: number) => void;
-  onCommit: (controlId: string) => void;
-}) {
-  if (control.kind === "slider") {
-    return (
-      <SliderRow
-        control={control}
-        disabled={disabled}
-        value={Number(value)}
-        onChange={(nextValue) => onSliderChange(control, nextValue)}
-        onCommit={() => onCommit(control.id)}
-      />
-    );
-  }
-  if (control.kind === "toggle") {
-    return <ToggleRow control={control} disabled={disabled} value={Boolean(value)} onChange={onChange} />;
-  }
-  if (control.kind === "color") {
-    return <ColorRow control={control} disabled={disabled} value={String(value)} onChange={onChange} />;
-  }
-  if (control.kind === "bezier") {
-    return (
-      <BezierRow
-        control={control}
-        disabled={disabled}
-        value={coerceBezierValue(value, control.defaultValue)}
-        onChange={onChange}
-      />
-    );
-  }
-  if (control.kind === "spring") {
-    return (
-      <SpringRow
-        control={control}
-        disabled={disabled}
-        value={coerceSpringValue(value, control.defaultValue)}
-        onChange={onChange}
-      />
-    );
-  }
-  if (control.kind === "trigger") {
-    return <TriggerRow control={control} disabled={disabled} onChange={onChange} />;
-  }
-  return null;
-}
-
-function SliderRow({
-  control,
-  disabled = false,
-  value,
-  onChange,
-  onCommit
-}: {
-  control: SliderControl;
-  disabled?: boolean;
-  value: number;
-  onChange: (value: number) => void;
-  onCommit: () => void;
-}) {
-  return (
-    <div className="controlRow">
-      <label htmlFor={control.id}>{control.label}</label>
-      <div className="sliderGrid">
-        <input
-          disabled={disabled}
-          id={control.id}
-          min={control.min}
-          max={control.max}
-          step={control.step ?? 1}
-          type="range"
-          value={value}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-          onKeyUp={onCommit}
-          onPointerUp={onCommit}
-        />
-        <output>
-          {value}
-          {control.unit ?? ""}
-        </output>
-      </div>
-    </div>
-  );
-}
-
-function ToggleRow({
-  control,
-  disabled = false,
-  value,
-  onChange
-}: {
-  control: ToggleControl;
-  disabled?: boolean;
-  value: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="controlRow inline">
-      <label htmlFor={control.id}>{control.label}</label>
-      <input
-        disabled={disabled}
-        id={control.id}
-        type="checkbox"
-        checked={value}
-        onChange={(event) => onChange(event.currentTarget.checked)}
-      />
-    </div>
-  );
-}
-
-function ColorRow({
-  control,
-  disabled = false,
-  value,
-  onChange
-}: {
-  control: ColorControl;
-  disabled?: boolean;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="controlRow inline">
-      <label htmlFor={control.id}>{control.label}</label>
-      <input
-        disabled={disabled}
-        id={control.id}
-        type="color"
-        value={value}
-        onChange={(event) => onChange(event.currentTarget.value)}
-      />
-    </div>
-  );
-}
-
-function TriggerRow({
-  control,
-  disabled = false,
-  onChange
-}: {
-  control: TriggerControl;
-  disabled?: boolean;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="controlRow inline">
-      <div>
-        <label>{control.label}</label>
-        {control.description ? <p className="controlDescription">{control.description}</p> : null}
-      </div>
-      <button
-        className="triggerButton"
-        disabled={disabled}
-        type="button"
-        onClick={() => onChange(Date.now())}
-      >
-        Run
-      </button>
-    </div>
-  );
-}
-
-function SpringRow({
-  control,
-  disabled = false,
-  value,
-  onChange
-}: {
-  control: SpringControl;
-  disabled?: boolean;
-  value: SpringValue;
-  onChange: (value: SpringValue) => void;
-}) {
-  const ranges = {
-    damping: control.ranges?.damping ?? [1, 40],
-    stiffness: control.ranges?.stiffness ?? [20, 400],
-    mass: control.ranges?.mass ?? [0.2, 4]
-  };
-
-  return (
-    <div className="controlRow springControl">
-      <label>{control.label}</label>
-      {control.description ? <p className="controlDescription">{control.description}</p> : null}
-      <SpringParameter
-        disabled={disabled}
-        label="Damping"
-        max={ranges.damping[1]}
-        min={ranges.damping[0]}
-        step={0.5}
-        value={value.damping}
-        onChange={(nextValue) => onChange({ ...value, damping: nextValue })}
-      />
-      <SpringParameter
-        disabled={disabled}
-        label="Stiffness"
-        max={ranges.stiffness[1]}
-        min={ranges.stiffness[0]}
-        step={1}
-        value={value.stiffness}
-        onChange={(nextValue) => onChange({ ...value, stiffness: nextValue })}
-      />
-      <SpringParameter
-        disabled={disabled}
-        label="Mass"
-        max={ranges.mass[1]}
-        min={ranges.mass[0]}
-        step={0.1}
-        value={value.mass ?? control.defaultValue.mass ?? 1}
-        onChange={(nextValue) => onChange({ ...value, mass: nextValue })}
-      />
-    </div>
-  );
-}
-
-function BezierRow({
-  control,
-  disabled = false,
-  value,
-  onChange
-}: {
-  control: BezierControl;
-  disabled?: boolean;
-  value: CubicBezier;
-  onChange: (value: CubicBezier) => void;
-}) {
-  return (
-    <div className="controlRow bezierControl">
-      <label>{control.label}</label>
-      {control.description ? <p className="controlDescription">{control.description}</p> : null}
-      <BezierPreview value={value} />
-      {(["x1", "y1", "x2", "y2"] as const).map((label, index) => (
-        <SpringParameter
-          disabled={disabled}
-          key={label}
-          label={label}
-          max={1}
-          min={0}
-          step={0.01}
-          value={value[index]}
-          onChange={(nextValue) => {
-            const nextBezier = [...value] as CubicBezier;
-            nextBezier[index] = nextValue;
-            onChange(nextBezier);
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function BezierPreview({ value }: { value: CubicBezier }) {
-  const [x1, y1, x2, y2] = value;
-  const start = { x: 12, y: 88 };
-  const end = { x: 148, y: 12 };
-  const controlA = { x: 12 + x1 * 136, y: 88 - y1 * 76 };
-  const controlB = { x: 12 + x2 * 136, y: 88 - y2 * 76 };
-  const path = `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`;
-
-  return (
-    <svg className="bezierPreview" viewBox="0 0 160 100" role="img" aria-label="Bezier curve preview">
-      <line className="bezierGuide" x1={start.x} x2={controlA.x} y1={start.y} y2={controlA.y} />
-      <line className="bezierGuide" x1={end.x} x2={controlB.x} y1={end.y} y2={controlB.y} />
-      <path className="bezierCurve" d={path} />
-      <circle className="bezierPoint" cx={controlA.x} cy={controlA.y} r="4" />
-      <circle className="bezierPoint" cx={controlB.x} cy={controlB.y} r="4" />
-    </svg>
-  );
-}
-
-function SpringParameter({
-  disabled = false,
-  label,
-  max,
-  min,
-  step,
-  value,
-  onChange
-}: {
-  disabled?: boolean;
-  label: string;
-  max: number;
-  min: number;
-  step: number;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <div className="springParameter">
-      <span>{label}</span>
-      <input
-        disabled={disabled}
-        max={max}
-        min={min}
-        step={step}
-        type="range"
-        value={value}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-      />
-      <output>{formatNumber(value)}</output>
-    </div>
-  );
-}
-
-function getControlValue(control: InspectorControl, values: Record<string, unknown>) {
-  if (control.kind === "trigger") return undefined;
-  return values[control.id] ?? control.defaultValue;
-}
-
-function coerceSpringValue(value: unknown, fallback: SpringValue): SpringValue {
-  if (!value || typeof value !== "object") return fallback;
-
-  const candidate = value as Partial<SpringValue>;
-  return {
-    damping:
-      typeof candidate.damping === "number" ? candidate.damping : fallback.damping,
-    stiffness:
-      typeof candidate.stiffness === "number"
-        ? candidate.stiffness
-        : fallback.stiffness,
-    mass: typeof candidate.mass === "number" ? candidate.mass : fallback.mass
-  };
-}
-
-function coerceBezierValue(value: unknown, fallback: CubicBezier): CubicBezier {
-  if (!Array.isArray(value) || value.length !== 4) return fallback;
-  if (!value.every((part) => typeof part === "number")) return fallback;
-  return value as CubicBezier;
-}
-
-function formatNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

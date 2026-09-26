@@ -123,11 +123,11 @@ The existing WebSocket/physical-device path predates the Rozenite work and is se
 
 - the actual graphical React Native DevTools + Metro + physical-device path has not yet been manually exercised in the current execution environment. Automated bridge tests use Rozenite's official in-memory channel and are passing, but they are not a substitute for that device validation.
 
-## Known verification issue
+## Runtime test isolation and error recovery
 
-The repository baseline already had a failing `pnpm test` gate before Rozenite changes: runtime WebSocket test doubles can recurse through `onerror -> close() -> onerror` and overflow the stack in runtime hook/auto-binding tests. Build and typecheck passed on the baseline.
+The WebSocket error handler detaches itself before closing the socket, preventing reentrant `onerror -> close() -> onerror` recursion. A regression test covers that failure and subsequent reconnect/disconnect behavior.
 
-This is separate from the new direct Rozenite path; the new Rozenite bridge tests and direct-runtime protocol-client tests are independently exercised. The baseline failure should be fixed as a focused follow-up rather than hidden or mislabeled as a Rozenite regression.
+Runtime unit tests use an offline in-memory socket by default; transport-specific suites install their own socket doubles. This avoids accidental native Node WebSocket connections from declaration/hook tests. The former baseline stack-overflow failure is resolved.
 
 ## Explicitly not implemented in this phase
 
