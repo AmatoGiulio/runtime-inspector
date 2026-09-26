@@ -1,6 +1,6 @@
 # Rozenite / React Native DevTools client
 
-Status: **implemented vertical slice; automated bridge/session coverage is in place. Physical-device DevTools validation is still required before calling the integration fully validated.**
+Status: **implemented and validated in React Native DevTools on the iOS simulator** (Expo Go, SDK 52, 2026-09-27): multi-schema reception, live tuning visible in the app, and DevTools reconnection after an app reload. A physical-device DevTools run is still outstanding.
 
 Runtime Inspector remains protocol-first. Rozenite is a client and transport host, not a replacement for the Runtime Inspector Protocol (RIP) or `panel-core`.
 
@@ -57,7 +57,7 @@ This preserves the existing stale-schema model rather than creating a Rozenite-s
 
 ## Supported client behavior
 
-The current panel uses `panel-core` for:
+The panel uses `panel-core` for:
 
 - multiple schemas;
 - cached values;
@@ -77,11 +77,31 @@ The renderer supports:
 - spring;
 - bezier.
 
-## Example
+## Using it in an app
 
-The existing Expo/Reanimated example is Rozenite-enabled without adding Rozenite-specific state declarations to `App.tsx`.
+1. Add the packages: `@runtime-inspector/react-native`, `@runtime-inspector/panel-rozenite`, and `@rozenite/metro` (dev).
+2. Wrap the Metro config. Keep it conditional so production bundling is unaffected:
 
-Build the workspace first, then start the example with Rozenite enabled:
+   ```js
+   const { withRozenite } = require("@rozenite/metro");
+
+   module.exports = withRozenite(config, {
+     enabled: process.env.WITH_ROZENITE === "true",
+     include: ["@runtime-inspector/panel-rozenite"]
+   });
+   ```
+
+3. Import the plugin once from the app entry. `@rozenite/metro` does not inject plugin code into the bundle; the import registers the device side of the bridge. It is inert in production and when Rozenite is not enabled:
+
+   ```js
+   import "@runtime-inspector/panel-rozenite";
+   ```
+
+4. Start Metro with `WITH_ROZENITE=true`, open React Native DevTools (`j` in the Metro terminal) and select **Rozenite → Runtime Inspector**.
+
+No broker, CLI or token is involved. Declarations are unchanged — `useRuntimeValue`, `useAction`, `useInspector` and `// @inspect` appear in DevTools exactly as in the web panel. The app does not mirror values into a Rozenite API.
+
+In this repository the example is already wired:
 
 ```bash
 pnpm install
@@ -89,24 +109,9 @@ pnpm build
 pnpm --filter @runtime-inspector/example-react-native-reanimated start:rozenite
 ```
 
-Open React Native DevTools and select the **Runtime Inspector** panel.
+## Rendering
 
-The declaration model remains unchanged:
-
-```ts
-const blur = useRuntimeValue("blur", 18, { min: 0, max: 40 });
-```
-
-or:
-
-```ts
-// @inspect min=0 max=40
-const blur = useSharedValue(18);
-```
-
-Grouped controls still use `useInspector(...)`; actions still use `useAction(...)`.
-
-The app does not mirror values into a Rozenite API.
+The panel is the shared DialKit `InspectorPanel` (see [DialKit rendering](dialkit.md)), identical to the web panel except that **Apply to code** is hidden: the direct bridge has no `workspace` client to write files. Use the web panel, or an MCP agent, for write-back.
 
 ## Validation
 
@@ -121,7 +126,9 @@ Automated tests use Rozenite's official `@rozenite/testing` in-memory channel an
 - direct runtime schema replay and disposal;
 - protocol version mismatch.
 
-What is **not** yet proven by automated CI is the full graphical React Native DevTools + Metro + physical-device path. That is the next manual validation step, not an implemented protocol feature.
+The graphical path — React Native DevTools + Metro + Rozenite + the example app — has been exercised manually on the iOS simulator. That run found and fixed two integration gaps: the example never imported the plugin (so the device bridge never started), and broker discovery logged a warning per connection attempt when only Rozenite was in use. Discovery now warns once per process and backs off after two failed cycles.
+
+Operational note: React Native accepts one debugger connection per app. Another CDP client (for example an agent reloading via CDP) disconnects DevTools; use **Reconnect DevTools** afterwards. If DevTools is opened by hand in a browser, open it on the same host as the inspector WebSocket (`127.0.0.1` vs `localhost`) or Metro closes the connection.
 
 ## Architectural note
 

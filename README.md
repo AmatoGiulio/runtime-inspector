@@ -1,193 +1,132 @@
 # Runtime Inspector
 
-Runtime Inspector is a protocol-first developer tool for **live React Native runtime controls**.
+**Tune a React Native app while it runs — from a web panel, from React Native DevTools, or from an AI agent — and write the result back into your code.**
 
-A React Native app declares values and actions that are safe to tune while it is running. Interchangeable clients consume the same Runtime Inspector Protocol (RIP), render those controls, and send changes back to the app. The runtime applies updates to Reanimated `SharedValue`-like handles or explicit bindings without routing high-frequency tuning through React state.
-
-The architectural core is the protocol and shared client semantics, not a specific UI.
-
-> **Status — September 2026:** RIP 0.3, the Web panel, React Native runtime SDK, physical-device WebSocket discovery, A/B comparison, copy-as-code, Babel auto-binding, MCP client, and the first Rozenite / React Native DevTools client are implemented. The Rozenite vertical slice is covered by automated bridge/session tests; physical-device React Native DevTools validation is still outstanding and should not be treated as completed.
-
-## What works today
-
-- **RIP 0.3 semantic messages**: `schema.publish`, `schema.dispose`, `control.patch`, `control.commit`, `control.batchPatch`, `control.trigger`, runtime status, handshake, and errors.
-- **Shared protocol validation**: Zod message parsing, control-value validation, slider bounds, and conformance fixtures.
-- **Multiple schemas and resilient sessions**: schema caching/replay on the broker path, stale schemas, reconnect behavior, and deliberate disposal.
-- **Live controls**: slider, toggle, color, spring, bezier, and trigger/action controls.
-- **Runtime-native tuning**: values are applied to Reanimated mutable handles / `SharedValue`-like bindings or explicit setters.
-- **Low-friction React Native APIs**: `useRuntimeValue`, `useAction`, `useInspector`, the explicit schema/binding API, and `// @inspect` Babel auto-binding.
-- **A/B comparison and copy-as-code** through the framework-agnostic `panel-core`.
-- **Physical-device WebSocket path**: Metro/LAN discovery, QR output, explicit URL override, and a per-session panel token.
-- **MCP client**: schema discovery, single-value updates, committed batch updates, and triggers through the same RIP semantics.
-- **React Native DevTools client**: a Rozenite plugin using the official app↔DevTools bridge while reusing `panel-core`; no Rozenite-specific runtime state mirroring is required.
-
-See [Implementation status](docs/implementation-status.md) for the code-vs-doc audit and exact implemented/partial distinctions.
-
-## The model
-
-The runtime declares **what can be controlled**. RIP describes **what the messages mean**. The transport carries those messages. A client decides **how controls are presented**.
-
-```text
-Web panel ---- panel-core ---- WebSocket broker --\
-                                                  \
-MCP client ------------------ WebSocket broker ----> React Native runtime -> SharedValue / binding
-                                                  /
-Rozenite ----- panel-core ---- Rozenite bridge ----/
-```
-
-Rozenite is therefore a client of Runtime Inspector, not its new core.
-
-## One value, one line
+Instead of editing a spring, saving, waiting for Fast Refresh and replaying the gesture, you declare the values worth tuning and drag them live on the real device. When it feels right, one click writes the value into the source file it came from.
 
 ```ts
-const blur = useRuntimeValue("blur", 18, {
-  min: 0,
-  max: 40
-});
+const blur = useRuntimeValue("blur", 18, { min: 0, max: 40 });
 ```
 
-`blur` remains a Reanimated mutable handle and appears in every compatible Runtime Inspector client.
+That line is still a Reanimated shared value. It also appears as a slider in every Runtime Inspector client.
 
-Actions are explicit:
+## Why it is different
+
+- **Write-back to source.** "Apply to code" rewrites the declaration that produced a control, located by AST and guarded against manual edits since the app was built. No copy-paste of magic numbers.
+- **Agents are first-class clients.** The MCP server exposes the same controls to an AI agent, which tunes the running app (set → observe → repeat) exactly like a human.
+- **One protocol, interchangeable panels.** The web panel, the React Native DevTools tab (via [Rozenite](https://github.com/callstackincubator/rozenite)) and the MCP client all speak the Runtime Inspector Protocol (RIP). None of them owns the semantics.
+- **Built for motion work.** Spring and Bézier editors with live curves, A/B snapshots, copy-as-TypeScript, trigger actions to replay a transition, and values applied on the UI thread without React re-renders.
+- **Zero-ceremony adoption.** Annotate an existing `useSharedValue` with `// @inspect` and it shows up. Production builds are untouched.
+
+The panels are rendered with [DialKit](https://github.com/joshpuckett/dialkit).
+
+## Quick start
+
+```bash
+pnpm install
+pnpm build
+pnpm dev                                                             # broker + web panel
+pnpm --filter @runtime-inspector/example-react-native-reanimated start
+```
+
+`pnpm dev` prints the panel URL (with its session token), LAN addresses and a QR code. Devices find the broker through Metro — simulators, emulators and physical phones on the same network need no configuration.
+
+## Declaring controls
+
+The DX ladder, from least to most ceremony:
 
 ```ts
+// 1. An existing shared value — just a comment (needs the Babel plugin)
+// @inspect min=0 max=40
+const blur = useSharedValue(18);
+
+// 2. One value, one line
+const glow = useRuntimeValue("glow", 10, { min: 0, max: 48 });
 const replay = useAction("replay", () => runReplayAnimation());
-```
 
-For grouped controls:
-
-```ts
+// 3. A named, grouped panel
 const card = useInspector("card-transition", {
   moveX: { value: 0, min: -120, max: 120, unit: "px" },
-  color: "#f5f7fb",
-  spring: {
-    damping: 14,
-    stiffness: 180,
-    onChange: () => runReplayAnimation()
-  },
+  tint: "#f5f7fb",
+  spring: { damping: 14, stiffness: 180, onChange: () => runReplayAnimation() },
   replay: () => runReplayAnimation()
 });
 ```
 
-## Existing code: `// @inspect`
+Numbers become sliders (a range is required), booleans toggles, strings colors, `{ damping, stiffness }` springs and four-number arrays Béziers; functions are actions. An explicit schema/binding API sits underneath for full control. See [Getting started](docs/getting-started.md).
 
-Register `@runtime-inspector/babel-plugin`, then annotate an existing SharedValue declaration:
+To enable `// @inspect`, add `@runtime-inspector/babel-plugin` before `react-native-reanimated/plugin` in `babel.config.js`.
 
-```ts
-// @inspect min=0 max=40
-const blur = useSharedValue(18);
+## Three ways to tune
+
+### Web panel
+
+`pnpm dev`, then open the printed URL. Every control, A/B snapshots, TypeScript export, and **Apply to code** (the CLI is the workspace that writes files; set `RUNTIME_INSPECTOR_WORKSPACE_ROOT` when it does not run from the app root).
+
+### React Native DevTools
+
+No broker needed: the DevTools tab talks to the app over Rozenite's own bridge.
+
+1. Wrap Metro with `withRozenite(config, { enabled: process.env.WITH_ROZENITE === "true", include: ["@runtime-inspector/panel-rozenite"] })`.
+2. Import the plugin once from your entry: `import "@runtime-inspector/panel-rozenite";`
+3. Start Metro with `WITH_ROZENITE=true`, press `j`, and open **Rozenite → Runtime Inspector**.
+
+In this repo: `pnpm --filter @runtime-inspector/example-react-native-reanimated start:rozenite`. Details in [Rozenite client](docs/rozenite.md).
+
+### AI agent (MCP)
+
+```bash
+RI_BROKER_URL=ws://127.0.0.1:4577 RI_TOKEN=<token printed by pnpm dev> runtime-inspector-mcp
 ```
 
-In development the Babel plugin registers the value in the shared auto schema. In production the declaration remains untouched.
+Tools: `get_schema`, `set_control_value`, `batch_set`, `trigger`. Agent writes are committed values; stale schemas are refused with an explicit error.
 
-The current DX ladder is:
+## How it fits together
 
 ```text
-useRuntimeValue / useAction -> useInspector -> explicit binding API
-           ^
-      // @inspect for existing SharedValue declarations
+Web panel ── panel-core ── WebSocket broker ──┐
+MCP agent ──────────────── WebSocket broker ──┼──> React Native runtime ──> SharedValue / binding
+DevTools  ── panel-core ── Rozenite bridge ───┘
+CLI workspace <── source.apply (Apply to code) ── broker
 ```
+
+The runtime declares what can be controlled, RIP defines what messages mean, transports carry them, and clients decide presentation. Invalid values are rejected with a reason, never clamped.
 
 ## Packages
 
-- `@runtime-inspector/protocol` — RIP message/schema types, validation, and conformance fixtures.
-- `@runtime-inspector/panel-core` — framework-agnostic schema/value/session semantics, throttling, commits, stale protection, A/B, and export.
-- `@runtime-inspector/transport-ws` — local WebSocket broker and routing.
-- `@runtime-inspector/react-native` — runtime declarations, bindings, hooks, broker discovery, and the direct RIP-client seam used by local transports.
-- `@runtime-inspector/babel-plugin` — dev-only `// @inspect` transform.
-- `@runtime-inspector/panel-web` — thin Vite/React renderer over `panel-core`.
-- `@runtime-inspector/panel-dialkit` — shared controlled DialKit renderer for Web and DevTools; see [integration details](docs/dialkit.md).
-- `@runtime-inspector/panel-rozenite` — React Native DevTools/Rozenite renderer and bridge adapter over `panel-core`.
-- `@runtime-inspector/client-mcp` — MCP client exposing the running app to AI agents.
-- `@runtime-inspector/cli` — local broker/panel startup, LAN/QR discovery, ports, and session token.
-- `examples/react-native-reanimated` — Expo/Reanimated example app used by the WebSocket path and the Rozenite vertical slice.
+| Package | Role |
+| --- | --- |
+| `@runtime-inspector/react-native` | Runtime SDK: hooks, bindings, broker discovery, direct-client seam |
+| `@runtime-inspector/babel-plugin` | Dev-only `// @inspect` transform and source anchors |
+| `@runtime-inspector/protocol` | RIP types, Zod validation, value validation, conformance fixtures |
+| `@runtime-inspector/panel-core` | Framework-agnostic session semantics: values, throttling, commits, stale protection, A/B, export, write-back |
+| `@runtime-inspector/panel-dialkit` | The shared DialKit panel used by web and DevTools ([details](docs/dialkit.md)) |
+| `@runtime-inspector/panel-web` | Web shell over the shared panel |
+| `@runtime-inspector/panel-rozenite` | React Native DevTools plugin and bridge adapter |
+| `@runtime-inspector/transport-ws` | Local WebSocket broker |
+| `@runtime-inspector/client-mcp` | MCP server for AI agents |
+| `@runtime-inspector/cli` | `dev` command: broker, panel, LAN/QR, session token, write-back workspace |
 
-## Run the Web panel
+`examples/react-native-reanimated` is an Expo/Reanimated app wired for every path.
 
-```bash
-pnpm install
-pnpm dev
-pnpm --filter @runtime-inspector/example-react-native-reanimated start
-```
+## Status
 
-The CLI starts the local broker and Web panel, prints local/LAN addresses and a QR code, and issues a session token for panel-role clients.
+Version 0.1 — protocol **RIP 0.3**. Validated live on a physical Android device (WebSocket path, multi-schema, stale recovery across Metro reloads), in React Native DevTools on the iOS simulator (Rozenite path), and with an agent tuning through MCP. See [Implementation status](docs/implementation-status.md) for exact boundaries.
 
-The Web path is:
-
-```text
-Web panel -> panel-core -> broker -> RN runtime -> SharedValue / binding
-```
-
-## Run the Rozenite / React Native DevTools client
-
-Build the workspace first so the plugin can consume the built workspace packages, then enable Rozenite in the example:
+Protocol changes go through an RFC in [`rfcs/`](rfcs/) with conformance fixtures; see [Protocol](docs/protocol.md) and the [stability policy](docs/protocol-stability.md).
 
 ```bash
-pnpm install
-pnpm build
-pnpm --filter @runtime-inspector/example-react-native-reanimated start:rozenite
+pnpm build && pnpm typecheck && pnpm test
 ```
 
-Open React Native DevTools and select **Runtime Inspector**.
+## Not in scope yet
 
-The DevTools path is direct:
-
-```text
-DevTools panel -> panel-core -> Rozenite bridge -> RN runtime -> SharedValue / binding
-```
-
-The Runtime Inspector WebSocket broker is not required for this DevTools path. See [Rozenite architecture](docs/rozenite.md) for the transport decision and reload/stale handling.
-
-## MCP / AI-agent tuning
-
-The MCP client uses the broker transport and connects as another panel-role RIP client:
-
-```bash
-RI_BROKER_URL=ws://127.0.0.1:4577 RI_TOKEN=<token> runtime-inspector-mcp
-```
-
-It currently exposes `get_schema`, `set_control_value`, `batch_set`, and trigger/action support.
-
-## Protocol status
-
-Current protocol version: **0.3**.
-
-Protocol changes require an RFC in `rfcs/`, conformance fixtures, and protocol documentation before implementation. The Rozenite client required **zero RIP changes**.
-
-See:
-
-- [Protocol](docs/protocol.md)
-- [Protocol stability policy](docs/protocol-stability.md)
-- [RFC 0001 — protocol 0.3 semantic messages](rfcs/0001-protocol-0.3-semantic-messages.md)
-- [RFC 0002 — Babel auto-binding](rfcs/0002-babel-plugin-auto-binding.md)
-- [RFC 0003 — Runtime Value model](rfcs/0003-runtime-value-model.md)
-
-## Verification
-
-```bash
-pnpm build
-pnpm typecheck
-pnpm test
-```
-
-Runtime WebSocket error handling is covered by a reentrant-close regression test. Runtime unit tests use an offline socket by default so declaration tests do not connect to a real broker. See [Implementation status](docs/implementation-status.md) for validation boundaries.
-
-## Non-goals for this phase
-
-- Nitro Modules;
-- standalone desktop app;
-- VSCode extension;
-- recording/timeline tooling;
-- generic plugin system;
-- production/remote networking;
-- monetization work.
+Timeline/recording tooling is the next design topic and will start as an RFC. Also out of scope for now: native (Nitro) transport, desktop or VS Code apps, a generic plugin system, and production/remote networking.
 
 ## Docs
 
-- [Implementation status](docs/implementation-status.md)
-- [Architecture](docs/architecture.md)
-- [Protocol](docs/protocol.md)
-- [Protocol stability policy](docs/protocol-stability.md)
-- [Getting started](docs/getting-started.md)
-- [Rozenite / React Native DevTools client](docs/rozenite.md)
-- [MVP roadmap](docs/mvp-roadmap.md)
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [DialKit rendering](docs/dialkit.md) · [Rozenite client](docs/rozenite.md) · [Implementation status](docs/implementation-status.md) · [Roadmap](docs/mvp-roadmap.md) · [Vision](docs/vision.md)
+
+## License
+
+MIT

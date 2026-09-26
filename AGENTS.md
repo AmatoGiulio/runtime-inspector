@@ -12,7 +12,7 @@ The runtime can expose the same Runtime Inspector Protocol (RIP) state through i
 - MCP: `client-mcp -> WebSocket broker -> React Native runtime`
 - React Native DevTools: `panel-rozenite -> panel-core -> Rozenite plugin bridge -> React Native runtime`
 
-The WebSocket path has been validated on physical devices, including multi-schema operation and stale-schema recovery across Metro reloads. The Rozenite client is a real direct-bridge vertical slice in the repository; automated bridge/session tests cover its message flow, but physical-device DevTools validation should not be claimed unless it has actually been run.
+The WebSocket path has been validated on physical devices, including multi-schema operation and stale-schema recovery across Metro reloads. The Rozenite client has been exercised inside React Native DevTools on the iOS simulator (2026-09-27); a physical-device DevTools run has not happened yet and should not be claimed. Both human panels render the same DialKit `InspectorPanel`. Source write-back (RFC 0004, `source.apply` to the CLI `workspace` role) is shipped on the broker path. The protocol also includes `source.apply` / `source.applyResult`.
 
 Every RIP protocol change goes through an RFC in `rfcs/` — see [docs/protocol-stability.md](docs/protocol-stability.md). The conformance fixtures in `packages/protocol/fixtures/` are the contract; new protocol messages require fixtures and documentation.
 
@@ -28,7 +28,7 @@ Read [docs/orchestration.md](docs/orchestration.md) before making broad multi-pa
 - Reject invalid values with a reason; never clamp or coerce silently.
 - No dynamic `require()` in packages built as ESM — `runtime-react-native` builds CJS specifically to allow guarded requires of optional peers. Do not regress it to ESM-only.
 - In the monorepo, `react`, `react-native`, and `react-native-reanimated` must resolve as singletons for the example app (see `examples/react-native-reanimated/metro.config.js`).
-- Do not introduce Nitro, a desktop app, a generic plugin system, recording/timeline tooling, or unrelated product surfaces without a separate decision.
+- Do not introduce Nitro, a desktop app, a generic plugin system, recording tooling, or unrelated product surfaces without a separate decision. Timeline tooling was decided on 2026-09-27: it comes after the v1 release and starts as RFC 0005, not as code.
 - Prefer narrow, testable changes. Every architectural change lands with the test that would have caught a regression.
 - Keep package APIs ergonomic for React Native developers. Current DX ladder: `useRuntimeValue` for a single tunable value, `useAction` for explicit actions, `useInspector` for grouped/advanced controls, explicit schema APIs when full control is needed, and `// @inspect` for Babel auto-binding.
 - A client must not reimplement schema storage, value state, patch/commit semantics, stale protection, A/B comparison, or export if `panel-core` already owns that behavior.
@@ -39,8 +39,8 @@ Read [docs/orchestration.md](docs/orchestration.md) before making broad multi-pa
 - `packages/transport-ws` owns the local WebSocket broker/transport and routing.
 - `packages/runtime-react-native` owns runtime declarations, binding application, broker discovery, `useRuntimeValue`, `useAction`, `useInspector`, `__riInspect`, and the small direct-protocol client seam used by transport integrations.
 - `packages/panel-core` owns framework-agnostic client/session behavior: schemas, cached values, throttling, patch/commit/trigger semantics, stale-schema protection, A/B comparison, and export.
-- `packages/panel-dialkit` owns shared controlled DialKit rendering only; session state and RIP semantics stay in `panel-core`.
-- `packages/panel-web` owns only Web rendering over `panel-core`.
+- `packages/panel-dialkit` owns the shared DialKit panel (`InspectorPanel` and control rows) used by web and DevTools — rendering only; session state and RIP semantics stay in `panel-core`.
+- `packages/panel-web` is a thin Web shell around `InspectorPanel`.
 - `packages/panel-rozenite` owns the Rozenite/React Native DevTools renderer and bridge adapter over `panel-core`; it must not become a second core.
 - `packages/client-mcp` owns the MCP server exposing RIP controls to AI agents through the broker.
 - `packages/babel-plugin` owns the `@inspect` directive transform.

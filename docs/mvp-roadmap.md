@@ -40,22 +40,17 @@ Runtime Inspector remains split into three concerns:
 
 The Rozenite vertical slice required **zero RIP changes** and reuses `panel-core`. That is the architectural result the previous roadmap was trying to prove.
 
-## Current milestone — validate the DevTools path on a real device
+## Current milestone — v1 release
 
-The Rozenite client is now implemented in code and covered by automated bridge/session tests. The next milestone is no longer “build Rozenite”; it is **prove the complete graphical DevTools path in real use**.
+The DevTools path has been exercised in React Native DevTools on the iOS simulator, and both panels now render one shared DialKit panel. Remaining for a v1 people can try:
 
-Highest-value validation:
+1. a short demo: DevTools tuning → Apply to code → an MCP agent tuning the same controls;
+2. a physical-device DevTools run;
+3. distribution decision (npm vs "clone + pnpm dev"; the CLI currently serves the panel through the workspace Vite dev server).
 
-1. run the existing Expo/Reanimated example with Rozenite enabled;
-2. open the Runtime Inspector tab in React Native DevTools;
-3. verify multiple schemas and live/stale state;
-4. tune slider/toggle/color/spring/bezier values on a physical device;
-5. verify patch during interaction and commit at the end;
-6. fire replay/trigger actions;
-7. reload Metro/app and verify stale → republished recovery;
-8. exercise A/B and copy-as-code from DevTools.
+## Next design topic — timeline
 
-Do not add new product surfaces until this path has been exercised and any actual integration friction is known.
+A timeline view (After Effects-style time grid, Ableton-style launchable/looping clips, frame stepping and scrubbing) is the next product direction. It requires the runtime to own animation time rather than only observe it, so it starts as **RFC 0005** — declared clips evaluated as a function of time, transport commands (play/pause/seek/loop) classified in the RIP taxonomy — before any implementation. DialKit 2's timeline module is the candidate renderer.
 
 ## Engineering cleanup completed
 
@@ -65,7 +60,7 @@ The runtime WebSocket error handler now guards reentrant errors during close, wi
 
 Ordered by leverage:
 
-1. **DevTools interaction polish** — only fixes discovered from real Rozenite/device usage.
+1. **DevTools interaction polish** — only fixes discovered from real Rozenite/device usage; Apply to code from DevTools via Metro is a candidate.
 2. **Spring/bezier presentation polish** — richer visualization without moving semantics out of `panel-core`.
 3. **Reconnect/diagnostic UX** — clearer transport/session state and actionable failures.
 4. **Control density/grouping ergonomics** — improve large schemas without inventing protocol features prematurely.
@@ -96,7 +91,7 @@ Neither point currently justifies a broad rewrite.
 - standalone desktop client;
 - VSCode client;
 - Nitro/native transport if measured JS transport limits require it;
-- recording/timeline tooling;
+- recording tooling beyond the timeline RFC above;
 - generic plugin system;
 - hierarchical addressing if real schemas require it;
 - remote collaboration/tunneling;

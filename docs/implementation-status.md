@@ -46,6 +46,8 @@ The core is framework-agnostic at the state/semantics level. Its injected transp
 
 ## Web panel
 
+Rendered by the shared DialKit `InspectorPanel` in `panel-dialkit` (also used by Rozenite). Checked in a browser against a live broker: DialKit layout, drag → throttled patches + one commit, and Apply to code round-trip with the result shown in the panel.
+
 **Implemented**
 
 - slider;
@@ -57,7 +59,8 @@ The core is framework-agnostic at the state/semantics level. Its injected transp
 - multi-schema UI;
 - stale state;
 - A/B comparison;
-- copy-as-code.
+- copy-as-code;
+- Apply to code (per control and per schema) through the CLI workspace.
 
 Older text claiming that spring/bezier were only reserved for a future pass is stale.
 
@@ -119,13 +122,16 @@ The existing WebSocket/physical-device path predates the Rozenite work and is se
 - A/B and copy-as-code through `panel-core`;
 - example Metro wiring through `@rozenite/metro`.
 
-**Partially implemented / validation outstanding**
+**Validated manually** (iOS simulator, Expo Go SDK 52, 2026-09-27): the Runtime Inspector tab inside React Native DevTools, multiple live schemas, slider tuning visible in the app, and reconnection after an app reload with panel and app values in agreement.
 
-- the actual graphical React Native DevTools + Metro + physical-device path has not yet been manually exercised in the current execution environment. Automated bridge tests use Rozenite's official in-memory channel and are passing, but they are not a substitute for that device validation.
+**Outstanding**
+
+- a physical-device React Native DevTools run;
+- Apply to code from DevTools (the direct bridge has no `workspace` client; the panel hides the affordance).
 
 ## Runtime test isolation and error recovery
 
-The WebSocket error handler detaches itself before closing the socket, preventing reentrant `onerror -> close() -> onerror` recursion. A regression test covers that failure and subsequent reconnect/disconnect behavior.
+Broker discovery warns once per process (not per schema or per attempt) and backs off after two failed candidate cycles (1s doubling to a 10s cap), so an app used only through Rozenite does not churn sockets or flood the console. The WebSocket error handler detaches itself before closing the socket, preventing reentrant `onerror -> close() -> onerror` recursion. A regression test covers that failure and subsequent reconnect/disconnect behavior.
 
 Runtime unit tests use an offline in-memory socket by default; transport-specific suites install their own socket doubles. This avoids accidental native Node WebSocket connections from declaration/hook tests. The former baseline stack-overflow failure is resolved.
 
