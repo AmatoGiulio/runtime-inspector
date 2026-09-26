@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
 
 export default defineConfig({
+  test: {
+    setupFiles: [resolve(__dirname, "src/test/setup.ts")]
+  },
   resolve: {
     alias: {
       "react-native": resolve(__dirname, "src/test/react-native-stub.ts"),

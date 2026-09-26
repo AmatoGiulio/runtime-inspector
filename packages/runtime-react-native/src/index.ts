@@ -454,6 +454,8 @@ function connectRuntime(session: Session) {
   };
 
   socket.onerror = () => {
+    // Closing a failed connection can synchronously emit another error.
+    socket.onerror = null;
     socket.close();
   };
 }

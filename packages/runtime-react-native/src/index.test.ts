@@ -104,6 +104,30 @@ afterEach(() => {
 });
 
 describe("multi-schema sessions", () => {
+  it("closes a failed socket once even if close emits another error, then reconnects", async () => {
+    vi.useFakeTimers();
+    const { definePanel } = await import("./index");
+    const panel = definePanel(makeSchema("panel-error"), { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+    const socket = FakeWebSocket.instances.at(-1)!;
+    const close = vi.spyOn(socket, "close").mockImplementation(() => {
+      // Some implementations emit error before updating readyState on close.
+      socket.onerror?.();
+      socket.readyState = FakeWebSocket.CLOSED;
+      socket.onclose?.();
+    });
+
+    expect(() => socket.onerror?.()).not.toThrow();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    panel.disconnect();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
   it("routes control patches to the right schema and binding", async () => {
     const { definePanel, applyControlPatch, bindValue } = await import("./index");
 
