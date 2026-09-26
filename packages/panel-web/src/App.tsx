@@ -1,6 +1,6 @@
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { createPanelSession } from "@runtime-inspector/panel-core";
-import type { PanelSchema } from "@runtime-inspector/protocol";
+import type { PanelSchema, SourceApplyResultEntry } from "@runtime-inspector/protocol";
 import { InspectorControlRow } from "@runtime-inspector/panel-dialkit";
 import "@runtime-inspector/panel-dialkit/styles.css";
 import { createRoot } from "react-dom/client";
@@ -29,7 +29,9 @@ function App() {
           <h1>Runtime Inspector</h1>
           <p>
             {state.notice ??
-              (state.schemas.length > 0
+              (state.lastApplyResult
+                ? formatApplyResults(state.lastApplyResult.results)
+                : state.schemas.length > 0
                 ? `${state.schemas.length} schema${state.schemas.length === 1 ? "" : "s"} published`
                 : "Waiting for runtime schema")}
           </p>
@@ -108,6 +110,8 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
     session.applyCompareSlot(slot, schema.id);
   }
 
+  const hasAnchoredControl = useMemo(() => schemaHasAnchoredControl(schema), [schema]);
+
   return (
     <section className="schemaSection">
       <div className="schemaSectionHeader">
@@ -116,6 +120,11 @@ function SchemaSection({ schema, state }: { schema: PanelSchema; state: ReturnTy
           {controlStats.live} live / {controlStats.advanced} replay
         </span>
         {isStale ? <span className="status disconnected">stale</span> : null}
+        {hasAnchoredControl ? (
+          <button className="applyAllButton" type="button" onClick={() => session.applySource(schema.id)}>
+            Apply all to code
+          </button>
+        ) : null}
       </div>
       <div className="layout">
         <section className="groups">
@@ -203,6 +212,21 @@ function CompareSlotControls({
         Apply
       </button>
     </div>
+  );
+}
+
+function formatApplyEntry(entry: SourceApplyResultEntry): string {
+  if (entry.ok) return `${entry.controlId} → ${entry.written} written`;
+  return `${entry.controlId}: ${entry.code}${entry.message ? ` — ${entry.message}` : ""}`;
+}
+
+function formatApplyResults(results: SourceApplyResultEntry[]): string {
+  return results.map(formatApplyEntry).join(" · ");
+}
+
+function schemaHasAnchoredControl(schema: PanelSchema): boolean {
+  return schema.groups.some((group) =>
+    group.controls.some((control) => control.kind !== "trigger" && Boolean(control.source))
   );
 }
 

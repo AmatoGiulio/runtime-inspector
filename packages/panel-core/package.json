@@ -2,6 +2,12 @@
   "name": "@runtime-inspector/panel-core",
   "version": "0.1.0",
   "description": "Framework-agnostic panel session logic for Runtime Inspector (connection, schema store, patch throttling, A/B compare, TypeScript export).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/panel-core"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,6 +18,9 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
     "test": "vitest run",

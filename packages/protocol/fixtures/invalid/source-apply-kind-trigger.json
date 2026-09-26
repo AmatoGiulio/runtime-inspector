@@ -1,0 +1,19 @@
+{
+  "type": "source.apply",
+  "schemaId": "card-transition",
+  "requests": [
+    {
+      "controlId": "replay",
+      "kind": "trigger",
+      "anchor": {
+        "file": "src/Card.tsx",
+        "line": 42,
+        "column": 8,
+        "enclosure": ["Card"],
+        "name": "replay",
+        "init": "0"
+      },
+      "value": true
+    }
+  ]
+}

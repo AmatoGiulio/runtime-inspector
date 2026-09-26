@@ -1,0 +1,8 @@
+{
+  "type": "source.applyResult",
+  "schemaId": "card-transition",
+  "results": [
+    { "controlId": "moveX", "ok": true, "written": "42", "previous": "0" },
+    { "controlId": "damping", "ok": false, "code": "EXPRESSION_MISMATCH" }
+  ]
+}

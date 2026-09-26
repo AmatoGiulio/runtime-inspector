@@ -10,9 +10,14 @@ import {
   type CubicBezier,
   type InspectorControl,
   type PanelSchema,
+  type SourceApplyRequest,
+  type SourceApplyResult,
+  type SourceApplyResultEntry,
   type SpringValue,
   type TriggerControl
 } from "@runtime-inspector/protocol";
+
+export { sampleSpringCurve, type SpringCurve } from "./spring-curve";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "rejected";
 
@@ -21,6 +26,12 @@ export type CompareSlotId = "A" | "B";
 export interface LastPatchInfo {
   controlId: string;
   label: string;
+  at: string;
+}
+
+export interface LastApplyResultInfo {
+  schemaId: string;
+  results: SourceApplyResultEntry[];
   at: string;
 }
 
@@ -37,6 +48,8 @@ export interface PanelState {
   staleSchemaIds: Record<string, boolean>;
   values: Record<string, Record<string, unknown>>;
   lastPatch?: LastPatchInfo;
+  /** Results of the most recently received `source.applyResult`, keyed by nothing (single latest snapshot). */
+  lastApplyResult?: LastApplyResultInfo;
   compareSlots: Record<string, Partial<Record<CompareSlotId, Record<string, unknown>>>>;
 }
 
@@ -84,6 +97,7 @@ export interface PanelSession {
   saveCompareSlot(slot: CompareSlotId, schemaId: string): void;
   applyCompareSlot(slot: CompareSlotId, schemaId: string): void;
   exportTypeScript(schemaId: string): string;
+  applySource(schemaId: string, controlIds?: string[]): void;
 }
 
 function defaultCreateSocket(url: string): WebSocketLike {
@@ -225,6 +239,9 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
           Object.fromEntries(message.patches.map((patch) => [patch.controlId, patch.value]))
         );
       }
+      if (message.type === "source.applyResult") {
+        applySourceResult(message);
+      }
       if (message.type === "error" && message.code === "UNAUTHORIZED") {
         stopReconnecting = true;
         setState({ status: "rejected", notice: "Broker rejected this panel: missing or wrong token." });
@@ -365,6 +382,24 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
           ...nextValues
         }
       }
+    });
+  }
+
+  function applySourceResult(message: SourceApplyResult) {
+    const expressionMismatch = message.results.find(
+      (entry): entry is Extract<SourceApplyResultEntry, { ok: false }> =>
+        !entry.ok && entry.code === "EXPRESSION_MISMATCH"
+    );
+
+    setState({
+      lastApplyResult: {
+        schemaId: message.schemaId,
+        results: message.results,
+        at: formatTime(new Date())
+      },
+      ...(expressionMismatch
+        ? { notice: "file changed since launch — hot-reload and retry" }
+        : {})
     });
   }
 
@@ -526,6 +561,39 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     return createTypeScriptPreset(schema, values);
   }
 
+  function applySource(schemaId: string, controlIds?: string[]): void {
+    const schema = schemasById.get(schemaId);
+    if (!schema) return;
+
+    const controlsById = controlsByIdForSchema(schema);
+    const candidateControls = controlIds
+      ? controlIds.map((controlId) => controlsById.get(controlId)).filter((control): control is InspectorControl => Boolean(control))
+      : Array.from(controlsById.values());
+
+    const schemaValues = state.values[schemaId] ?? {};
+    const requests: SourceApplyRequest[] = [];
+
+    for (const control of candidateControls) {
+      if (!isValueControl(control)) continue;
+      if (!control.source) continue;
+      const value = schemaValues[control.id] ?? control.value ?? control.defaultValue;
+      requests.push({
+        controlId: control.id,
+        kind: control.kind,
+        anchor: control.source,
+        value
+      });
+    }
+
+    if (requests.length === 0) return;
+
+    send({
+      type: "source.apply",
+      schemaId,
+      requests
+    });
+  }
+
   return {
     getState,
     subscribe,
@@ -536,7 +604,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     fireTrigger,
     saveCompareSlot,
     applyCompareSlot,
-    exportTypeScript
+    exportTypeScript,
+    applySource
   };
 }
 

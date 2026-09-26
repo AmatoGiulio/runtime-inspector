@@ -1,0 +1,19 @@
+{
+  "type": "source.apply",
+  "schemaId": "card-transition",
+  "requests": [
+    {
+      "controlId": "moveX",
+      "kind": "slider",
+      "anchor": {
+        "file": "src/Card.tsx",
+        "line": 42,
+        "column": 8,
+        "enclosure": ["Card"],
+        "name": "moveX",
+        "init": "0"
+      },
+      "value": 42
+    }
+  ]
+}

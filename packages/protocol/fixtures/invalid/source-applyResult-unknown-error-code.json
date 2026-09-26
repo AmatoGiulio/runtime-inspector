@@ -1,0 +1,7 @@
+{
+  "type": "source.applyResult",
+  "schemaId": "card-transition",
+  "results": [
+    { "controlId": "damping", "ok": false, "code": "TOTALLY_MADE_UP" }
+  ]
+}

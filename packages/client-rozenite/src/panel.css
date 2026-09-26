@@ -1,0 +1,42 @@
+.riRozeniteRoot {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+}
+
+.riConnectForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2a2b30;
+}
+
+.riConnectForm input {
+  background: #1f2024;
+  border: 1px solid #33343a;
+  border-radius: 6px;
+  color: inherit;
+  padding: 6px 8px;
+  min-width: 220px;
+}
+
+.riConnectForm label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9aa0aa;
+}
+
+.riSchemaList {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

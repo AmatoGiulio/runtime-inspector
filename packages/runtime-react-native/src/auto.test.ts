@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeWebSocket } from "./test-utils";
 
 function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, id: string) {
   return schema.groups[0].controls.find((control) => control.id === id);
@@ -6,6 +7,8 @@ function controlById(schema: import("@runtime-inspector/protocol").PanelSchema, 
 
 describe("__riInspect", () => {
   beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
     vi.useFakeTimers();
   });
 
@@ -13,6 +16,7 @@ describe("__riInspect", () => {
     const { __resetAutoRegistryForTests } = await import("./auto");
     __resetAutoRegistryForTests();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.resetModules();
   });
 
@@ -87,6 +91,69 @@ describe("__riInspect", () => {
     const schema = definePanelSpy.mock.calls.at(-1)![0];
     const control = controlById(schema, "enabled");
     expect(control?.kind).toBe("toggle");
+  });
+
+  it("forwards a source anchor from meta onto the published control", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    const source = {
+      file: "src/Card.tsx",
+      line: 42,
+      column: 8,
+      enclosure: ["Card"],
+      name: "moveX",
+      init: "0"
+    };
+    __riInspect({ value: 0 }, "moveX", { min: -120, max: 120, source });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    const control = controlById(schema, "moveX");
+    expect((control as { source?: unknown })?.source).toEqual(source);
+  });
+
+  it("omits the source field entirely when no source anchor is given", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    __riInspect({ value: 0 }, "moveX", { min: -120, max: 120 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    const control = controlById(schema, "moveX");
+    expect((control as { source?: unknown })?.source).toBeUndefined();
+    expect(control && "source" in control).toBe(false);
+  });
+
+  it("keeps the rest of the meta (label, range, step, unit) working alongside a source anchor", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riInspect } = await import("./auto");
+
+    const source = {
+      file: "src/Card.tsx",
+      line: 10,
+      column: 2,
+      enclosure: ["Card"],
+      name: "cardRadius",
+      init: "8"
+    };
+    __riInspect(
+      { value: 8 },
+      "cardRadius",
+      { min: 8, max: 48, step: 2, unit: "px", label: "Card Radius", source }
+    );
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    const control = controlById(schema, "cardRadius");
+    expect(control?.kind).toBe("slider");
+    expect((control as { min: number }).min).toBe(8);
+    expect((control as { max: number }).max).toBe(48);
+    expect((control as { step?: number }).step).toBe(2);
+    expect((control as { unit?: string }).unit).toBe("px");
+    expect(control?.label).toBe("Card Radius");
+    expect((control as { source?: unknown })?.source).toEqual(source);
   });
 
   it("re-registering the same name via __riInspect overwrites silently (no suffix, no warning)", async () => {

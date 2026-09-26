@@ -1,81 +1,81 @@
 # Runtime Inspector Protocol (RIP)
 
-Runtime Inspector Protocol is the transport-independent contract between an instrumented runtime and a client that controls it. Current version: **0.3**.
-
-RIP is not tied to the Web panel or to WebSockets. Today the same semantic messages can be carried by:
-
-- the local WebSocket broker used by the Web panel and MCP client;
-- the Rozenite / React Native DevTools bridge used by `@runtime-inspector/panel-rozenite`.
-
-Transport-specific lifecycle signals may exist outside RIP, but they must not redefine protocol semantics. The Rozenite `runtime-inspector:ready` generation event is one such transport-local signal; it results in existing RIP stale/re-handshake behavior rather than a new protocol message.
+The Runtime Inspector Protocol is a set of transport-independent JSON messages exchanged between a `runtime` client (an app instrumenting itself), a `panel` client (a human or machine controller), and — since RFC 0004 — a `workspace` client (a filesystem-capable client that writes tuned values back into source), relayed by a broker or carried directly by a transport bridge. Current transports are the local WebSocket broker (Web panel, MCP client, CLI workspace) and the Rozenite / React Native DevTools plugin bridge (`@runtime-inspector/panel-rozenite`); see [Transport independence](#transport-independence). Current version: **0.3**.
 
 ## Message taxonomy
 
-| Family | Meaning | Replay/cache expectation |
-| --- | --- | --- |
-| **State** | “The world is like this.” | May be cached/replayed when appropriate. |
-| **Command** | “Do this now.” | Must not be replayed as state. |
-| **Lifecycle** | Connection/session/schema lifecycle changed. | Updates bookkeeping rather than representing a tunable value. |
+Every message belongs to one of three families:
 
-Current messages:
+| Family | Meaning | Idempotent | Cacheable / replayable |
+| --- | --- | --- | --- |
+| **State** | "The world is like this" | Yes | Yes — last value can be cached and replayed to late joiners |
+| **Command** | "Do this" | No | Never cached or replayed — re-sending has an effect each time |
+| **Lifecycle event** | "This happened" | N/A | Updates caches / connection bookkeeping, not replayed itself |
 
-| Message | Family | Purpose |
-| --- | --- | --- |
-| `handshake.hello` | Lifecycle | Identify role/client and negotiate protocol version. |
-| `handshake.accept` | Lifecycle | Accept the client for the negotiated version. |
-| `schema.publish` | State | Publish/replace a runtime control schema. |
-| `schema.dispose` | Lifecycle | Deliberately remove a schema. |
-| `control.patch` | Preview mutation | Apply an ephemeral/live value update. |
-| `control.commit` | State mutation | Apply the decided/final value. |
-| `control.batchPatch` | Mutation | Apply multiple values; `committed` distinguishes preview vs decided batch. |
-| `control.trigger` | Command | Fire a trigger/action exactly as an action, not as value state. |
-| `runtime.status` | Lifecycle | Report runtime/schema online/offline state. |
-| `error` | Lifecycle/error | Report protocol/authorization/version failures. |
+Classification of every current message type:
 
-Protocol 0.3 intentionally separates `control.trigger` from value mutation and `control.commit` from drag/preview patches. A trigger is not a value and must not be sent through `control.patch`.
+| Message | Family |
+| --- | --- |
+| `handshake.hello` | Lifecycle event |
+| `handshake.accept` | Lifecycle event |
+| `schema.publish` | State |
+| `schema.dispose` | Lifecycle event |
+| `control.patch` | Command-shaped, but see below |
+| `control.batchPatch` | State (see `committed` field) |
+| `control.trigger` | Command |
+| `control.commit` | State |
+| `runtime.status` | Lifecycle event |
+| `error` | Lifecycle event |
+| `source.apply` | Command |
+| `source.applyResult` | Lifecycle event |
 
-## Roles
+**Taxonomy violation resolved in 0.3.** Prior to 0.3, `trigger` controls ("do this callback now", e.g. "replay transition") were fired via `control.patch` — the same message type used for value updates (slider, toggle, color, bezier, spring), and drag-preview patches were indistinguishable from a human's decided value. Protocol 0.3 introduces two dedicated messages to resolve this:
 
-A client identifies as either:
+- `control.trigger` (family: Command) — fires a `trigger` control. Never cached, never replayed, at-most-once delivery.
+- `control.commit` (family: State) — same shape and validation as `control.patch`, but marks *the decided value* (drag release, A/B apply, agent decision) as opposed to a throttled/ephemeral preview. `control.batchPatch` gained an optional `committed` boolean (default `false`) for the same reason, rather than a separate batch-commit message.
 
-- `runtime` — the instrumented application publishing schemas and applying mutations/actions;
-- `panel` — a human or machine client controlling the runtime.
+`control.patch` targeting a `trigger` control is now invalid at the application layer: the runtime SDK ignores it with a dev warning instead of routing it to the trigger registry (that routing is now `control.trigger`'s job).
 
-“MCP” and “Rozenite” are not protocol roles. Both behave as clients of the same protocol semantics.
+## Message catalog
 
-## Handshake
+### `handshake.hello`
 
-A client starts with:
+Sent by any client to identify itself and negotiate protocol version. `role` is `"runtime"`, `"panel"`, or `"workspace"`. `token` is required for `panel`- and `workspace`-role clients when the broker was started with a token.
 
 ```json
 {
   "type": "handshake.hello",
   "protocolVersion": "0.3",
-  "role": "panel",
-  "clientId": "runtime-inspector-panel",
-  "clientName": "Runtime Inspector",
-  "token": "optional-transport-token"
+  "role": "runtime",
+  "clientId": "runtime-card-transition",
+  "clientName": "Card Transition Demo"
 }
 ```
 
-On success:
+Fields: `protocolVersion` (must match broker's `RIP_VERSION` or the broker rejects with `VERSION_MISMATCH`), `role`, `clientId` (unique per client), `clientName` (optional, display only), `token` (optional, required for `panel` and `workspace` clients when broker enforces one).
+
+#### Roles
+
+- **`runtime`** — an app instrumenting itself. Publishes `schema.publish`/`schema.dispose`, receives control updates. Never token-checked (see Security).
+- **`panel`** — a controller: the web panel, a CLI, or an AI agent via `client-mcp`. Sends `control.patch`/`control.batchPatch`/`control.trigger`/`control.commit`/`source.apply`, receives schemas, `runtime.status`, and `source.applyResult`.
+- **`workspace`** *(since RFC 0004)* — a client with filesystem access to the project, responsible for applying a tuned value back into source. In `runtime-inspector dev` this is the CLI process itself, connected to its own broker; a future editor extension could be a `workspace` client instead, applying edits through the editor's own undo stack. The broker stays dumb (route, don't interpret): it only forwards `source.apply` to `workspace` clients and `source.applyResult` back to `panel` clients. Authenticates with the session token exactly like `panel`.
+
+### `handshake.accept`
+
+Sent by the broker in response to a valid `handshake.hello`.
 
 ```json
 {
   "type": "handshake.accept",
   "protocolVersion": "0.3",
-  "brokerId": "runtime-inspector",
-  "clientId": "runtime-inspector-panel"
+  "brokerId": "broker-2f6b6f6e-9c3f-4b2a-8f2e-1a2b3c4d5e6f",
+  "clientId": "panel-web-1"
 }
 ```
 
-`brokerId` names the accepting endpoint; direct transports may use an endpoint identity such as `direct-runtime`. It does not imply that every RIP transport contains the WebSocket broker.
+### `schema.publish`
 
-The WebSocket broker requires the CLI-issued session token for panel-role clients. A direct Rozenite bridge does not use the LAN broker/token because DevTools already owns the app↔panel channel.
-
-A protocol-version mismatch is rejected with an `error` message rather than silently accepting incompatible semantics.
-
-## Schema publication
+Sent by a `runtime` client to describe the controls it exposes. Contains a `PanelSchema` with groups of `InspectorControl`s. Supported control kinds: `slider`, `toggle`, `color`, `bezier`, `spring`, `trigger`.
 
 ```json
 {
@@ -83,32 +83,64 @@ A protocol-version mismatch is rejected with an `error` message rather than sile
   "schema": {
     "id": "card-transition",
     "title": "Card Transition",
-    "version": "1",
     "groups": [
       {
         "id": "motion",
         "label": "Motion",
-        "controls": []
+        "controls": [
+          { "id": "scale", "kind": "slider", "label": "Scale", "defaultValue": 1, "min": 0, "max": 2, "step": 0.01 },
+          { "id": "flip", "kind": "toggle", "label": "Flip", "defaultValue": false },
+          { "id": "accentColor", "kind": "color", "label": "Accent Color", "defaultValue": "#3366ff", "format": "hex" }
+        ]
+      },
+      {
+        "id": "easing",
+        "label": "Easing",
+        "controls": [
+          { "id": "curve", "kind": "bezier", "label": "Curve", "defaultValue": [0.42, 0, 1, 1] },
+          { "id": "bounce", "kind": "spring", "label": "Bounce", "defaultValue": { "damping": 10, "stiffness": 100 } }
+        ]
+      },
+      {
+        "id": "actions",
+        "label": "Actions",
+        "controls": [
+          { "id": "replay", "kind": "trigger", "label": "Replay Transition", "binding": "card.replay" }
+        ]
       }
     ]
   }
 }
 ```
 
-A schema contains groups of controls. Supported control kinds are:
+The web panel renders all control kinds defined by the protocol: `slider`, `toggle`, `color`, `bezier` (with curve preview), `spring` (editor with curve preview), and `trigger`.
 
-- `slider`
-- `toggle`
-- `color`
-- `bezier`
-- `spring`
-- `trigger`
+Every non-`trigger` control may carry an optional `source: SourceAnchor` field *(since RFC 0004, additive)*, populated by the runtime SDK when the Babel plugin captured the declaration the control was generated from:
 
-The current Web and Rozenite renderers both support these control kinds. Older documentation that described spring/bezier rendering as a future pass is obsolete.
+```json
+{
+  "id": "moveX",
+  "kind": "slider",
+  "label": "Move X",
+  "defaultValue": 0,
+  "min": -120,
+  "max": 120,
+  "source": {
+    "file": "src/Card.tsx",
+    "line": 42,
+    "column": 8,
+    "enclosure": ["Card"],
+    "name": "moveX",
+    "init": "0"
+  }
+}
+```
 
-Publishing an existing schema id replaces/refreshes that schema for clients. Multiple schemas can be live concurrently.
+`file` is relative to the Babel root/cwd; `line`/`column` are a tiebreaker only, never trusted offsets — re-location always re-parses the current file. `enclosure` is the enclosing function/component chain, outermost first. `init` is the exact source text of the original initializer argument, used as the safety check before overwriting (see `source.apply` below). A control without a `source` field simply has no anchor: panels show no "Apply to code" affordance for it. Panels that predate this field ignore it (tolerant reader).
 
-## Schema disposal
+### `schema.dispose`
+
+Sent by a `runtime` client from `disconnect()` (deliberate teardown: screen unmount, `definePanel` hot-reload replacement) before closing its socket, best-effort.
 
 ```json
 {
@@ -118,66 +150,50 @@ Publishing an existing schema id replaces/refreshes that schema for clients. Mul
 }
 ```
 
-`schema.dispose` is a deliberate lifecycle event: the runtime is saying that schema no longer exists. Clients remove it rather than retaining it as stale.
+On receipt, the broker drops the cached schema for that id and forwards the message to panels, which must remove the schema from their UI. This is distinct from a silent disconnect (see `runtime.status` and Broker rules below), which keeps the cache and marks the schema stale instead.
 
-A transient runtime disconnect is different. The broker/direct transport can report `runtime.status` offline so clients keep the last known schema visible but stale/frozen until it is republished or disposed.
+### `control.patch`
 
-## Live patch
+Sent by a `panel` (or occasionally `runtime`) client to update a single control's value.
 
 ```json
 {
   "type": "control.patch",
   "schemaId": "card-transition",
-  "controlId": "opacity",
-  "value": 0.72,
+  "controlId": "scale",
+  "value": 1.08,
   "source": "panel",
-  "timestamp": 1789387200000
+  "timestamp": 1751500000000
 }
 ```
 
-`control.patch` is for live/preview mutation such as a slider drag. `panel-core` throttles high-frequency outgoing preview updates.
+`value` is untyped at the message-schema level (`unknown`) — its shape is validated against the target control's `kind` at the application layer via `validateControlValue`, not by `ControlPatchSchema`. `source` is one of `"panel" | "runtime" | "preset"`.
 
-The runtime validates the value against the target control before applying it. Invalid values are rejected/ignored with an explicit reason; Runtime Inspector does not silently clamp or coerce them.
+For `slider` controls, validation also enforces the control's declared `min`/`max` bounds: a finite number outside `[min, max]` is invalid, the same as a wrong-shape value. `step` is not enforced here — rounding to a step is a UI concern, not a validity concern.
 
-`control.patch` targeting a `trigger` control is invalid at the application layer. Use `control.trigger`.
+#### Validation entry point
 
-## Commit
+`validateControlValue(control, value): ValidationResult` (exported from `@runtime-inspector/protocol`) is the normative validation entry point — the single source of truth for whether a value is valid for a given control, and *why* it isn't when it's not:
 
-```json
-{
-  "type": "control.commit",
-  "schemaId": "card-transition",
-  "controlId": "opacity",
-  "value": 0.72,
-  "source": "panel",
-  "timestamp": 1789387200100
-}
+```ts
+type ValidationResult =
+  | { ok: true }
+  | { ok: false; code: ValidationErrorCode; message: string };
+
+type ValidationErrorCode =
+  | "WRONG_TYPE"       // wrong primitive/shape for the control's kind (e.g. a string for a toggle, a non-array for bezier)
+  | "OUT_OF_RANGE"      // right shape, but a slider value outside its declared min/max
+  | "MALFORMED_VALUE"   // right general shape but invalid contents (e.g. a bezier tuple of the wrong length, a spring object missing stiffness, or any non-finite number)
+  | "UNKNOWN_KIND";     // the control's `kind` is not a recognized control type
 ```
 
-`control.commit` has the same value shape and validation rules as a patch, but means: **this is the decided/final value**. Typical examples are pointer release, A/B apply, or an agent choosing a value.
+`isValidControlValue(control, value): boolean` and `describeInvalidValue(control, value): string` remain exported as thin conveniences on top of `validateControlValue` — `isValidControlValue` returns just the `ok` boolean, and `describeInvalidValue` returns just the `message` (or a generic "valid value" string when the value is in fact valid). Prefer `validateControlValue` directly wherever the error `code` is useful (e.g. surfacing a specific error to a human or an agent) rather than only a human-readable string.
 
-The runtime applies commits through the same binding path as patches; clients can distinguish preview traffic from final state semantically.
+Since 0.3, a `control.patch` targeting a `trigger` control is invalid at the application layer: the runtime SDK ignores it and logs a dev warning. Use `control.trigger` instead.
 
-## Batch patch
+### `control.trigger`
 
-```json
-{
-  "type": "control.batchPatch",
-  "schemaId": "card-transition",
-  "source": "preset",
-  "committed": true,
-  "patches": [
-    { "controlId": "opacity", "value": 0.72 },
-    { "controlId": "enabled", "value": true }
-  ]
-}
-```
-
-`committed` defaults to preview semantics when omitted/false. `committed: true` marks the batch as a decided value set, as used by A/B/preset application.
-
-Each patch may optionally carry its own `source` and `timestamp`; otherwise the batch-level values apply.
-
-## Trigger/action
+Sent by `panel`-role clients to fire a `trigger` control (family: Command). Has no `value` field — a trigger is a command, not a value update.
 
 ```json
 {
@@ -185,121 +201,201 @@ Each patch may optionally carry its own `source` and `timestamp`; otherwise the 
   "schemaId": "card-transition",
   "controlId": "replay",
   "source": "panel",
-  "timestamp": 1789387200200
+  "timestamp": 1780000000000
 }
 ```
 
-A trigger is a command. It carries no persistent control value and must never be replayed merely because a client reconnects. Typical use: replay an animation.
+The runtime SDK routes it to the `triggerRegistry` binding exactly as `control.patch` on a trigger control used to. Delivery is at-most-once: a trigger lost during reconnect is acceptable, but the broker must never deliver one twice. Never cached or replayed.
 
-## Runtime status and stale schemas
+### `control.commit`
+
+Sent by a `panel` (or occasionally `runtime`/`preset`) client to report *the decided value* of a control — drag release, A/B apply, or an agent's tuning decision — as opposed to an ephemeral drag preview. Same shape and validation as `control.patch`.
+
+```json
+{
+  "type": "control.commit",
+  "schemaId": "card-transition",
+  "controlId": "scale",
+  "value": 1.08,
+  "source": "panel",
+  "timestamp": 1780000000000
+}
+```
+
+The runtime SDK applies it exactly like a `control.patch` (same code path). The preceding throttled drag patches remain `control.patch`; only the flushed/final value is a commit. Not cached — values live in schemas and clients, not in the broker.
+
+### `control.batchPatch`
+
+Multiple patches for the same schema, applied together (e.g. loading a preset or an A/B compare slot). The optional `committed` boolean (default `false`) marks the whole batch as a decided value rather than a preview — batches are already all-or-nothing, so there is no separate batch-commit message.
+
+```json
+{
+  "type": "control.batchPatch",
+  "schemaId": "card-transition",
+  "patches": [
+    { "controlId": "scale", "value": 1.2 },
+    { "controlId": "flip", "value": false }
+  ],
+  "source": "preset",
+  "committed": true
+}
+```
+
+### `runtime.status`
+
+Broadcast by the broker to all `panel` clients when a `runtime` client connects or disconnects.
 
 ```json
 {
   "type": "runtime.status",
-  "online": false,
+  "online": true,
   "clientId": "runtime-card-transition",
   "schemaId": "card-transition"
 }
 ```
 
-Clients use runtime status to distinguish a live schema from a cached/stale schema.
+Since 0.3, a silent runtime disconnect (no preceding `schema.dispose`) does **not** clear the schema cache: the broker broadcasts `runtime.status` with `online: false` (and the schema id, when known) so panels can render the schema **stale** — visible but frozen — instead of disappearing. A late-joining panel is replayed the cached `schema.publish` followed by the current `runtime.status`, so it learns immediately whether the schema it just received is live or stale. This removes the Metro-reload blank-screen defect: the screen stays populated across a reload instead of going empty for its duration.
 
-Current `panel-core` behavior:
+### `error`
 
-- offline schema: remains visible, marked stale, outgoing mutations/actions are blocked;
-- republished schema: becomes live again and controls resume;
-- disposed schema: removed deliberately.
-
-This behavior is shared by the Web and Rozenite clients because it lives in `panel-core` rather than renderer code.
-
-## Errors
+Sent by the broker (or a client) to report a protocol-level failure.
 
 ```json
 {
   "type": "error",
   "code": "VERSION_MISMATCH",
-  "message": "Protocol version mismatch"
+  "message": "Protocol version mismatch: client sent \"0.2\", broker expects \"0.3\"."
 }
 ```
 
-Known transports also use protocol errors for cases such as unauthorized panel connections. Consumers should use the machine-readable `code` and keep the human-readable `message` for diagnostics.
+Known codes today: `INVALID_MESSAGE`, `VERSION_MISMATCH`, `UNAUTHORIZED`.
 
-## Control schemas and value validation
+### `source.apply`
 
-### Slider
+*(Since RFC 0004, additive.)* Sent by a `panel` client to a `workspace` client (family: Command) to write one or more tuned values back into their anchored source declarations. Carries the typed protocol value, not a pre-serialized expression: the workspace owns serialization so the written syntax always matches the target context (see `serializeValueExpression` in `@runtime-inspector/protocol`).
 
 ```json
 {
-  "id": "opacity",
-  "kind": "slider",
-  "label": "Opacity",
-  "defaultValue": 1,
-  "min": 0,
-  "max": 1,
-  "step": 0.01
+  "type": "source.apply",
+  "schemaId": "card-transition",
+  "requests": [
+    {
+      "controlId": "moveX",
+      "kind": "slider",
+      "anchor": {
+        "file": "src/Card.tsx",
+        "line": 42,
+        "column": 8,
+        "enclosure": ["Card"],
+        "name": "moveX",
+        "init": "0"
+      },
+      "value": 42
+    }
+  ]
 }
 ```
 
-Requires a finite numeric value inside `[min, max]`. `step` must be positive when provided.
+`requests` is a non-empty array so a schema-level "Apply all" can be sent as a single command. At-most-once delivery: never cached, never replayed.
 
-### Toggle
+Each request carries `kind: SerializableControlKind` — the control's kind (`slider | toggle | color | bezier | spring`), needed by the workspace to call `serializeValueExpression(kind, value)`. `trigger` is excluded: a trigger has no value expression to write back, and the panel never offers "Apply to code" for one.
 
-Requires a boolean.
+### `source.applyResult`
 
-### Color
+*(Since RFC 0004, additive.)* Sent by a `workspace` client back to `panel` clients (family: Event) with a per-request outcome for a `source.apply`.
 
-Requires a string. `format` may be `hex` or `rgba`; current protocol validation checks the value type rather than normalizing/coercing color syntax.
+```json
+{
+  "type": "source.applyResult",
+  "schemaId": "card-transition",
+  "results": [
+    { "controlId": "moveX", "ok": true, "written": "42", "previous": "0" },
+    { "controlId": "damping", "ok": false, "code": "EXPRESSION_MISMATCH" }
+  ]
+}
+```
 
-### Bezier
+Each result entry is either `{ controlId, ok: true, written, previous }` (the new and prior initializer text, for the panel's notice area and as the CLI's only "undo" story alongside git) or `{ controlId, ok: false, code, message? }`. Never cached, never replayed.
 
-Requires exactly four finite numbers: `[x1, y1, x2, y2]`.
+#### `source.apply` error taxonomy
 
-### Spring
+| Code | Meaning |
+| --- | --- |
+| `PARSE_FAILURE` | current file no longer parses |
+| `DECLARATION_MISSING` | no declaration matches name + enclosure |
+| `DECLARATION_MOVED` | matches exist but none at the recorded line/column when disambiguation was needed |
+| `DECLARATION_AMBIGUOUS` | multiple matches even after the line/column tiebreaker |
+| `EXPRESSION_MISMATCH` | current initializer text differs from the anchor's `init` (manual edit since the schema was published) — never overwrite silently |
+| `WRITE_FAILURE` | filesystem error |
 
-Requires an object with finite `damping` and `stiffness`, plus optional finite `mass`. Optional display ranges may be supplied per field.
+`EXPRESSION_MISMATCH` is the load-bearing guard: the workspace only replaces an expression it can prove is the one the running app was built from. A hot-reload after the edit republishes the schema with a fresh anchor, clearing the mismatch naturally.
 
-### Trigger
+## Broker rules
 
-Has no `defaultValue`/persistent value. It is fired only through `control.trigger`.
+Derived from `packages/transport-ws/src/index.ts`.
 
-Validation returns structured reasons:
+| Message | Forwarded to | Cached | Replayed on panel join |
+| --- | --- | --- | --- |
+| `handshake.hello` | broker only (not forwarded) | no | no |
+| `handshake.accept` | sender only, from broker | no | no |
+| `schema.publish` | opposite role (panel) | yes, keyed by sending runtime's `clientId` | yes, to every panel that completes handshake afterward (+ current `runtime.status` if the publishing runtime is currently disconnected — see stale replay below) |
+| `schema.dispose` | opposite role (panel) | deletes the cache entry | n/a |
+| `control.patch` | opposite role | no | no |
+| `control.batchPatch` | opposite role | no | no |
+| `control.trigger` | opposite role (runtime) | never | never |
+| `control.commit` | opposite role (runtime) | no | no |
+| `runtime.status` | broadcast to all panels, from broker (on runtime connect/disconnect) | no | no |
+| `error` | sender only, from broker | no | no |
+| `source.apply` | `workspace` clients only (from a `panel`) | no | no |
+| `source.applyResult` | `panel` clients only (from a `workspace`) | no | no |
 
-- `WRONG_TYPE`
-- `OUT_OF_RANGE`
-- `MALFORMED_VALUE`
-- `UNKNOWN_KIND`
+**Stale replay:** when a late-joining panel is replayed a cached `schema.publish` whose publishing runtime is currently disconnected, the broker follows it with the current `runtime.status` (`online: false`) so the panel immediately knows to render it stale.
 
-## Wire validation
+Additional broker behavior:
 
-`packages/protocol` exports the Zod schemas and two parsing paths:
+- The schema cache entry for a runtime is deleted **only** by an explicit `schema.dispose` from that runtime, or when a different schema with the same id is republished. A silent disconnect (socket close without a preceding `schema.dispose`) keeps the cache entry — see the `runtime.status` section above.
+- `control.trigger` is never cached or replayed, by design: replaying a command on late-panel-join would re-execute it, which is exactly the taxonomy violation 0.3 fixes.
+- All `runtime`/`panel` messages (everything except `source.apply`/`source.applyResult`) are relayed strictly between clients of the **opposite** role, `runtime` and `panel` only (`forwardToOppositeRole`); a message from a `panel` never reaches another `panel`, a `runtime`, or a `workspace`, and vice versa.
+- `source.apply` and `source.applyResult` are routed explicitly by target role rather than by "opposite role": `source.apply` from a `panel` is forwarded only to `workspace` clients (never to `runtime`), and `source.applyResult` from a `workspace` is forwarded only to `panel` clients. Neither is ever cached or replayed to a late joiner, like `control.trigger`.
+- Unparseable JSON is answered with an `error` (`INVALID_MESSAGE`) and otherwise dropped — it is never forwarded.
 
-- `parseRIPMessage(input)` for already-decoded message objects;
-- `safeParseRIPMessage(data)` for JSON/string wire payloads, returning `undefined` for invalid input.
+## Compatibility policy
 
-`control.commit` is structurally required to contain a `value` field.
+1. **Tolerant reader (MUST).** Clients MUST ignore message types they don't recognize and MUST ignore unknown fields on messages they do recognize. The reference implementation enforces the unknown-fields half of this for free: no schema in `packages/protocol` uses Zod's `.strict()`, so unrecognized fields are stripped, not rejected.
+2. **Additive vs. semantic changes (SHOULD).** Adding a new message type or a new *optional* field to an existing message does not require a version bump. Changing the meaning or requiredness of an existing field is a semantic change and MUST bump `RIP_VERSION`.
+3. **Version checked at handshake only.** `protocolVersion` is validated once, in `handshake.hello`. A mismatch gets an `error` with code `VERSION_MISMATCH` and the broker closes the socket. No other message carries or checks a version.
 
-## Conformance
+## Guarantees
 
-The fixtures under `packages/protocol/fixtures/` are the executable protocol contract. Protocol changes must update:
+- **Ordering:** guaranteed only per-connection (messages from a single client arrive at the broker, and are forwarded, in the order sent). No cross-connection ordering guarantee exists.
+- **Commands are at-most-once.** `control.trigger` may be lost if a client disconnects mid-send during reconnect — that is acceptable. A command must never be delivered twice by the broker.
+- **Drag patches are sacrificable; committed values are not.** Rapid `control.patch` messages during a drag gesture may be coalesced or dropped by any layer (client, broker, runtime) without correctness impact. A final, committed value must always arrive as `control.commit` (or a `control.batchPatch` with `committed: true`), which is never coalesced or dropped.
+- **Slider values MUST respect the declared `min`/`max`.** A `slider` value outside its control's declared bounds is invalid. Receivers (runtime, panel, MCP client) MUST reject an out-of-range value with an explicit error — they MUST NOT silently clamp it into range.
 
-1. an RFC in `rfcs/`;
-2. types/schemas;
-3. conformance fixtures;
-4. this document;
-5. affected runtime/client tests.
+## Security
 
-See [Protocol stability](protocol-stability.md).
+- `panel`- and `workspace`-role clients may be required to present a `token` in `handshake.hello` (set via the broker's `token` option). A missing or mismatched token gets an `error` with code `UNAUTHORIZED` and the socket is closed.
+- `runtime`-role clients are never token-checked. This is by design: Runtime Inspector is a LAN-only dev tool, and requiring runtime-side auth would add friction with no meaningful security benefit in that threat model.
+
+## Clients
+
+Any client may take the `panel` role: the web panel, the Rozenite/DevTools plugin, a CLI, or an AI agent (e.g. via an MCP server). The protocol assumes nothing about who is on the other side; a machine-driven tuning loop (patch → observe → repeat) is a first-class use case.
+
+`packages/client-mcp` proves this thesis: it is a stdio MCP server that connects to the broker as an ordinary `panel`-role client (same handshake as the web panel) and exposes `get_schema`, `set_control_value`, `batch_set`, and `trigger` as MCP tools, so an AI agent can read a runtime's schema and tune it exactly the way a human would from the web panel. Since an agent's tool call is by definition a decided value rather than a preview, `set_control_value` sends `control.commit`, `batch_set` sends `control.batchPatch` with `committed: true`, and `trigger` sends `control.trigger`. `get_schema`'s output also reports per-schema `stale` status; when a schema is stale, the MCP client rejects `set_control_value`, `batch_set`, and `trigger` with an explicit error instead of sending controls to a disconnected runtime.
 
 ## Transport independence
 
-RIP deliberately does not specify how messages move between runtime and client.
+RIP deliberately does not specify how messages move between runtime and client. The broker rules above describe the WebSocket transport; a direct bridge has no broker, so there is no token check, schema cache or `runtime.status` synthesis — the bridge adapter must provide equivalent stale/replay behavior locally.
 
 Current concrete paths:
 
 ```text
 Web panel -> panel-core -> WebSocket broker -> runtime
 MCP       -------------> WebSocket broker -> runtime
+CLI (workspace) <-------- WebSocket broker <- panel (source.apply)
 Rozenite  -> panel-core -> plugin bridge ----> runtime
 ```
+
+Transport-specific lifecycle signals may exist outside RIP, but they must not redefine protocol semantics. The Rozenite `runtime-inspector:ready` generation event is one such transport-local signal; it results in existing RIP stale/re-handshake behavior rather than a new protocol message.
 
 The protocol should remain unchanged when adding a transport unless the product requirement truly cannot be represented by the existing State / Command / Lifecycle model. Transport convenience alone is not grounds for a protocol message.

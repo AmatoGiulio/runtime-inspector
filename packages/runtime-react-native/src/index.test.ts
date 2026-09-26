@@ -1,45 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PanelSchema, SliderControl, ToggleControl } from "@runtime-inspector/protocol";
+import { FakeWebSocket } from "./test-utils";
 
 function toggleValue(schema: PanelSchema): boolean | undefined {
   return (schema.groups[0].controls[0] as ToggleControl).value;
-}
-
-class FakeWebSocket {
-  static OPEN = 1;
-  static CONNECTING = 0;
-  static CLOSED = 3;
-
-  static instances: FakeWebSocket[] = [];
-
-  url: string;
-  readyState = FakeWebSocket.CONNECTING;
-  closeCalls = 0;
-  onopen: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  sent: string[] = [];
-
-  constructor(url: string) {
-    this.url = url;
-    FakeWebSocket.instances.push(this);
-  }
-
-  send(data: string) {
-    this.sent.push(data);
-  }
-
-  close() {
-    this.closeCalls += 1;
-    this.readyState = FakeWebSocket.CLOSED;
-    this.onclose?.();
-  }
-
-  open() {
-    this.readyState = FakeWebSocket.OPEN;
-    this.onopen?.();
-  }
 }
 
 function makeSliderSchema(id: string): PanelSchema {
@@ -452,6 +416,35 @@ describe("protocol 0.3 semantic messages", () => {
     expect(disposeMessages).toEqual([{ type: "schema.dispose", schemaId: "panel-hot-dispose", source: "runtime" }]);
 
     panel2.disconnect();
+  });
+});
+
+describe("socket error handling", () => {
+  it("does not recurse when close() re-emits onerror on an already-closing socket", async () => {
+    class RecursiveCloseWebSocket extends FakeWebSocket {
+      close() {
+        super.close();
+        // Simulate environments (e.g. undici) where close() on a socket
+        // already in an error state re-emits the error event.
+        this.onerror?.();
+      }
+    }
+
+    vi.stubGlobal("WebSocket", RecursiveCloseWebSocket as unknown as typeof WebSocket);
+
+    const { definePanel } = await import("./index");
+
+    const schema = makeSchema("panel-onerror");
+    const panel = definePanel(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+
+    const socket = FakeWebSocket.instances[FakeWebSocket.instances.length - 1] as RecursiveCloseWebSocket;
+    socket.open();
+
+    expect(() => socket.onerror?.()).not.toThrow();
+    expect(socket.closeCalls).toBe(1);
+
+    panel.disconnect();
   });
 });
 

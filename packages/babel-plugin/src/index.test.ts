@@ -1,4 +1,4 @@
-import { transformSync } from "@babel/core";
+import { transformSync, type TransformOptions } from "@babel/core";
 import { describe, expect, it } from "vitest";
 import plugin from "./index";
 
@@ -15,6 +15,19 @@ function transform(code: string, envName: string = "development"): string {
   return result.code;
 }
 
+function transformWithOpts(code: string, opts: Partial<TransformOptions>): string {
+  const result = transformSync(code, {
+    presets: [["@babel/preset-typescript", { isTSX: true, allExtensions: true }]],
+    plugins: [plugin],
+    envName: "development",
+    babelrc: false,
+    configFile: false,
+    ...opts
+  });
+  if (!result?.code) throw new Error("transform produced no output");
+  return result.code;
+}
+
 describe("runtime-inspector babel plugin", () => {
   it("transforms an annotated useSharedValue declaration and adds the auto-import", () => {
     const code = transform(`
@@ -26,7 +39,7 @@ describe("runtime-inspector babel plugin", () => {
     expect(code).toContain('import { __riInspect } from "@runtime-inspector/react-native"');
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      '__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, step: 1, unit: "px", label: "Move X" })'
+      '__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, step: 1, unit: "px", label: "Move X", source: { file: "test.tsx", line: 4, column: 12, enclosure: [], name: "moveX", init: "0" } })'
     );
   });
 
@@ -105,6 +118,92 @@ describe("runtime-inspector babel plugin", () => {
     expect(importLines).toHaveLength(1);
     expect(importLines[0]).toContain("useInspector");
     expect(importLines[0]).toContain("__riInspect");
+  });
+
+  it("embeds a source anchor with file/line/column/name relative to the babel root", () => {
+    const code = transformWithOpts(
+      `
+      import { useSharedValue } from "react-native-reanimated";
+      // @inspect min=-120 max=120
+      const moveX = useSharedValue(0);
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain('file: "src/Card.tsx"');
+    expect(normalized).toMatch(/line: \d+/);
+    expect(normalized).toMatch(/column: \d+/);
+    expect(normalized).toContain('name: "moveX"');
+    expect(normalized).toContain("enclosure: []");
+    expect(normalized).toContain('init: "0"');
+
+    const lineMatch = /line: (\d+)/.exec(normalized);
+    const columnMatch = /column: (\d+)/.exec(normalized);
+    expect(lineMatch?.[1]).toBe("4");
+    expect(columnMatch?.[1]).toBe("12");
+  });
+
+  it("captures the enclosure chain for a nested named component", () => {
+    const code = transformWithOpts(
+      `
+      import { useSharedValue } from "react-native-reanimated";
+      function Outer() {
+        const Inner = () => {
+          // @inspect min=0 max=10
+          const value = useSharedValue(0);
+          return value;
+        };
+        return Inner;
+      }
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain('enclosure: ["Outer", "Inner"]');
+  });
+
+  it("keeps the init text faithful to the original source for non-trivial initializers", () => {
+    const objectInitCode = transformWithOpts(
+      `
+      import { useSharedValue } from "react-native-reanimated";
+      // @inspect min=0 max=1
+      const spring = useSharedValue({ damping: 14, stiffness: 180 });
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+    expect(objectInitCode.replace(/\s+/g, " ")).toContain(
+      'init: "{ damping: 14, stiffness: 180 }"'
+    );
+
+    const negativeInitCode = transformWithOpts(
+      `
+      import { useSharedValue } from "react-native-reanimated";
+      // @inspect min=-200 max=200
+      const offset = useSharedValue(-120);
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+    expect(negativeInitCode).toContain('init: "-120"');
+  });
+
+  it("omits the source field entirely when no filename is available", () => {
+    const code = transformWithOpts(
+      `
+      import { useSharedValue } from "react-native-reanimated";
+      // @inspect min=-120 max=120
+      const moveX = useSharedValue(0);
+    `,
+      { filename: undefined }
+    );
+
+    expect(code).toContain("__riInspect");
+    expect(code).not.toContain("source:");
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      '__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, label: "moveX" })'
+    );
   });
 });
 

@@ -4,6 +4,7 @@ import type {
   InspectorControl,
   PanelSchema,
   SliderControl,
+  SourceAnchor,
   SpringControl,
   ToggleControl,
   TriggerControl
@@ -36,6 +37,10 @@ export interface InspectMeta {
   step?: number;
   unit?: string;
   label?: string;
+  /** Structural source-declaration anchor emitted by the babel plugin (RFC 0004). Forwarded
+   * as-is onto the published control's `source` field; not validated here (the schema's Zod
+   * validates on publish). */
+  source?: SourceAnchor;
 }
 
 /** Registration mode: "replace" (lifecycle-less, e.g. __riInspect) overwrites its own prior
@@ -285,6 +290,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
   const label = meta.label ?? deriveLabel(name);
   const value = sharedValue.value;
   const kind = inferKindFromValue(value);
+  const sourceField = meta.source !== undefined ? { source: meta.source } : {};
 
   if (!kind) {
     warnDev(
@@ -311,6 +317,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
         max: meta.max,
         ...(meta.step !== undefined ? { step: meta.step } : {}),
         ...(meta.unit !== undefined ? { unit: meta.unit } : {}),
+        ...sourceField,
         binding
       });
       return control;
@@ -320,6 +327,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
         id: name,
         label,
         defaultValue: value as boolean,
+        ...sourceField,
         binding
       });
       return control;
@@ -329,6 +337,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
         id: name,
         label,
         defaultValue: value as string,
+        ...sourceField,
         binding
       });
       return control;
@@ -338,6 +347,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
         id: name,
         label,
         defaultValue: value as never,
+        ...sourceField,
         binding
       });
       return control;
@@ -347,6 +357,7 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
         id: name,
         label,
         defaultValue: value as never,
+        ...sourceField,
         binding
       });
       return control;

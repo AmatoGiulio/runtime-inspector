@@ -1,15 +1,31 @@
 import type { ConfigAPI, NodePath, PluginObj, PluginPass } from "@babel/core";
 import type * as BabelTypesNamespace from "@babel/types";
 import type {
+  CallExpression,
   CommentBlock,
   CommentLine,
   Node,
   VariableDeclarator
 } from "@babel/types";
+import { relative, sep } from "node:path";
 import { parseDirectiveComment, type ParsedDirective } from "./directive";
 
 const HELPER_NAME = "__riInspect";
 const SOURCE_MODULE = "@runtime-inspector/react-native";
+
+/**
+ * Structural anchor for a captured declaration (RFC 0004, Part 1). Carried in
+ * the emitted meta as `source` so a later "Apply to code" pass can re-locate
+ * the declaration without trusting stale line numbers.
+ */
+interface SourceAnchor {
+  file: string;
+  line: number;
+  column: number;
+  enclosure: string[];
+  name: string;
+  init: string;
+}
 
 /**
  * The Babel plugin entry function receives the classic API object, which
@@ -66,11 +82,18 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         if (directive.unit !== undefined) metaProps.push(["unit", directive.unit]);
         metaProps.push(["label", label]);
 
-        const metaObject = t.objectExpression(
-          metaProps.map(([key, value]) =>
-            t.objectProperty(t.identifier(key), literalFor(t, value))
-          )
+        const metaProperties = metaProps.map(([key, value]) =>
+          t.objectProperty(t.identifier(key), literalFor(t, value))
         );
+
+        const anchor = buildSourceAnchor(path, state, name, init);
+        if (anchor) {
+          metaProperties.push(
+            t.objectProperty(t.identifier("source"), sourceAnchorToObjectExpression(t, anchor))
+          );
+        }
+
+        const metaObject = t.objectExpression(metaProperties);
 
         const call = t.callExpression(t.identifier(HELPER_NAME), [
           init,
@@ -98,6 +121,85 @@ function isUseSharedValueCallee(callee: Node): boolean {
 function literalFor(t: BabelAPI["types"], value: unknown) {
   if (typeof value === "number") return t.numericLiteral(value);
   return t.stringLiteral(String(value));
+}
+
+/**
+ * Builds the `source` anchor for a captured `useSharedValue` declaration
+ * (RFC 0004, Part 1). Returns `undefined` whenever any required piece of
+ * information (filename, root/cwd, loc, or the first call argument) is
+ * unavailable - a partial anchor is never emitted.
+ */
+function buildSourceAnchor(
+  path: NodePath<VariableDeclarator>,
+  state: PluginPass,
+  name: string,
+  init: CallExpression
+): SourceAnchor | undefined {
+  const filename = state.filename ?? state.file.opts.filename ?? undefined;
+  if (!filename) return undefined;
+
+  const root = state.file.opts.root ?? state.file.opts.cwd ?? undefined;
+  if (!root) return undefined;
+
+  const loc = path.node.loc;
+  if (!loc) return undefined;
+
+  const firstArg = init.arguments[0];
+  if (!firstArg || firstArg.start == null || firstArg.end == null) return undefined;
+
+  const code = state.file.code;
+  const initText = code.slice(firstArg.start, firstArg.end);
+
+  const file = relative(root, filename).split(sep).join("/");
+
+  return {
+    file,
+    line: loc.start.line,
+    column: loc.start.column,
+    enclosure: collectEnclosure(path),
+    name,
+    init: initText
+  };
+}
+
+/**
+ * Walks the ancestor chain from the declaration outward, collecting the
+ * names of enclosing named functions/components: `FunctionDeclaration`s with
+ * an `id`, and `FunctionExpression`/`ArrowFunctionExpression`s assigned to a
+ * named `VariableDeclarator`. Anonymous functions are skipped entirely (no
+ * placeholder is invented). Returned outermost-first.
+ */
+function collectEnclosure(path: NodePath<VariableDeclarator>): string[] {
+  const names: string[] = [];
+  let current: NodePath | null = path.parentPath;
+
+  while (current) {
+    if (current.isFunctionDeclaration() && current.node.id?.name) {
+      names.push(current.node.id.name);
+    } else if (current.isFunctionExpression() || current.isArrowFunctionExpression()) {
+      const parent = current.parentPath;
+      if (parent && parent.isVariableDeclarator() && parent.node.id.type === "Identifier") {
+        names.push(parent.node.id.name);
+      }
+    }
+    current = current.parentPath;
+  }
+
+  return names.reverse();
+}
+
+function sourceAnchorToObjectExpression(t: BabelAPI["types"], anchor: SourceAnchor) {
+  return t.objectExpression([
+    t.objectProperty(t.identifier("file"), t.stringLiteral(anchor.file)),
+    t.objectProperty(t.identifier("line"), t.numericLiteral(anchor.line)),
+    t.objectProperty(t.identifier("column"), t.numericLiteral(anchor.column)),
+    t.objectProperty(
+      t.identifier("enclosure"),
+      t.arrayExpression(anchor.enclosure.map((entry) => t.stringLiteral(entry)))
+    ),
+    t.objectProperty(t.identifier("name"), t.stringLiteral(anchor.name)),
+    t.objectProperty(t.identifier("init"), t.stringLiteral(anchor.init))
+  ]);
 }
 
 /**

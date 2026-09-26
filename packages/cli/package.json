@@ -2,24 +2,40 @@
   "name": "@runtime-inspector/cli",
   "version": "0.1.0",
   "description": "Runtime Inspector command line tools.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
     "runtime-inspector": "./dist/index.js"
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
     "dev": "tsx src/index.ts dev",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@babel/parser": "^7.26.0",
+    "@runtime-inspector/protocol": "workspace:*",
     "@runtime-inspector/transport-ws": "workspace:*",
     "execa": "^9.5.2",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/qrcode-terminal": "^0.12.2",
-    "tsup": "^8.3.5"
+    "@types/ws": "^8.5.13",
+    "tsup": "^8.3.5",
+    "vitest": "^4.1.9"
   }
 }

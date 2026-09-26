@@ -4,7 +4,8 @@ export const RIP_VERSION = "0.3";
 
 export type RuntimeRole = "runtime";
 export type PanelRole = "panel";
-export type RIPRole = RuntimeRole | PanelRole;
+export type WorkspaceRole = "workspace";
+export type RIPRole = RuntimeRole | PanelRole | WorkspaceRole;
 
 export interface HandshakeHello {
   type: "handshake.hello";
@@ -22,6 +23,31 @@ export interface HandshakeAccept {
   clientId: string;
 }
 
+/**
+ * Structural identity of the source declaration a control was captured from:
+ * file path + enclosing function/component chain + variable name. Line/column
+ * are carried only as a tiebreaker when the same name appears twice in the
+ * same scope chain — re-location always re-parses the current file content,
+ * it never trusts recorded offsets. See rfcs/0004-source-anchors-write-back.md.
+ */
+export interface SourceAnchor {
+  file: string;
+  line: number;
+  column: number;
+  enclosure: string[];
+  name: string;
+  init: string;
+}
+
+export const SourceAnchorSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().int().min(1),
+  column: z.number().int().min(0),
+  enclosure: z.array(z.string()),
+  name: z.string().min(1),
+  init: z.string()
+});
+
 export interface BaseControl<TKind extends string, TValue> {
   id: string;
   kind: TKind;
@@ -30,6 +56,7 @@ export interface BaseControl<TKind extends string, TValue> {
   defaultValue: TValue;
   value?: TValue;
   binding?: string;
+  source?: SourceAnchor;
 }
 
 export interface SliderControl extends BaseControl<"slider", number> {
@@ -82,6 +109,8 @@ export type InspectorControl =
   | TriggerControl;
 
 export type ValueControl = Exclude<InspectorControl, TriggerControl>;
+
+export type ControlKind = InspectorControl["kind"];
 
 export function isValueControl(control: InspectorControl): control is ValueControl {
   return control.kind !== "trigger";
@@ -143,6 +172,44 @@ export interface SchemaDispose {
   source?: "runtime";
 }
 
+/**
+ * Control kinds that carry a value expression and can be serialized by
+ * `serializeValueExpression`. Excludes `trigger`, which has no value to
+ * write back into source.
+ */
+export type SerializableControlKind = Exclude<ControlKind, "trigger">;
+
+export interface SourceApplyRequest {
+  controlId: string;
+  kind: SerializableControlKind;
+  anchor: SourceAnchor;
+  value: unknown;
+}
+
+export interface SourceApply {
+  type: "source.apply";
+  schemaId: string;
+  requests: SourceApplyRequest[];
+}
+
+export type SourceApplyErrorCode =
+  | "PARSE_FAILURE"
+  | "DECLARATION_MISSING"
+  | "DECLARATION_MOVED"
+  | "DECLARATION_AMBIGUOUS"
+  | "EXPRESSION_MISMATCH"
+  | "WRITE_FAILURE";
+
+export type SourceApplyResultEntry =
+  | { controlId: string; ok: true; written: string; previous: string }
+  | { controlId: string; ok: false; code: SourceApplyErrorCode; message?: string };
+
+export interface SourceApplyResult {
+  type: "source.applyResult";
+  schemaId: string;
+  results: SourceApplyResultEntry[];
+}
+
 export interface PresetExport {
   schemaId: string;
   schemaVersion?: string;
@@ -179,10 +246,12 @@ export type RIPMessage =
   | ControlTrigger
   | ControlCommit
   | SchemaDispose
+  | SourceApply
+  | SourceApplyResult
   | RuntimeStatusMessage
   | ErrorMessage;
 
-const roleSchema = z.union([z.literal("runtime"), z.literal("panel")]);
+const roleSchema = z.union([z.literal("runtime"), z.literal("panel"), z.literal("workspace")]);
 
 export const HandshakeHelloSchema = z.object({
   type: z.literal("handshake.hello"),
@@ -204,7 +273,8 @@ const baseControlSchema = {
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().optional(),
-  binding: z.string().optional()
+  binding: z.string().optional(),
+  source: SourceAnchorSchema.optional()
 };
 
 const finiteNumberSchema = z.number().finite();
@@ -352,6 +422,57 @@ export const SchemaDisposeSchema = z.object({
   source: z.literal("runtime").optional()
 });
 
+const serializableControlKindSchema = z.union([
+  z.literal("slider"),
+  z.literal("toggle"),
+  z.literal("color"),
+  z.literal("bezier"),
+  z.literal("spring")
+]);
+
+export const SourceApplyRequestSchema = z.object({
+  controlId: z.string().min(1),
+  kind: serializableControlKindSchema,
+  anchor: SourceAnchorSchema,
+  value: z.unknown()
+});
+
+export const SourceApplySchema = z.object({
+  type: z.literal("source.apply"),
+  schemaId: z.string().min(1),
+  requests: z.array(SourceApplyRequestSchema).min(1)
+});
+
+const sourceApplyErrorCodeSchema = z.union([
+  z.literal("PARSE_FAILURE"),
+  z.literal("DECLARATION_MISSING"),
+  z.literal("DECLARATION_MOVED"),
+  z.literal("DECLARATION_AMBIGUOUS"),
+  z.literal("EXPRESSION_MISMATCH"),
+  z.literal("WRITE_FAILURE")
+]);
+
+export const SourceApplyResultEntrySchema = z.union([
+  z.object({
+    controlId: z.string().min(1),
+    ok: z.literal(true),
+    written: z.string(),
+    previous: z.string()
+  }),
+  z.object({
+    controlId: z.string().min(1),
+    ok: z.literal(false),
+    code: sourceApplyErrorCodeSchema,
+    message: z.string().optional()
+  })
+]);
+
+export const SourceApplyResultSchema = z.object({
+  type: z.literal("source.applyResult"),
+  schemaId: z.string().min(1),
+  results: z.array(SourceApplyResultEntrySchema)
+});
+
 export const PresetExportSchema = z.object({
   schemaId: z.string().min(1),
   schemaVersion: z.string().optional(),
@@ -388,6 +509,8 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   ControlTriggerSchema,
   ControlCommitSchema,
   SchemaDisposeSchema,
+  SourceApplySchema,
+  SourceApplyResultSchema,
   RuntimeStatusMessageSchema,
   ErrorMessageSchema
 ]);
@@ -573,4 +696,75 @@ export function createCommit(
     source: "panel",
     timestamp: Date.now()
   };
+}
+
+/**
+ * Builds a minimal synthetic control of the given kind, permissive enough
+ * (unbounded slider range) that `validateControlValue` only enforces the
+ * value's *shape* for that kind — range/preset constraints are a property
+ * of a real control declaration, which this helper does not have.
+ */
+function syntheticControlForKind(kind: Exclude<ControlKind, "trigger">): InspectorControl {
+  switch (kind) {
+    case "slider":
+      return { id: "__serialize__", kind: "slider", label: "__serialize__", defaultValue: 0, min: -Infinity, max: Infinity };
+    case "toggle":
+      return { id: "__serialize__", kind: "toggle", label: "__serialize__", defaultValue: false };
+    case "color":
+      return { id: "__serialize__", kind: "color", label: "__serialize__", defaultValue: "" };
+    case "bezier":
+      return { id: "__serialize__", kind: "bezier", label: "__serialize__", defaultValue: [0, 0, 1, 1] };
+    case "spring":
+      return {
+        id: "__serialize__",
+        kind: "spring",
+        label: "__serialize__",
+        defaultValue: { damping: 0, stiffness: 0 }
+      };
+    default: {
+      const exhaustive: never = kind;
+      throw new Error(`serializeValueExpression: unknown control kind "${exhaustive}"`);
+    }
+  }
+}
+
+/**
+ * Serializes a control's typed value to the TypeScript source expression a
+ * workspace client (or copy-as-code) would splice into a file. Pure and
+ * value-shape-driven: no session logic. Validates the value against the
+ * kind's shape (via `validateControlValue`) before serializing, and throws
+ * a descriptive error for a trigger kind or an invalid value.
+ */
+export function serializeValueExpression(kind: ControlKind, value: unknown): string {
+  if (kind === "trigger") {
+    throw new Error('serializeValueExpression: "trigger" controls have no value expression to serialize');
+  }
+
+  const control = syntheticControlForKind(kind);
+  const validation = validateControlValue(control, value);
+  if (!validation.ok) {
+    throw new Error(`serializeValueExpression: cannot serialize value for kind "${kind}": ${validation.message}`);
+  }
+
+  switch (kind) {
+    case "slider":
+      return String(value as number);
+    case "toggle":
+      return (value as boolean) ? "true" : "false";
+    case "color":
+      return `"${value as string}"`;
+    case "bezier": {
+      const tuple = value as CubicBezier;
+      return `[${tuple.map((part) => String(part)).join(", ")}]`;
+    }
+    case "spring": {
+      const spring = value as SpringValue;
+      const massPart = spring.mass !== undefined ? `, mass: ${spring.mass}` : "";
+      return `{ damping: ${spring.damping}, stiffness: ${spring.stiffness}${massPart} }`;
+    }
+    default: {
+      const exhaustive: never = kind;
+      throw new Error(`serializeValueExpression: unknown control kind "${exhaustive}"`);
+    }
+  }
 }

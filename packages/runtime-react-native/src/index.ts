@@ -454,6 +454,12 @@ function connectRuntime(session: Session) {
   };
 
   socket.onerror = () => {
+    if (
+      socket.readyState === WebSocket.CLOSING ||
+      socket.readyState === WebSocket.CLOSED
+    ) {
+      return;
+    }
     // Closing a failed connection can synchronously emit another error.
     socket.onerror = null;
     socket.close();
