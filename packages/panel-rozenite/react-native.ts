@@ -14,7 +14,10 @@ type GlobalBridgeState = {
 const STATE_KEY = "__RUNTIME_INSPECTOR_ROZENITE_BRIDGE__";
 
 if (isDev()) {
-  void initialize();
+  initialize().catch(() => {
+    // Rozenite is not enabled for this Metro session. DevTools stays optional:
+    // the WebSocket broker transport keeps working without it.
+  });
 }
 
 async function initialize() {
