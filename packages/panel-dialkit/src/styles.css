@@ -1,0 +1,218 @@
+@import "dialkit/styles.css";
+
+/*
+ * Runtime Inspector additions to DialKit's inline panel. Everything here reads
+ * DialKit's own --dial-* tokens so light/dark/system theming stays DialKit's.
+ */
+
+.ri-panel .dialkit-panel[data-mode="inline"] {
+  width: 100%;
+  max-width: none;
+}
+
+.ri-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--dial-text-tertiary);
+}
+.ri-panel-notice {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dial-text-secondary);
+}
+.ri-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  text-transform: capitalize;
+}
+.ri-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dial-text-tertiary);
+}
+.ri-status-connected .ri-status-dot {
+  background: #4ade80;
+}
+.ri-status-stale .ri-status-dot,
+.ri-status-connecting .ri-status-dot {
+  background: #fbbf24;
+}
+.ri-status-disconnected .ri-status-dot,
+.ri-status-rejected .ri-status-dot {
+  background: #f87171;
+}
+
+.ri-panel-empty {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--dial-radius);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dial-text-tertiary);
+  background: var(--dial-surface-subtle);
+}
+.ri-panel-empty strong {
+  font-weight: 500;
+  color: var(--dial-text-label);
+}
+
+.ri-schema {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dial-row-gap);
+}
+.ri-stale-banner {
+  padding: 8px 12px;
+  border-radius: var(--dial-radius);
+  font-size: 12px;
+  color: var(--dial-text-secondary);
+  background: var(--dial-surface-subtle);
+  box-shadow: inset 2px 0 0 #fbbf24;
+}
+
+.dialkit-toolbar-add svg {
+  stroke: currentColor;
+}
+.dialkit-toolbar-add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ri-dial-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.ri-dial-editor {
+  flex: 1;
+  min-width: 0;
+}
+.ri-dial-gesture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dial-row-gap);
+}
+
+/* Per-control write-back, revealed on hover like DialKit's own affordances. */
+.ri-dial-apply {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: var(--dial-row-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--dial-radius);
+  color: var(--dial-text-tertiary);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.ri-dial-apply svg {
+  width: 14px;
+  height: 14px;
+}
+.ri-dial-control:hover .ri-dial-apply,
+.ri-dial-apply:focus-visible {
+  opacity: 1;
+}
+.ri-dial-apply:hover {
+  color: var(--dial-text-primary);
+  background: var(--dial-surface-hover);
+}
+/* Keep every row in a schema the same width when only some rows can write back. */
+.ri-schema[data-writeback] .ri-dial-control:not(:has(> .ri-dial-apply))::after {
+  content: "";
+  flex: none;
+  width: 24px;
+}
+@media (hover: none) {
+  .ri-dial-apply {
+    opacity: 1;
+  }
+}
+
+/* DialKit's value editor clamps and rounds; exact entry goes through RIP validation instead. */
+.ri-dial-control .dialkit-slider-value {
+  pointer-events: none;
+}
+.ri-dial-exact {
+  width: 100%;
+  height: var(--dial-row-height);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--dial-border-hover);
+  border-radius: var(--dial-radius);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dial-text-primary);
+  background: var(--dial-surface);
+  outline: none;
+}
+.ri-dial-exact:focus {
+  border-color: var(--dial-focus-ring);
+}
+
+.ri-dial-frozen {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  height: var(--dial-row-height);
+  padding: 0 12px;
+  border-radius: var(--dial-radius);
+  font-size: 13px;
+  color: var(--dial-text-tertiary);
+  background: var(--dial-surface-subtle);
+}
+.ri-dial-frozen output {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ri-compare-actions {
+  display: flex;
+  gap: 4px;
+}
+.ri-compare-slot .dialkit-button {
+  flex: none;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.dialkit-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dialkit-button:disabled:hover {
+  color: var(--dial-text-secondary);
+  background: var(--dial-surface);
+}
+
+.ri-code {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 240px;
+  overflow: auto;
+  border-radius: var(--dial-radius);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--dial-text-secondary);
+  background: var(--dial-surface-subtle);
+}

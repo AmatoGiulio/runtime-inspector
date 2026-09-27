@@ -1,0 +1,26 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": false,
+    "composite": false,
+    "incremental": false,
+    "noEmitOnError": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "verbatimModuleSyntax": false,
+    "module": "CommonJS",
+    "moduleResolution": "node10",
+    "customConditions": null,
+    "rootDir": "..",
+    "outDir": "../dist/react-native/cjs"
+  },
+  "files": [
+    "../react-native.ts"
+  ],
+  "include": [
+    "../*.d.ts",
+    "../src/**/*.d.ts"
+  ]
+}

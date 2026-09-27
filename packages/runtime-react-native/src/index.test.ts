@@ -68,6 +68,30 @@ afterEach(() => {
 });
 
 describe("multi-schema sessions", () => {
+  it("closes a failed socket once even if close emits another error, then reconnects", async () => {
+    vi.useFakeTimers();
+    const { definePanel } = await import("./index");
+    const panel = definePanel(makeSchema("panel-error"), { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+    const socket = FakeWebSocket.instances.at(-1)!;
+    const close = vi.spyOn(socket, "close").mockImplementation(() => {
+      // Some implementations emit error before updating readyState on close.
+      socket.onerror?.();
+      socket.readyState = FakeWebSocket.CLOSED;
+      socket.onclose?.();
+    });
+
+    expect(() => socket.onerror?.()).not.toThrow();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    panel.disconnect();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
   it("routes control patches to the right schema and binding", async () => {
     const { definePanel, applyControlPatch, bindValue } = await import("./index");
 
@@ -449,6 +473,64 @@ describe("discovery diagnostics", () => {
 
     panel.disconnect();
     warnSpy.mockRestore();
+  });
+
+  it("warns once per process across schemas and never per connection attempt", async () => {
+    vi.useFakeTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { definePanel } = await import("./index");
+    const panels = [definePanel(makeSchema("quiet-a")), definePanel(makeSchema("quiet-b"))];
+    panels.forEach((panel) => panel.connect());
+
+    for (let i = 0; i < 12; i++) {
+      for (const socket of FakeWebSocket.instances.filter((s) => s.readyState !== FakeWebSocket.CLOSED)) {
+        socket.readyState = FakeWebSocket.CLOSED;
+        socket.onclose?.();
+      }
+      vi.advanceTimersByTime(20_000);
+    }
+
+    const messages = warnSpy.mock.calls.map((call) => String(call[0]));
+    expect(messages.filter((m) => m.includes("Could not reach a Runtime Inspector broker"))).toHaveLength(1);
+    expect(messages.filter((m) => m.includes("Connecting to"))).toHaveLength(0);
+
+    panels.forEach((panel) => panel.disconnect());
+    warnSpy.mockRestore();
+  });
+
+  it("backs off discovery after two failed cycles and caps the delay", async () => {
+    vi.useFakeTimers();
+    const { definePanel } = await import("./index");
+    const panel = definePanel(makeSchema("backoff"), { brokerUrl: "ws://127.0.0.1:4577" });
+    panel.connect();
+
+    function failLatest() {
+      const socket = FakeWebSocket.instances.at(-1)!;
+      socket.readyState = FakeWebSocket.CLOSED;
+      socket.onclose?.();
+    }
+    function reconnectsWithin(ms: number) {
+      const before = FakeWebSocket.instances.length;
+      vi.advanceTimersByTime(ms);
+      return FakeWebSocket.instances.length > before;
+    }
+
+    failLatest();
+    expect(reconnectsWithin(250)).toBe(true); // first cycle: fast
+    failLatest();
+    expect(reconnectsWithin(999)).toBe(false); // backoff begins at 1s
+    expect(reconnectsWithin(1)).toBe(true);
+    failLatest();
+    expect(reconnectsWithin(1999)).toBe(false); // then 2s
+    expect(reconnectsWithin(1)).toBe(true);
+    for (let i = 0; i < 6; i++) {
+      failLatest();
+      vi.advanceTimersByTime(10_000);
+    }
+    failLatest();
+    expect(reconnectsWithin(10_000)).toBe(true); // capped at 10s
+
+    panel.disconnect();
   });
 
   it("warns once when discovery resolves only a tunnel url", async () => {

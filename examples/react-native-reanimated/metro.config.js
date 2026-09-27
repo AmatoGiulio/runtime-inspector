@@ -1,4 +1,5 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const { withRozenite } = require("@rozenite/metro");
 const path = require("path");
 
 const config = getDefaultConfig(__dirname);
@@ -26,4 +27,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return resolve(context, moduleName, platform);
 };
 
-module.exports = config;
+module.exports = withRozenite(config, {
+  enabled: process.env.WITH_ROZENITE === "true",
+  include: ["@runtime-inspector/panel-rozenite"]
+});

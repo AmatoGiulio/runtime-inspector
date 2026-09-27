@@ -17,7 +17,7 @@ Runtime Inspector is split into small workspace packages.
 
 The protocol is the stable core. Everything else is a replaceable client or transport:
 
-- The WebSocket broker is an implementation detail, not part of the contract. A future client may ride an existing bridge instead (e.g. a Rozenite plugin inside React Native DevTools over CDP).
+- The WebSocket broker is an implementation detail, not part of the contract. The Rozenite client already uses a direct plugin bridge inside React Native DevTools; its automated bridge/session tests do not imply physical-device validation.
 - The broker does not care who sends patches. A panel, a CLI, or an AI agent (e.g. via MCP) are all just `panel`-role clients. Nothing in the protocol assumes a human is on the other side.
 
 ## Message flow
@@ -75,3 +75,7 @@ Discovery reads `scriptURL` from whichever source the runtime exposes, in cascad
 | Release builds | `__DEV__` is false | SDK is a no-op — `definePanel` returns inert `connect`/`disconnect` |
 
 When every candidate in a cycle fails to connect, the SDK also warns once per session with the full candidate list, so a broken broker connection is never silent.
+
+## Shared browser controls
+
+The web and Rozenite renderers share `packages/panel-dialkit`, a controlled DialKit adapter. It owns presentation only; all client semantics remain in `panel-core`. See [DialKit rendering](dialkit.md).

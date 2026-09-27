@@ -12,6 +12,7 @@ import {
   type CubicBezier,
   type InspectorControl,
   type PanelSchema,
+  type RIPMessage,
   type SliderControl,
   type SpringControl,
   type SpringValue,
@@ -36,11 +37,26 @@ export interface SharedValueLike<T> {
   value: T;
 }
 
+export interface RuntimeInspectorProtocolSink {
+  send(message: RIPMessage): void;
+}
+
+export interface RuntimeInspectorProtocolClient {
+  receive(message: RIPMessage): void;
+  dispose(): void;
+}
+
 type BindingTarget = SharedValueLike<unknown> | ((value: unknown) => void);
 type TriggerHandler = () => void;
 
+type DirectProtocolClient = {
+  sink: RuntimeInspectorProtocolSink;
+  accepted: boolean;
+};
+
 const bindingRegistry = new Map<string, BindingTarget>();
 const triggerRegistry = new Map<string, TriggerHandler>();
+const directProtocolClients = new Set<DirectProtocolClient>();
 
 interface Session {
   schema: PanelSchema;
@@ -52,9 +68,14 @@ interface Session {
   lockedUrl: string | undefined;
   warnedTunnel: boolean;
   warnedFullCycle: boolean;
+  active: boolean;
+  /** Candidate list length from the last connect attempt, for discovery backoff. */
+  candidateCount: number;
 }
 
 const sessions = new Map<string, Session>();
+const MAX_DISCOVERY_DELAY_MS = 10_000;
+let warnedUnreachable = false;
 
 function getScriptUrl(): Array<string | undefined> {
   let fromNativeModules: string | undefined;
@@ -158,7 +179,9 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
     candidateIndex: 0,
     lockedUrl: undefined,
     warnedTunnel: false,
-    warnedFullCycle: false
+    warnedFullCycle: false,
+    candidateCount: 1,
+    active: false
   };
   sessions.set(schema.id, session);
 
@@ -262,6 +285,55 @@ export function applyBatchPatch(batch: BatchPatch) {
   }
 }
 
+/**
+ * Attach a transport-local Runtime Inspector client (for example Rozenite).
+ * The client exchanges normal RIP messages with the runtime and therefore
+ * does not need its own schema/value/control implementation.
+ */
+export function attachRuntimeInspectorProtocolClient(
+  sink: RuntimeInspectorProtocolSink
+): RuntimeInspectorProtocolClient {
+  const client: DirectProtocolClient = { sink, accepted: false };
+  directProtocolClients.add(client);
+  let disposed = false;
+
+  return {
+    receive(message) {
+      if (disposed) return;
+
+      if (message.type === "handshake.hello") {
+        if (message.role !== "panel") return;
+        if (message.protocolVersion !== RIP_VERSION) {
+          sink.send({
+            type: "error",
+            code: "VERSION_MISMATCH",
+            message: `Protocol version mismatch: client sent "${message.protocolVersion}", runtime expects "${RIP_VERSION}".`
+          });
+          return;
+        }
+
+        client.accepted = true;
+        sink.send({
+          type: "handshake.accept",
+          protocolVersion: RIP_VERSION,
+          brokerId: "direct-runtime",
+          clientId: message.clientId
+        });
+        replayActiveSchemas(sink);
+        return;
+      }
+
+      if (!client.accepted) return;
+      dispatchRuntimeMessage(message);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      directProtocolClients.delete(client);
+    }
+  };
+}
+
 export type { CubicBezier, PanelSchema, SpringValue };
 
 export { useInspector, buildInspector, deriveLabel, inferKindFromValue } from "./use-inspector";
@@ -292,6 +364,17 @@ function connectRuntime(session: Session) {
     sessions.set(session.schema.id, session);
   }
 
+  if (!session.active) {
+    session.active = true;
+    broadcastDirect({ type: "schema.publish", schema: session.schema });
+    broadcastDirect({
+      type: "runtime.status",
+      online: true,
+      clientId: session.options.clientId ?? `runtime-${session.schema.id}`,
+      schemaId: session.schema.id
+    });
+  }
+
   if (
     session.socket?.readyState === WebSocket.OPEN ||
     session.socket?.readyState === WebSocket.CONNECTING
@@ -309,8 +392,9 @@ function connectRuntime(session: Session) {
         platform: getPlatformOs(),
         defaultPort: 4577
       });
+  const hasDirectClient = directProtocolClients.size > 0;
 
-  if (tunnelUrl && !scriptUrl && !session.warnedTunnel) {
+  if (tunnelUrl && !scriptUrl && !session.warnedTunnel && !hasDirectClient) {
     session.warnedTunnel = true;
     warnDev(
       `Dev server is behind a tunnel (${tunnelUrl}). A tunnel cannot reach a local broker - use LAN mode or set EXPO_PUBLIC_RI_BROKER_URL.`
@@ -324,18 +408,17 @@ function connectRuntime(session: Session) {
     session.candidateIndex % candidates.length === 0
   ) {
     session.warnedFullCycle = true;
-    warnDev(
-      `Could not reach a Runtime Inspector broker at: ${candidates.join(", ")}. Is \`runtime-inspector dev\` running? Set EXPO_PUBLIC_RI_BROKER_URL or pass brokerUrl to override.`
-    );
+    // One diagnostic per process, not per schema: every session walks the same candidates.
+    if (!hasDirectClient && !warnedUnreachable) {
+      warnedUnreachable = true;
+      warnDev(
+        `Could not reach a Runtime Inspector broker at: ${candidates.join(", ")}. Is \`runtime-inspector dev\` running? Set EXPO_PUBLIC_RI_BROKER_URL or pass brokerUrl to override. (Discovery: scriptUrl=${scriptUrl ?? "undefined"} tunnelUrl=${tunnelUrl ?? "undefined"} platform=${getPlatformOs() ?? "undefined"}.) Retrying quietly in the background.`
+      );
+    }
   }
 
   const brokerUrl = session.lockedUrl ?? candidates[session.candidateIndex % candidates.length];
-  if (session.candidateIndex === 0 && !session.lockedUrl) {
-    warnDev(
-      `Discovery: scriptUrl=${scriptUrl ?? "undefined"} tunnelUrl=${tunnelUrl ?? "undefined"} platform=${getPlatformOs() ?? "undefined"} candidates=${candidates.join(", ")}`
-    );
-  }
-  warnDev(`Connecting to ${brokerUrl}`);
+  session.candidateCount = candidates.length;
   const clientId = options.clientId ?? `runtime-${schema.id}`;
   const socket = new WebSocket(brokerUrl);
   session.socket = socket;
@@ -359,19 +442,7 @@ function connectRuntime(session: Session) {
   socket.onmessage = (event) => {
     const message = parseRuntimeMessage(event.data);
     if (!message) return;
-
-    if (message.type === "control.patch") {
-      applyControlPatch(message);
-    }
-    if (message.type === "control.batchPatch") {
-      applyBatchPatch(message);
-    }
-    if (message.type === "control.trigger") {
-      applyControlTrigger(message);
-    }
-    if (message.type === "control.commit") {
-      applyControlCommit(message);
-    }
+    dispatchRuntimeMessage(message);
   };
 
   socket.onclose = () => {
@@ -389,6 +460,8 @@ function connectRuntime(session: Session) {
     ) {
       return;
     }
+    // Closing a failed connection can synchronously emit another error.
+    socket.onerror = null;
     socket.close();
   };
 }
@@ -401,17 +474,56 @@ function parseRuntimeMessage(data: unknown) {
   return message;
 }
 
+function dispatchRuntimeMessage(message: RIPMessage) {
+  if (message.type === "control.patch") {
+    applyControlPatch(message);
+  }
+  if (message.type === "control.batchPatch") {
+    applyBatchPatch(message);
+  }
+  if (message.type === "control.trigger") {
+    applyControlTrigger(message);
+  }
+  if (message.type === "control.commit") {
+    applyControlCommit(message);
+  }
+}
+
+function replayActiveSchemas(sink: RuntimeInspectorProtocolSink) {
+  for (const session of sessions.values()) {
+    if (!session.active) continue;
+    sink.send({ type: "schema.publish", schema: session.schema });
+    sink.send({
+      type: "runtime.status",
+      online: true,
+      clientId: session.options.clientId ?? `runtime-${session.schema.id}`,
+      schemaId: session.schema.id
+    });
+  }
+}
+
+function broadcastDirect(message: RIPMessage) {
+  for (const client of directProtocolClients) {
+    if (client.accepted) {
+      client.sink.send(message);
+    }
+  }
+}
+
 function sendSchemaDispose(session: Session) {
+  const message: RIPMessage = {
+    type: "schema.dispose",
+    schemaId: session.schema.id,
+    source: "runtime"
+  };
+  if (session.active) {
+    broadcastDirect(message);
+  }
+
   const socket = session.socket;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   try {
-    socket.send(
-      JSON.stringify({
-        type: "schema.dispose",
-        schemaId: session.schema.id,
-        source: "runtime"
-      })
-    );
+    socket.send(JSON.stringify(message));
   } catch {
     // best-effort: disposal is not guaranteed delivery
   }
@@ -424,6 +536,7 @@ function disconnectRuntime(session: Session) {
     session.reconnectTimer = undefined;
   }
   sendSchemaDispose(session);
+  session.active = false;
   session.socket?.close();
   session.socket = undefined;
   session.candidateIndex = 0;
@@ -438,6 +551,7 @@ function teardownSession(session: Session) {
     session.reconnectTimer = undefined;
   }
   sendSchemaDispose(session);
+  session.active = false;
   session.socket?.close();
   session.socket = undefined;
   unregisterSession(session);
@@ -455,12 +569,24 @@ function scheduleReconnect(session: Session) {
   const { options } = session;
   const delay = session.lockedUrl
     ? options.reconnectDelayMs ?? 1000
-    : Math.min(options.reconnectDelayMs ?? 1000, 250);
+    : discoveryDelay(session, options.reconnectDelayMs ?? 1000);
 
   session.reconnectTimer = setTimeout(() => {
     session.reconnectTimer = undefined;
     connectRuntime(session);
   }, delay);
+}
+
+/**
+ * Discovery walks the candidates quickly twice, then backs off (1s, 2s, 4s... capped
+ * at 10s) so an app used only through a direct transport such as Rozenite does not
+ * churn failed sockets forever. The first successful open locks the url again.
+ */
+function discoveryDelay(session: Session, reconnectDelayMs: number): number {
+  const fast = Math.min(reconnectDelayMs, 250);
+  const cycles = Math.floor(session.candidateIndex / Math.max(session.candidateCount, 1));
+  if (cycles < 2) return fast;
+  return Math.max(fast, Math.min(1000 * 2 ** (cycles - 2), MAX_DISCOVERY_DELAY_MS));
 }
 
 function findControl(schema: PanelSchema, controlId: string): InspectorControl | undefined {

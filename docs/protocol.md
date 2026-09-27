@@ -1,6 +1,6 @@
 # Runtime Inspector Protocol (RIP)
 
-The Runtime Inspector Protocol is a set of transport-independent JSON messages exchanged between a `runtime` client (an app instrumenting itself), a `panel` client (a human or machine controller), and — since RFC 0004 — a `workspace` client (a filesystem-capable client that writes tuned values back into source), all relayed by a broker. The current transport is a local WebSocket. Current version: **0.3**.
+The Runtime Inspector Protocol is a set of transport-independent JSON messages exchanged between a `runtime` client (an app instrumenting itself), a `panel` client (a human or machine controller), and — since RFC 0004 — a `workspace` client (a filesystem-capable client that writes tuned values back into source), relayed by a broker or carried directly by a transport bridge. Current transports are the local WebSocket broker (Web panel, MCP client, CLI workspace) and the Rozenite / React Native DevTools plugin bridge (`@runtime-inspector/panel-rozenite`); see [Transport independence](#transport-independence). Current version: **0.3**.
 
 ## Message taxonomy
 
@@ -379,6 +379,23 @@ Additional broker behavior:
 
 ## Clients
 
-Any client may take the `panel` role: the web panel, a future Rozenite/DevTools plugin, a CLI, or an AI agent (e.g. via an MCP server). The protocol assumes nothing about who is on the other side; a machine-driven tuning loop (patch → observe → repeat) is a first-class use case.
+Any client may take the `panel` role: the web panel, the Rozenite/DevTools plugin, a CLI, or an AI agent (e.g. via an MCP server). The protocol assumes nothing about who is on the other side; a machine-driven tuning loop (patch → observe → repeat) is a first-class use case.
 
 `packages/client-mcp` proves this thesis: it is a stdio MCP server that connects to the broker as an ordinary `panel`-role client (same handshake as the web panel) and exposes `get_schema`, `set_control_value`, `batch_set`, and `trigger` as MCP tools, so an AI agent can read a runtime's schema and tune it exactly the way a human would from the web panel. Since an agent's tool call is by definition a decided value rather than a preview, `set_control_value` sends `control.commit`, `batch_set` sends `control.batchPatch` with `committed: true`, and `trigger` sends `control.trigger`. `get_schema`'s output also reports per-schema `stale` status; when a schema is stale, the MCP client rejects `set_control_value`, `batch_set`, and `trigger` with an explicit error instead of sending controls to a disconnected runtime.
+
+## Transport independence
+
+RIP deliberately does not specify how messages move between runtime and client. The broker rules above describe the WebSocket transport; a direct bridge has no broker, so there is no token check, schema cache or `runtime.status` synthesis — the bridge adapter must provide equivalent stale/replay behavior locally.
+
+Current concrete paths:
+
+```text
+Web panel -> panel-core -> WebSocket broker -> runtime
+MCP       -------------> WebSocket broker -> runtime
+CLI (workspace) <-------- WebSocket broker <- panel (source.apply)
+Rozenite  -> panel-core -> plugin bridge ----> runtime
+```
+
+Transport-specific lifecycle signals may exist outside RIP, but they must not redefine protocol semantics. The Rozenite `runtime-inspector:ready` generation event is one such transport-local signal; it results in existing RIP stale/re-handshake behavior rather than a new protocol message.
+
+The protocol should remain unchanged when adding a transport unless the product requirement truly cannot be represented by the existing State / Command / Lifecycle model. Transport convenience alone is not grounds for a protocol message.

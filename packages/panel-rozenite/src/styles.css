@@ -1,0 +1,34 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #1a1a1a;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  body {
+    background: #f4f4f4;
+    color-scheme: light;
+  }
+}
+
+.ri-shell {
+  width: 100%;
+  max-width: 440px;
+  padding: 12px;
+}
+
+.ri-connecting {
+  padding: 12px;
+  font: 12px system-ui, -apple-system, sans-serif;
+  color: rgba(127, 127, 127, 0.9);
+}
