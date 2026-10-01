@@ -1,6 +1,6 @@
 # RFC 0005 — Runtime Workbench: recording, probes and motion timeline
 
-- Status: proposed; M0 vertical spike implemented on `feat/runtime-workbench-m0`, pending macOS runtime/performance validation
+- Status: proposed; M0 validated on macOS 2026-10-01; M3a live iOS Simulator viewport spike implemented on `feat/runtime-workbench-ios-viewport`
 - Author: Giulio Amato / architect session, 2026-10-01
 - Base: `rozenite-client`
 - Affects: `protocol` (additive), `runtime-react-native`, `panel-core`, `transport-ws`, `cli`, new desktop Workbench client, docs
