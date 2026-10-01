@@ -3,7 +3,6 @@ import {
   BrowserWindow,
   desktopCapturer,
   ipcMain,
-  nativeImage,
   session,
   systemPreferences
 } from "electron";
@@ -12,11 +11,11 @@ import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 import {
-  captureIOSSimulatorFrame,
   ensureIOSSimulatorBooted,
   listIOSSimulators
 } from "./simulator.mjs";
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
+import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -28,8 +27,8 @@ let viteServer;
 let selectedCaptureSourceId;
 let selectedCaptureWindowId;
 let selectedSimulator;
-let framebufferSession;
 const simulatorInput = new SimulatorInputHelper();
+const simulatorFramebuffer = new SimulatorFramebufferHelper();
 
 app.setName("Runtime Inspector");
 
@@ -56,7 +55,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
-  stopFramebufferSession();
+  await stopFramebufferSession();
   simulatorInput.dispose();
   if (viteServer) {
     try {
@@ -153,23 +152,46 @@ function registerDesktopIpc() {
       };
     }
 
-    stopFramebufferSession();
+    await stopFramebufferSession();
 
-    const token = {};
     const sender = event.sender;
-    framebufferSession = { token, sender, udid: selectedSimulator.udid };
-    void pumpSimulatorFramebuffer(token, sender, selectedSimulator.udid);
+    await simulatorFramebuffer.start({
+      udid: selectedSimulator.udid,
+      fps: 60,
+      width: 640,
+      quality: 0.72,
+      onFrame: (frame) => {
+        if (sender.isDestroyed()) return;
+        sender.send("runtime-desktop:simulator-framebuffer-frame", {
+          sequence: frame.sequence,
+          timestamp: frame.timestamp,
+          width: frame.width,
+          height: frame.height,
+          mimeType: frame.mimeType,
+          bytes: Uint8Array.from(frame.bytes).buffer
+        });
+      },
+      onError: (error) => {
+        if (sender.isDestroyed()) return;
+        sender.send("runtime-desktop:simulator-framebuffer-error", {
+          message:
+            error instanceof Error
+              ? error.message
+              : "The persistent Simulator framebuffer helper failed."
+        });
+      }
+    });
 
     return {
       device: selectedSimulator,
-      mode: "simctl-screenshot-poll",
-      targetFrameRate: 15,
+      mode: "iosurface-mjpeg",
+      targetFrameRate: 60,
       input
     };
   });
 
   ipcMain.handle("runtime-desktop:stop-simulator-framebuffer", async () => {
-    stopFramebufferSession();
+    await stopFramebufferSession();
     return true;
   });
 
@@ -241,50 +263,8 @@ function registerDesktopIpc() {
   });
 }
 
-function stopFramebufferSession() {
-  framebufferSession = undefined;
-}
-
-async function pumpSimulatorFramebuffer(token, sender, udid) {
-  const targetIntervalMs = 1000 / 15;
-  let sequence = 0;
-
-  while (framebufferSession?.token === token && !sender.isDestroyed()) {
-    const startedAt = Date.now();
-
-    try {
-      const frame = await captureIOSSimulatorFrame(udid, "jpeg");
-      if (framebufferSession?.token !== token || sender.isDestroyed()) break;
-
-      const image = nativeImage.createFromBuffer(frame);
-      const size = image.getSize();
-      const bytes = Uint8Array.from(frame).buffer;
-
-      sender.send("runtime-desktop:simulator-framebuffer-frame", {
-        sequence,
-        timestamp: Date.now(),
-        width: size.width,
-        height: size.height,
-        mimeType: "image/jpeg",
-        bytes
-      });
-      sequence += 1;
-    } catch (error) {
-      if (framebufferSession?.token !== token || sender.isDestroyed()) break;
-      sender.send("runtime-desktop:simulator-framebuffer-error", {
-        message:
-          error instanceof Error ? error.message : "Could not capture the Simulator framebuffer."
-      });
-      stopFramebufferSession();
-      break;
-    }
-
-    const elapsed = Date.now() - startedAt;
-    const delay = Math.max(0, targetIntervalMs - elapsed);
-    if (delay > 0) {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
+async function stopFramebufferSession() {
+  await simulatorFramebuffer.stop();
 }
 
 function registerDisplayCaptureHandler() {
