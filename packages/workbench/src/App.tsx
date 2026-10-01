@@ -64,6 +64,7 @@ function App() {
   const [desktopBusy, setDesktopBusy] = useState(false);
   const [inputReady, setInputReady] = useState(false);
   const [framebufferHasFrame, setFramebufferHasFrame] = useState(false);
+  const [framebufferFrameSource, setFramebufferFrameSource] = useState<string>();
   const [viewportBenchmarkBusy, setViewportBenchmarkBusy] = useState(false);
   const [viewportBenchmarkResult, setViewportBenchmarkResult] =
     useState<ViewportBenchmarkResult>();
@@ -223,6 +224,12 @@ function App() {
       );
     });
 
+    const unsubscribeStatus = desktop.onSimulatorFramebufferStatus((status) => {
+      if (status.frameSource) {
+        setFramebufferFrameSource(status.frameSource);
+      }
+    });
+
     const unsubscribeError = desktop.onSimulatorFramebufferError((error) => {
       setRuntimeCaptureError(error.message);
     });
@@ -231,6 +238,7 @@ function App() {
       disposed = true;
       pendingFrame = undefined;
       unsubscribeFrame();
+      unsubscribeStatus();
       unsubscribeError();
     };
   }, []);
@@ -489,6 +497,7 @@ function App() {
           latencyMs: []
         };
         setFramebufferHasFrame(false);
+        setFramebufferFrameSource(undefined);
         setRuntimeCapture({
           label: `${prepared.device.name} · ${prepared.device.runtime}`,
           source: "framebuffer"
@@ -567,6 +576,7 @@ function App() {
     const canvas = framebufferCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     setFramebufferHasFrame(false);
+    setFramebufferFrameSource(undefined);
     framebufferBootstrapRef.current = undefined;
     framebufferTimesRef.current = [];
     framebufferLatencyRef.current = [];
@@ -692,7 +702,7 @@ function App() {
               {runtimeCapture ? (
                 <span className="capture-status">
                   <span className="capture-status-dot" />
-                  {captureSummary(runtimeCapture)}
+                  {captureSummary(runtimeCapture, framebufferFrameSource)}
                 </span>
               ) : window.runtimeDesktop ? (
                 <span className="stage-note">Desktop adapter · iOS Simulator</span>
@@ -967,7 +977,7 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
   );
 }
 
-function captureSummary(capture: RuntimeCaptureInfo) {
+function captureSummary(capture: RuntimeCaptureInfo, frameSource?: string) {
   const size =
     capture.width && capture.height ? `${capture.width}×${capture.height}` : undefined;
   const fps = capture.frameRate ? `${capture.frameRate.toFixed(0)} fps` : undefined;
@@ -977,7 +987,14 @@ function captureSummary(capture: RuntimeCaptureInfo) {
     capture.encodeMs !== undefined ? `enc ${capture.encodeMs.toFixed(1)}` : undefined;
   const decode =
     capture.decodeMs !== undefined ? `dec ${capture.decodeMs.toFixed(1)}` : undefined;
-  const source = capture.source === "framebuffer" ? "direct framebuffer" : undefined;
+  const source =
+    capture.source === "framebuffer"
+      ? frameSource === "simscreen-callbacks"
+        ? "SimScreen callbacks"
+        : frameSource === "seed-polling"
+          ? "seed polling"
+          : "direct framebuffer"
+      : undefined;
   return [size, fps, latency, encode, decode, source].filter(Boolean).join(" · ") || "attached";
 }
 
