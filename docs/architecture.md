@@ -11,6 +11,7 @@ Runtime Inspector is split into small workspace packages.
 - `packages/transport-ws`: local broker that routes messages between runtime and panel.
 - `packages/cli`: developer command that starts broker and panel.
 - `packages/client-mcp`: MCP server that lets an AI agent tune a running app through the broker as a panel-role client.
+- `packages/workbench`: RFC 0005 Workbench shell. M0 renders explicit runtime probe recordings; simulator/emulator capture is intentionally deferred until the trace path passes performance validation.
 - `examples/react-native-reanimated`: minimal Expo/Reanimated loop.
 
 ## Design stance
