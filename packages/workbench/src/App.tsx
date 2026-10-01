@@ -34,6 +34,24 @@ interface RuntimeCaptureInfo {
   displaySurface?: string;
 }
 
+interface ViewportBenchmarkSamples {
+  active: boolean;
+  frameTimes: number[];
+  encodeMs: number[];
+  decodeMs: number[];
+  latencyMs: number[];
+}
+
+interface ViewportBenchmarkResult {
+  frames: number;
+  durationMs: number;
+  frameRate: number;
+  frameIntervalP95Ms: number;
+  encodeP95Ms: number;
+  decodeP95Ms: number;
+  latencyP95Ms: number;
+}
+
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const traceEntries = Object.entries(state.traceSchemas);
@@ -46,6 +64,9 @@ function App() {
   const [desktopBusy, setDesktopBusy] = useState(false);
   const [inputReady, setInputReady] = useState(false);
   const [framebufferHasFrame, setFramebufferHasFrame] = useState(false);
+  const [viewportBenchmarkBusy, setViewportBenchmarkBusy] = useState(false);
+  const [viewportBenchmarkResult, setViewportBenchmarkResult] =
+    useState<ViewportBenchmarkResult>();
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
   const framebufferCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -55,6 +76,14 @@ function App() {
   const framebufferEncodeRef = useRef<number[]>([]);
   const framebufferDecodeRef = useRef<number[]>([]);
   const framebufferStatsUpdateRef = useRef(0);
+  const viewportBenchmarkRef = useRef<ViewportBenchmarkSamples>({
+    active: false,
+    frameTimes: [],
+    encodeMs: [],
+    decodeMs: [],
+    latencyMs: []
+  });
+  const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!schemaId && traceEntries[0]) {
@@ -129,10 +158,13 @@ function App() {
 
           const decodeMs = performance.now() - decodeStartedAt;
           pushRolling(framebufferDecodeRef.current, decodeMs);
-          pushRolling(
-            framebufferLatencyRef.current,
-            Math.max(0, Date.now() - frame.capturedAtMs)
-          );
+          const latencyMs = Math.max(0, Date.now() - frame.capturedAtMs);
+          pushRolling(framebufferLatencyRef.current, latencyMs);
+
+          if (viewportBenchmarkRef.current.active) {
+            viewportBenchmarkRef.current.decodeMs.push(decodeMs);
+            viewportBenchmarkRef.current.latencyMs.push(latencyMs);
+          }
         }
       } catch (error) {
         if (!disposed) {
@@ -155,7 +187,13 @@ function App() {
       const times = framebufferTimesRef.current;
       times.push(frame.capturedAtMs);
       if (times.length > 60) times.shift();
-      pushRolling(framebufferEncodeRef.current, frame.encodeDurationUs / 1000);
+      const encodeMs = frame.encodeDurationUs / 1000;
+      pushRolling(framebufferEncodeRef.current, encodeMs);
+
+      if (viewportBenchmarkRef.current.active) {
+        viewportBenchmarkRef.current.frameTimes.push(frame.capturedAtMs);
+        viewportBenchmarkRef.current.encodeMs.push(encodeMs);
+      }
 
       const now = performance.now();
       const shouldUpdateStats =
@@ -287,6 +325,10 @@ function App() {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
       runtimeStreamRef.current = undefined;
       void window.runtimeDesktop?.stopSimulatorFramebuffer();
+      if (viewportBenchmarkTimerRef.current) {
+        clearTimeout(viewportBenchmarkTimerRef.current);
+      }
+      viewportBenchmarkRef.current.active = false;
       framebufferCanvasRef.current
         ?.getContext("2d")
         ?.clearRect(
@@ -334,6 +376,84 @@ function App() {
     }
   }
 
+  function runViewportBenchmark() {
+    if (
+      !schemaId ||
+      runtimeCapture?.source !== "framebuffer" ||
+      viewportBenchmarkBusy
+    ) {
+      return;
+    }
+
+    const schema = state.schemas.find((item) => item.id === schemaId);
+    const benchmarkControl = schema?.groups
+      .flatMap((group) => group.controls)
+      .find(
+        (control) =>
+          control.kind === "trigger" &&
+          (control.id.toLowerCase().includes("benchmarkviewport") ||
+            control.id.toLowerCase().includes("benchmark") ||
+            control.binding?.toLowerCase().includes("benchmark"))
+      );
+
+    if (!benchmarkControl) {
+      setRuntimeCaptureError(
+        "This runtime does not expose the deterministic viewport benchmark trigger."
+      );
+      return;
+    }
+
+    setRuntimeCaptureError(undefined);
+    setViewportBenchmarkResult(undefined);
+    setViewportBenchmarkBusy(true);
+    viewportBenchmarkRef.current = {
+      active: true,
+      frameTimes: [],
+      encodeMs: [],
+      decodeMs: [],
+      latencyMs: []
+    };
+
+    session.fireTrigger(schemaId, benchmarkControl.id);
+
+    viewportBenchmarkTimerRef.current = setTimeout(() => {
+      const samples = viewportBenchmarkRef.current;
+      samples.active = false;
+      viewportBenchmarkTimerRef.current = undefined;
+
+      const times = samples.frameTimes;
+      const durationMs =
+        times.length > 1 ? times[times.length - 1] - times[0] : 0;
+      const frameIntervals = times
+        .slice(1)
+        .map((time, index) => time - times[index])
+        .filter((value) => value > 0);
+
+      setViewportBenchmarkBusy(false);
+
+      if (
+        times.length < 2 ||
+        durationMs <= 0 ||
+        samples.encodeMs.length === 0
+      ) {
+        setRuntimeCaptureError(
+          "Viewport benchmark did not receive enough live framebuffer samples."
+        );
+        return;
+      }
+
+      setViewportBenchmarkResult({
+        frames: times.length,
+        durationMs,
+        frameRate: ((times.length - 1) * 1000) / durationMs,
+        frameIntervalP95Ms: percentile(frameIntervals, 0.95),
+        encodeP95Ms: percentile(samples.encodeMs, 0.95),
+        decodeP95Ms: percentile(samples.decodeMs, 0.95),
+        latencyP95Ms: percentile(samples.latencyMs, 0.95)
+      });
+    }, 3600);
+  }
+
   async function attachRuntimeCapture() {
     const desktop = window.runtimeDesktop;
     setRuntimeCaptureError(undefined);
@@ -353,6 +473,14 @@ function App() {
         framebufferEncodeRef.current = [];
         framebufferDecodeRef.current = [];
         framebufferStatsUpdateRef.current = 0;
+        setViewportBenchmarkResult(undefined);
+        viewportBenchmarkRef.current = {
+          active: false,
+          frameTimes: [],
+          encodeMs: [],
+          decodeMs: [],
+          latencyMs: []
+        };
         setFramebufferHasFrame(false);
         setRuntimeCapture({
           label: `${prepared.device.name} · ${prepared.device.runtime}`,
@@ -438,6 +566,13 @@ function App() {
     framebufferEncodeRef.current = [];
     framebufferDecodeRef.current = [];
     framebufferStatsUpdateRef.current = 0;
+    if (viewportBenchmarkTimerRef.current) {
+      clearTimeout(viewportBenchmarkTimerRef.current);
+      viewportBenchmarkTimerRef.current = undefined;
+    }
+    viewportBenchmarkRef.current.active = false;
+    setViewportBenchmarkBusy(false);
+    setViewportBenchmarkResult(undefined);
     setRuntimeCapture(undefined);
     setRuntimeCaptureError(undefined);
     setInputReady(false);
@@ -710,15 +845,28 @@ function App() {
           </button>
           <button
             className="tool-button"
+            onClick={runViewportBenchmark}
+            disabled={
+              !schemaId ||
+              runtimeCapture?.source !== "framebuffer" ||
+              viewportBenchmarkBusy
+            }
+          >
+            {viewportBenchmarkBusy ? "Benchmarking…" : "Benchmark viewport"}
+          </button>
+          <button
+            className="tool-button"
             onClick={() => session.clearRecording()}
             disabled={isRecording || !recording}
           >
             Clear
           </button>
           <div className="timeline-meta">
-            {recording
-              ? `${recording.samples.length} samples · ${recording.sampleRateHz} Hz${recording.incomplete ? " · gap" : ""}`
-              : "No recording"}
+            {viewportBenchmarkResult
+              ? benchmarkSummary(viewportBenchmarkResult)
+              : recording
+                ? `${recording.samples.length} samples · ${recording.sampleRateHz} Hz${recording.incomplete ? " · gap" : ""}`
+                : "No recording"}
           </div>
         </div>
 
@@ -834,6 +982,29 @@ function pushRolling(values: number[], value: number, max = 60) {
 function average(values: number[]) {
   if (values.length === 0) return undefined;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+
+function percentile(values: number[], percentileValue: number) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = percentileValue * (sorted.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const fraction = index - lower;
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction;
+}
+
+function benchmarkSummary(result: ViewportBenchmarkResult) {
+  return [
+    `Bench ${result.frameRate.toFixed(1)} fps`,
+    `frame p95 ${result.frameIntervalP95Ms.toFixed(1)} ms`,
+    `enc p95 ${result.encodeP95Ms.toFixed(1)}`,
+    `dec p95 ${result.decodeP95Ms.toFixed(1)}`,
+    `lat p95 ${result.latencyP95Ms.toFixed(0)}`,
+    `${result.frames} frames`
+  ].join(" · ");
 }
 
 function measuredHz(samples: Array<{ t: number; value: number }>) {
