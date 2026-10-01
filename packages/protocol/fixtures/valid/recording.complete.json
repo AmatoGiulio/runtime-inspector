@@ -1,0 +1,8 @@
+{
+  "type": "recording.complete",
+  "recordingId": "rec-1",
+  "schemaId": "card-transition",
+  "durationMs": 1000,
+  "sampleCount": 60,
+  "complete": true
+}
