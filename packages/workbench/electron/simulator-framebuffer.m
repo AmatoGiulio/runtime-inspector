@@ -441,6 +441,120 @@ static IOSurfaceRef RICreateBenchmarkSurface(size_t width, size_t height) {
   return surface;
 }
 
+static NSData *RICopyScaledRGBAFromSurface(
+  IOSurfaceRef surface,
+  size_t targetWidth,
+  uint32_t *targetHeightOut
+) {
+  if (!surface) return nil;
+  if (IOSurfaceLock(surface, kIOSurfaceLockReadOnly, NULL) != kIOReturnSuccess) return nil;
+
+  const size_t sourceWidth = IOSurfaceGetWidth(surface);
+  const size_t sourceHeight = IOSurfaceGetHeight(surface);
+  const size_t sourceBytesPerRow = IOSurfaceGetBytesPerRow(surface);
+  void *baseAddress = IOSurfaceGetBaseAddress(surface);
+
+  if (!baseAddress || sourceWidth == 0 || sourceHeight == 0) {
+    IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+    return nil;
+  }
+
+  if (targetWidth == 0 || targetWidth > sourceWidth) targetWidth = sourceWidth;
+  const size_t targetHeight = (size_t)llround(
+    ((double)sourceHeight / (double)sourceWidth) * (double)targetWidth
+  );
+
+  CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+  CGDataProviderRef provider = CGDataProviderCreateWithData(
+    NULL,
+    baseAddress,
+    sourceBytesPerRow * sourceHeight,
+    NULL
+  );
+  CGImageRef source = CGImageCreate(
+    sourceWidth,
+    sourceHeight,
+    8,
+    32,
+    sourceBytesPerRow,
+    colorSpace,
+    kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst,
+    provider,
+    NULL,
+    false,
+    kCGRenderingIntentDefault
+  );
+
+  const size_t bytesPerRow = targetWidth * 4;
+  NSMutableData *data = [NSMutableData dataWithLength:bytesPerRow * targetHeight];
+  CGContextRef context = CGBitmapContextCreate(
+    [data mutableBytes],
+    targetWidth,
+    targetHeight,
+    8,
+    bytesPerRow,
+    colorSpace,
+    kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast
+  );
+
+  if (source && context) {
+    CGContextSetInterpolationQuality(context, kCGInterpolationMedium);
+    CGContextDrawImage(context, CGRectMake(0, 0, targetWidth, targetHeight), source);
+  } else {
+    [data setLength:0];
+  }
+
+  if (context) CGContextRelease(context);
+  if (source) CGImageRelease(source);
+  if (provider) CGDataProviderRelease(provider);
+  CGColorSpaceRelease(colorSpace);
+  IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
+
+  if ([data length] == 0) return nil;
+  if (targetHeightOut) *targetHeightOut = (uint32_t)targetHeight;
+  return data;
+}
+
+static NSData *RICopyJPEGDecodedRGBA(
+  NSData *jpeg,
+  size_t targetWidth,
+  size_t targetHeight
+) {
+  if (!jpeg || targetWidth == 0 || targetHeight == 0) return nil;
+
+  CGImageSourceRef source = CGImageSourceCreateWithData((CFDataRef)jpeg, NULL);
+  if (!source) return nil;
+
+  CGImageRef image = CGImageSourceCreateImageAtIndex(source, 0, NULL);
+  CFRelease(source);
+  if (!image) return nil;
+
+  CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+  const size_t bytesPerRow = targetWidth * 4;
+  NSMutableData *data = [NSMutableData dataWithLength:bytesPerRow * targetHeight];
+  CGContextRef context = CGBitmapContextCreate(
+    [data mutableBytes],
+    targetWidth,
+    targetHeight,
+    8,
+    bytesPerRow,
+    colorSpace,
+    kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast
+  );
+
+  if (context) {
+    CGContextSetInterpolationQuality(context, kCGInterpolationMedium);
+    CGContextDrawImage(context, CGRectMake(0, 0, targetWidth, targetHeight), image);
+  } else {
+    [data setLength:0];
+  }
+
+  if (context) CGContextRelease(context);
+  CGColorSpaceRelease(colorSpace);
+  CGImageRelease(image);
+  return [data length] > 0 ? data : nil;
+}
+
 static double RIPSNRRGB(NSData *reference, NSData *candidate) {
   if (!reference || !candidate || [reference length] != [candidate length]) return 0;
 
