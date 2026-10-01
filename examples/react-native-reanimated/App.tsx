@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -15,6 +15,8 @@ export default function App() {
   const cardRadius = useSharedValue(28);
   const glow = useRuntimeValue("glow", 10, { min: 0, max: 48, label: "Glow" });
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [inputPressed, setInputPressed] = useState(false);
+  const [inputTapCount, setInputTapCount] = useState(0);
 
   function schedulePreview() {
     if (previewTimer.current) {
@@ -132,6 +134,19 @@ export default function App() {
           </Text>
         </Animated.View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        onPressIn={() => setInputPressed(true)}
+        onPressOut={() => setInputPressed(false)}
+        onPress={() => setInputTapCount((count) => count + 1)}
+        style={[styles.inputTest, inputPressed && styles.inputTestPressed]}
+      >
+        <Text style={styles.inputTestLabel}>
+          {inputPressed ? "PRESSED" : `TAP TEST · ${inputTapCount}`}
+        </Text>
+        <Text style={styles.inputTestHint}>Use the embedded Runtime viewport</Text>
+      </Pressable>
     </View>
   );
 }
@@ -200,5 +215,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
     marginTop: 12
+  },
+  inputTest: {
+    alignItems: "center",
+    backgroundColor: "#24272f",
+    borderColor: "#4a4f5b",
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 28,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    width: "100%"
+  },
+  inputTestPressed: {
+    opacity: 0.55,
+    transform: [{ scale: 0.98 }]
+  },
+  inputTestLabel: {
+    color: "#f5f7fb",
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: 0.4
+  },
+  inputTestHint: {
+    color: "#8f98a8",
+    fontSize: 11,
+    marginTop: 4
   }
 });
