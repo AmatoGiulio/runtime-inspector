@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   desktopCapturer,
   ipcMain,
+  nativeImage,
   session,
   systemPreferences
 } from "electron";
@@ -11,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 import {
+  captureIOSSimulatorFrame,
   ensureIOSSimulatorBooted,
   listIOSSimulators
 } from "./simulator.mjs";
@@ -155,6 +157,34 @@ function registerDesktopIpc() {
     await stopFramebufferSession();
 
     const sender = event.sender;
+
+    // CoreSimulator may publish the live IOSurface lazily until the display has
+    // produced its first present. Prime that path once and use the exact
+    // framebuffer snapshot as the immediate bootstrap frame so the Workbench
+    // never waits on an external click in Simulator.app.
+    try {
+      const bootstrap = await captureIOSSimulatorFrame(selectedSimulator.udid, "jpeg");
+      const bootstrapImage = nativeImage.createFromBuffer(bootstrap);
+      const bootstrapSize = bootstrapImage.getSize();
+
+      if (!bootstrapImage.isEmpty() && bootstrapSize.width > 0 && bootstrapSize.height > 0) {
+        sender.send("runtime-desktop:simulator-framebuffer-frame", {
+          sequence: 0,
+          timestamp: Date.now(),
+          width: bootstrapSize.width,
+          height: bootstrapSize.height,
+          mimeType: "image/jpeg",
+          bytes: Uint8Array.from(bootstrap).buffer
+        });
+      }
+
+      // Give CoreSimulator a short turn to publish the display surface after
+      // the bootstrap capture before the persistent helper resolves ioPorts.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    } catch {
+      // Bootstrap is best-effort. The persistent helper still owns the live path.
+    }
+
     await simulatorFramebuffer.start({
       udid: selectedSimulator.udid,
       fps: 60,
