@@ -1,12 +1,10 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, session, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, session, systemPreferences } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 import {
-  captureIOSSimulatorScreenshot,
   ensureIOSSimulatorBooted,
-  getIOSSimulatorDeviceCrop,
   listIOSSimulators
 } from "./simulator.mjs";
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
@@ -157,20 +155,10 @@ function registerDesktopIpc() {
     selectedCaptureSourceId = source.id;
     selectedCaptureWindowId = windowId;
 
-    let crop;
-    try {
-      const reference = await captureIOSSimulatorScreenshot(selectedSimulator.udid);
-      const referenceImage = nativeImage.createFromBuffer(reference);
-      const referenceSize = referenceImage.getSize();
-      if (!referenceImage.isEmpty() && referenceSize.width > 0 && referenceSize.height > 0) {
-        crop = await getIOSSimulatorDeviceCrop(
-          selectedSimulator.name,
-          referenceSize.width / referenceSize.height
-        );
-      }
-    } catch {
-      // Exact crop is optional. Full-window capture is the safe fallback.
-    }
+    // Window capture is retained only as the stable fallback while the direct
+    // CoreSimulator framebuffer adapter is implemented. Do not crop or map
+    // input against Simulator chrome: the window is not the iOS framebuffer.
+    const crop = undefined;
 
     let input = { ready: false, error: undefined };
     try {
