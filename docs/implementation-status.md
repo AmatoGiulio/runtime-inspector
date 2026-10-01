@@ -199,14 +199,14 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 - native HID input validated from the embedded viewport;
 - observed cadence ~9 fps on the validation run, confirming the screenshot-per-frame transport is far too slow for product use.
 
-**M3c.1 cold-start validated manually on macOS, 2026-10-01; cadence/latency validation pending**
+**M3c.1 cold-start validated manually on macOS, 2026-10-01; persistent MJPEG path performance characterized**
 
 - persistent native CoreSimulator helper;
 - direct main-display IOSurface access;
 - one-shot `simctl io screenshot` startup prime;
 - bootstrap frame deferred until the React framebuffer canvas is mounted, avoiding the first-frame IPC race;
 - 60 Hz seed polling with surface-swap refresh;
-- pre-encode downscale to a 600 px Workbench stream;
+- pre-encode downscale using the shared runtime framebuffer profile;
 - framed JPEG transport over one long-lived process;
 - coalesced canvas decoding in the renderer;
 - per-frame capture timestamp + native encode timing;
@@ -232,14 +232,27 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 ### M3c.2 deterministic encoder tuning
 
-**Implemented on `feat/runtime-workbench-desktop`, pending first local benchmark run**
+**Implemented and benchmarked locally on `feat/runtime-workbench-desktop`, 2026-10-01**
 
 - native benchmark mode reuses the production IOSurface JPEG encoder;
 - deterministic 1320×2868 synthetic source surface;
 - baseline/balanced/fast/lean profiles;
 - repeated rounds with p50/p95/payload metrics;
 - same-run relative performance gate;
-- CI-safe regression test verifies deterministic workload/output properties without asserting hardware-dependent milliseconds.
+- deterministic PSNR quality comparison at a common 600 px reference size;
+- shared profile configuration used by both runtime and benchmark;
+- official runtime profile promoted to `balanced` (560 px, JPEG quality 0.60);
+- official balanced gate: p95 <= 90% of baseline, payload <= 85% of baseline, PSNR loss <= 1.10 dB;
+- CI-safe regression tests verify the official profile/gate and deterministic workload/output properties without asserting hardware-dependent milliseconds.
+
+Observed local deterministic sweep on the M4 Pro test host:
+
+| profile | p95 encode | p95 capacity | avg payload | PSNR | delta vs baseline |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline 600/0.65 | 16.04 ms | 62.3 fps | 513.5 KB | 19.41 dB | — |
+| balanced 560/0.60 | 13.90 ms | 71.9 fps | 400.7 KB | 18.41 dB | -0.99 dB |
+| fast 520/0.58 | 12.60 ms | 79.3 fps | 340.5 KB | 17.88 dB | -1.52 dB |
+| lean 480/0.55 | 11.56 ms | 86.5 fps | 277.1 KB | 17.31 dB | -2.10 dB |
 
 Commands:
 
