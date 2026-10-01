@@ -199,10 +199,11 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 - native HID input validated from the embedded viewport;
 - observed cadence ~9 fps on the validation run, confirming the screenshot-per-frame transport is far too slow for product use.
 
-**M3c.1 implemented on `feat/runtime-workbench-desktop`, pending manual cadence/latency validation**
+**M3c.1 implemented on `feat/runtime-workbench-desktop`; live IOSurface path manually observed, startup priming fix pending validation**
 
 - persistent native CoreSimulator helper;
 - direct main-display IOSurface access;
+- one-shot `simctl io screenshot` startup prime to handle Xcode 26.3 lazy surface publication;
 - 60 Hz seed polling with surface-swap refresh;
 - pre-encode downscale to a 600 px Workbench stream;
 - framed JPEG transport over one long-lived process;
