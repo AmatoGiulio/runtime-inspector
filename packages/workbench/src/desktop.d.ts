@@ -45,7 +45,9 @@ declare global {
 
   interface RuntimeDesktopFramebufferFrame {
     sequence: number;
-    timestamp: number;
+    capturedAtMs: number;
+    receivedAtMs: number;
+    encodeDurationUs: number;
     width: number;
     height: number;
     mimeType: string;
