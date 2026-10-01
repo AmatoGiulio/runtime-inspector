@@ -33,6 +33,7 @@ test(
       "-framework",
       "IOSurface",
       "-fno-objc-arc",
+        "-fblocks",
       "-O3"
     ]);
 
