@@ -42,11 +42,12 @@ function App() {
   const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
   const [desktopBusy, setDesktopBusy] = useState(false);
   const [inputReady, setInputReady] = useState(false);
-  const [framebufferUrl, setFramebufferUrl] = useState<string>();
+  const [framebufferHasFrame, setFramebufferHasFrame] = useState(false);
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
-  const framebufferUrlRef = useRef<string | undefined>(undefined);
+  const framebufferCanvasRef = useRef<HTMLCanvasElement>(null);
   const framebufferTimesRef = useRef<number[]>([]);
+  const framebufferStatsUpdateRef = useRef(0);
 
   useEffect(() => {
     if (!schemaId && traceEntries[0]) {
@@ -85,18 +86,69 @@ function App() {
     const desktop = window.runtimeDesktop;
     if (!desktop) return;
 
+    let disposed = false;
+    let decoding = false;
+    let pendingFrame: RuntimeDesktopFramebufferFrame | undefined;
+
+    const drawLatestFrame = async () => {
+      if (decoding || disposed) return;
+      decoding = true;
+
+      try {
+        while (pendingFrame && !disposed) {
+          const frame = pendingFrame;
+          pendingFrame = undefined;
+
+          const bitmap = await createImageBitmap(
+            new Blob([new Uint8Array(frame.bytes)], { type: frame.mimeType })
+          );
+
+          if (disposed) {
+            bitmap.close();
+            break;
+          }
+
+          const canvas = framebufferCanvasRef.current;
+          if (canvas) {
+            if (canvas.width !== frame.width) canvas.width = frame.width;
+            if (canvas.height !== frame.height) canvas.height = frame.height;
+            const context = canvas.getContext("2d", { alpha: false });
+            context?.drawImage(bitmap, 0, 0, frame.width, frame.height);
+            setFramebufferHasFrame(true);
+          }
+
+          bitmap.close();
+        }
+      } catch (error) {
+        if (!disposed) {
+          setRuntimeCaptureError(
+            error instanceof Error ? error.message : "Could not decode Simulator framebuffer frame."
+          );
+        }
+      } finally {
+        decoding = false;
+        if (pendingFrame && !disposed) {
+          void drawLatestFrame();
+        }
+      }
+    };
+
     const unsubscribeFrame = desktop.onSimulatorFramebufferFrame((frame) => {
-      const nextUrl = URL.createObjectURL(
-        new Blob([new Uint8Array(frame.bytes)], { type: frame.mimeType })
-      );
-      const previousUrl = framebufferUrlRef.current;
-      framebufferUrlRef.current = nextUrl;
-      setFramebufferUrl(nextUrl);
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      pendingFrame = frame;
+      void drawLatestFrame();
 
       const times = framebufferTimesRef.current;
       times.push(frame.timestamp);
-      if (times.length > 30) times.shift();
+      if (times.length > 60) times.shift();
+
+      const now = performance.now();
+      const shouldUpdateStats =
+        frame.sequence === 0 ||
+        now - framebufferStatsUpdateRef.current >= 300;
+
+      if (!shouldUpdateStats) return;
+      framebufferStatsUpdateRef.current = now;
+
       const measuredFrameRate =
         times.length > 1
           ? ((times.length - 1) * 1000) / Math.max(1, times[times.length - 1] - times[0])
@@ -119,6 +171,8 @@ function App() {
     });
 
     return () => {
+      disposed = true;
+      pendingFrame = undefined;
       unsubscribeFrame();
       unsubscribeError();
     };
@@ -153,10 +207,14 @@ function App() {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
       runtimeStreamRef.current = undefined;
       void window.runtimeDesktop?.stopSimulatorFramebuffer();
-      if (framebufferUrlRef.current) {
-        URL.revokeObjectURL(framebufferUrlRef.current);
-        framebufferUrlRef.current = undefined;
-      }
+      framebufferCanvasRef.current
+        ?.getContext("2d")
+        ?.clearRect(
+          0,
+          0,
+          framebufferCanvasRef.current.width,
+          framebufferCanvasRef.current.height
+        );
     };
   }, []);
   const isRecording = Boolean(recording && !recording.complete);
@@ -210,6 +268,8 @@ function App() {
         setSimulators(await desktop.listSimulators());
         setInputReady(prepared.input.ready);
         framebufferTimesRef.current = [];
+        framebufferStatsUpdateRef.current = 0;
+        setFramebufferHasFrame(false);
         setRuntimeCapture({
           label: `${prepared.device.name} · ${prepared.device.runtime}`,
           source: "framebuffer",
@@ -286,12 +346,11 @@ function App() {
     if (runtimeVideoRef.current) {
       runtimeVideoRef.current.srcObject = null;
     }
-    if (framebufferUrlRef.current) {
-      URL.revokeObjectURL(framebufferUrlRef.current);
-      framebufferUrlRef.current = undefined;
-    }
-    setFramebufferUrl(undefined);
+    const canvas = framebufferCanvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    setFramebufferHasFrame(false);
     framebufferTimesRef.current = [];
+    framebufferStatsUpdateRef.current = 0;
     setRuntimeCapture(undefined);
     setRuntimeCaptureError(undefined);
     setInputReady(false);
@@ -481,16 +540,14 @@ function App() {
                   onPointerUp={handleRuntimePointerUp}
                   onPointerCancel={handleRuntimePointerUp}
                 >
-                  {framebufferUrl ? (
-                    <img
-                      className="runtime-framebuffer"
-                      src={framebufferUrl}
-                      alt="Live iOS Simulator framebuffer"
-                      draggable={false}
-                    />
-                  ) : (
+                  <canvas
+                    ref={framebufferCanvasRef}
+                    className="runtime-framebuffer"
+                    aria-label="Live iOS Simulator framebuffer"
+                  />
+                  {!framebufferHasFrame ? (
                     <div className="framebuffer-loading">Connecting to Simulator framebuffer…</div>
-                  )}
+                  ) : null}
                 </div>
               ) : (
                 <div className="runtime-video-shell">
