@@ -348,6 +348,7 @@ int main(int argc, const char *argv[]) {
     uint32_t sequence = 0;
     const useconds_t frameInterval = (useconds_t)(1000000 / fps);
     CFAbsoluteTime lastSurfaceRefresh = 0;
+    const CFAbsoluteTime streamStartedAt = CFAbsoluteTimeGetCurrent();
 
     while (true) {
       @autoreleasepool {
@@ -370,6 +371,14 @@ int main(int argc, const char *argv[]) {
         }
 
         if (!surface) {
+          if (frameStart - streamStartedAt > 5.0) {
+            fprintf(
+              stderr,
+              "Could not locate the main CoreSimulator IOSurface for %s within 5 seconds.\n",
+              [udid UTF8String]
+            );
+            return 4;
+          }
           usleep(100000);
           continue;
         }
