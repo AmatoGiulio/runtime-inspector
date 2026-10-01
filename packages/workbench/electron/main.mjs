@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 import { ensureIOSSimulatorBooted, listIOSSimulators } from "./simulator.mjs";
+import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -13,7 +14,9 @@ const panelToken = process.env.VITE_RI_TOKEN;
 
 let viteServer;
 let selectedCaptureSourceId;
+let selectedCaptureWindowId;
 let selectedSimulator;
+const simulatorInput = new SimulatorInputHelper();
 
 app.setName("Runtime Inspector");
 
@@ -40,6 +43,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  simulatorInput.dispose();
   if (viteServer) {
     try {
       await viteServer.close();
@@ -109,6 +113,23 @@ function registerDesktopIpc() {
     return listIOSSimulators();
   });
 
+  ipcMain.handle("runtime-desktop:get-input-permission", async () => {
+    ensureDarwin();
+    return simulatorInput.getPermission(false);
+  });
+
+  ipcMain.handle("runtime-desktop:request-input-permission", async () => {
+    ensureDarwin();
+    return simulatorInput.getPermission(true);
+  });
+
+  ipcMain.on("runtime-desktop:simulator-pointer", (_event, pointer) => {
+    if (!selectedCaptureWindowId) return;
+    void simulatorInput.sendPointer(selectedCaptureWindowId, pointer).catch(() => {
+      // Pointer streaming is best-effort. Permission/setup errors are surfaced by the explicit permission flow.
+    });
+  });
+
   ipcMain.handle("runtime-desktop:prepare-simulator-capture", async (_event, udid) => {
     ensureDarwin();
 
@@ -124,13 +145,20 @@ function registerDesktopIpc() {
 
     selectedSimulator = await ensureIOSSimulatorBooted(requested.udid);
     const source = await waitForSimulatorWindow(selectedSimulator.name);
+    const windowId = parseDesktopWindowId(source.id);
+    if (!windowId) {
+      throw new Error(`Simulator capture source "${source.id}" does not expose a macOS window id.`);
+    }
+
     selectedCaptureSourceId = source.id;
+    selectedCaptureWindowId = windowId;
 
     return {
       device: selectedSimulator,
       source: {
         id: source.id,
-        name: source.name
+        name: source.name,
+        windowId
       }
     };
   });
@@ -153,6 +181,7 @@ function registerDisplayCaptureHandler() {
 
       if (!source) {
         selectedCaptureSourceId = undefined;
+        selectedCaptureWindowId = undefined;
         callback({});
         return;
       }
