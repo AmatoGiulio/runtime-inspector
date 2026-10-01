@@ -118,20 +118,19 @@ function registerDesktopIpc() {
     return listIOSSimulators();
   });
 
-  ipcMain.handle("runtime-desktop:get-input-permission", async () => {
+  ipcMain.handle("runtime-desktop:prepare-simulator-input", async () => {
     ensureDarwin();
-    return simulatorInput.getPermission(false);
-  });
-
-  ipcMain.handle("runtime-desktop:request-input-permission", async () => {
-    ensureDarwin();
-    return simulatorInput.getPermission(true);
+    if (!selectedSimulator) {
+      throw new Error("Attach an iOS Simulator before preparing input.");
+    }
+    await simulatorInput.prepare(selectedSimulator.udid);
+    return true;
   });
 
   ipcMain.on("runtime-desktop:simulator-pointer", (_event, pointer) => {
-    if (!selectedCaptureWindowId) return;
-    void simulatorInput.sendPointer(selectedCaptureWindowId, pointer).catch(() => {
-      // Pointer streaming is best-effort. Permission/setup errors are surfaced by the explicit permission flow.
+    if (!selectedSimulator) return;
+    void simulatorInput.sendPointer(selectedSimulator.udid, pointer).catch((error) => {
+      console.error("[Runtime Inspector] Simulator HID input failed:", error);
     });
   });
 
@@ -166,6 +165,17 @@ function registerDesktopIpc() {
       // Device-only crop is an optimization. Full-window capture remains a valid fallback.
     }
 
+    let input = { ready: false, error: undefined };
+    try {
+      await simulatorInput.prepare(selectedSimulator.udid);
+      input = { ready: true, error: undefined };
+    } catch (error) {
+      input = {
+        ready: false,
+        error: error instanceof Error ? error.message : "Simulator HID input could not be prepared."
+      };
+    }
+
     return {
       device: selectedSimulator,
       source: {
@@ -173,7 +183,8 @@ function registerDesktopIpc() {
         name: source.name,
         windowId
       },
-      crop
+      crop,
+      input
     };
   });
 }
