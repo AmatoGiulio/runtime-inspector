@@ -114,6 +114,11 @@ export class SimulatorFramebufferHelper {
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk) => {
       this.stderrBuffer += chunk;
+      for (const line of String(chunk).split(/\r?\n/)) {
+        if (line.startsWith("RI_STATUS:")) {
+          console.log(`[Runtime Inspector] ${line.slice("RI_STATUS:".length)}`);
+        }
+      }
       if (this.stderrBuffer.length > 16000) {
         this.stderrBuffer = this.stderrBuffer.slice(-16000);
       }
@@ -197,6 +202,7 @@ export class SimulatorFramebufferHelper {
         "-framework",
         "IOSurface",
         "-fno-objc-arc",
+        "-fblocks",
         "-O3"
       ]);
     })();
