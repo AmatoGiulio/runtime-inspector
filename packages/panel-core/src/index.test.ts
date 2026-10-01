@@ -629,3 +629,81 @@ describe("createPanelSession with multiple schemas sharing control ids", () => {
     expect(session.getState().values["schema-b"]?.scale).toBe(9);
   });
 });
+
+describe("recording timeline state (RFC 0005 M0)", () => {
+  it("publishes trace schemas, records ordered chunks, and completes", () => {
+    const { session } = createSession({ clientId: "workbench-test" });
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    socket.receive({
+      type: "trace.schema.publish",
+      schemaId: "demo",
+      probes: [{ id: "speed", label: "Speed", valueType: "number", unit: "px" }]
+    });
+
+    expect(session.getState().traceSchemas.demo?.[0]?.id).toBe("speed");
+
+    const recordingId = session.startRecording("demo", ["speed"], 60);
+    expect(recordingId).toBeDefined();
+    expect(
+      socket.sent.some((raw) => JSON.parse(raw).type === "recording.start")
+    ).toBe(true);
+
+    socket.receive({
+      type: "recording.started",
+      recordingId,
+      schemaId: "demo",
+      probeIds: ["speed"],
+      sampleRateHz: 60,
+      startedAtRuntimeMs: 100
+    });
+    socket.receive({
+      type: "recording.chunk",
+      recordingId,
+      schemaId: "demo",
+      sequence: 0,
+      samples: [
+        { t: 0, values: { speed: 0 } },
+        { t: 16.7, values: { speed: 2 } }
+      ]
+    });
+    socket.receive({
+      type: "recording.complete",
+      recordingId,
+      schemaId: "demo",
+      durationMs: 20,
+      sampleCount: 2,
+      complete: true
+    });
+
+    const recording = session.getState().recording;
+    expect(recording?.samples).toHaveLength(2);
+    expect(recording?.complete).toBe(true);
+    expect(recording?.incomplete).toBe(false);
+  });
+
+  it("marks a recording incomplete when chunk sequence has a gap", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({
+      type: "trace.schema.publish",
+      schemaId: "demo",
+      probes: [{ id: "speed", valueType: "number" }]
+    });
+
+    const recordingId = session.startRecording("demo", ["speed"], 60);
+    socket.receive({
+      type: "recording.chunk",
+      recordingId,
+      schemaId: "demo",
+      sequence: 1,
+      samples: [{ t: 16.7, values: { speed: 1 } }]
+    });
+
+    expect(session.getState().recording?.incomplete).toBe(true);
+  });
+});
