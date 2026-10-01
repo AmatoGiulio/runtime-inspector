@@ -1,0 +1,10 @@
+{
+  "type": "recording.chunk",
+  "recordingId": "rec-1",
+  "schemaId": "card-transition",
+  "sequence": 0,
+  "samples": [
+    { "t": 0, "values": { "moveX": 0 } },
+    { "t": 16.67, "values": { "moveX": -12.5 } }
+  ]
+}
