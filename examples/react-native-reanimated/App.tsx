@@ -4,6 +4,7 @@ import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSequence,
   withSpring,
   withTiming
@@ -59,7 +60,8 @@ export default function App() {
       value: [0.22, 1, 0.36, 1],
       onChange: () => schedulePreview()
     },
-    replay: () => replayTransition()
+    replay: () => replayTransition(),
+    benchmarkViewport: () => benchmarkViewport()
   });
 
   useRuntimeProbe("card-transition", "moveX", card.moveX, {
@@ -84,6 +86,33 @@ export default function App() {
       card.opacity.value = withSpring(targets.opacity, spring);
       card.color.value = targets.color;
     }, 220);
+  }
+
+  function benchmarkViewport() {
+    const duration = 140;
+    const repetitions = 24;
+    const easing = Easing.linear;
+
+    card.moveX.value = withRepeat(
+      withTiming(-110, { duration, easing }),
+      repetitions,
+      true
+    );
+    card.rotate.value = withRepeat(
+      withTiming(-14, { duration, easing }),
+      repetitions,
+      true
+    );
+    card.scale.value = withRepeat(
+      withTiming(0.82, { duration, easing }),
+      repetitions,
+      true
+    );
+    card.opacity.value = withRepeat(
+      withTiming(0.62, { duration, easing }),
+      repetitions,
+      true
+    );
   }
 
   useEffect(() => {
