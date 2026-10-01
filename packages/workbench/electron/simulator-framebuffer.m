@@ -159,9 +159,7 @@ static IOSurfaceRef RICopyMainDisplaySurface(id device, NSString **diagnosticOut
     }
 
     id state = RISafeGet(descriptor, @"state", @selector(state));
-    id displayClassValue = state
-      ? RISafeGet(state, @"displayClass", @selector(displayClass))
-      : nil;
+    id displayClassValue = state ? RISafeValue(state, @"displayClass") : nil;
 
     unsigned int displayClass = UINT_MAX;
     if ([displayClassValue respondsToSelector:@selector(unsignedIntValue)]) {
