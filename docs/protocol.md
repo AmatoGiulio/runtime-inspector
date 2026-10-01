@@ -28,6 +28,13 @@ Classification of every current message type:
 | `error` | Lifecycle event |
 | `source.apply` | Command |
 | `source.applyResult` | Lifecycle event |
+| `trace.schema.publish` | State |
+| `trace.schema.dispose` | Lifecycle event |
+| `recording.start` | Command |
+| `recording.started` | Lifecycle event |
+| `recording.chunk` | Lifecycle event |
+| `recording.stop` | Command |
+| `recording.complete` | Lifecycle event |
 
 **Taxonomy violation resolved in 0.3.** Prior to 0.3, `trigger` controls ("do this callback now", e.g. "replay transition") were fired via `control.patch` — the same message type used for value updates (slider, toggle, color, bezier, spring), and drag-preview patches were indistinguishable from a human's decided value. Protocol 0.3 introduces two dedicated messages to resolve this:
 
@@ -151,6 +158,55 @@ Sent by a `runtime` client from `disconnect()` (deliberate teardown: screen unmo
 ```
 
 On receipt, the broker drops the cached schema for that id and forwards the message to panels, which must remove the schema from their UI. This is distinct from a silent disconnect (see `runtime.status` and Broker rules below), which keeps the cache and marks the schema stale instead.
+
+### Runtime trace / recording (RFC 0005, M0)
+
+Recording is explicit instrumentation. Runtime Inspector does not discover arbitrary animations automatically.
+
+A runtime publishes the probes available for a schema:
+
+```json
+{
+  "type": "trace.schema.publish",
+  "schemaId": "card-transition",
+  "probes": [
+    { "id": "moveX", "label": "Move X", "valueType": "number", "unit": "px" }
+  ]
+}
+```
+
+`trace.schema.publish` is **State** and the broker caches the latest trace schema per runtime for late panels. `trace.schema.dispose` removes it.
+
+A panel starts a bounded recording with `recording.start` (**Command**):
+
+```json
+{
+  "type": "recording.start",
+  "recordingId": "rec-1",
+  "schemaId": "card-transition",
+  "probeIds": ["moveX"],
+  "sampleRateHz": 60
+}
+```
+
+M0 accepts 1–60 Hz and at most 16 probes. The runtime replies with `recording.started`, then sends sequence-numbered `recording.chunk` lifecycle events containing timestamped scalar samples. Chunks are never cached or replayed: a sequence gap makes the trace incomplete.
+
+```json
+{
+  "type": "recording.chunk",
+  "recordingId": "rec-1",
+  "schemaId": "card-transition",
+  "sequence": 0,
+  "samples": [
+    { "t": 0, "values": { "moveX": 0 } },
+    { "t": 16.67, "values": { "moveX": -12.5 } }
+  ]
+}
+```
+
+`recording.stop` is a **Command**. The runtime flushes its final chunk and emits `recording.complete` with duration and sample count. M0 recordings are capped at 10 seconds.
+
+The initial sampler is intentionally a vertical-spike implementation using the React Native frame loop and batched transport. Its overhead must be validated on the simulator/device before the recording path is considered production-ready. A later implementation may move collection fully onto the Reanimated/UI execution path without changing these protocol semantics.
 
 ### `control.patch`
 
