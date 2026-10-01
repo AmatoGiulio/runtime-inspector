@@ -396,9 +396,199 @@ static NSString *RIArgumentValue(NSArray<NSString *> *arguments, NSString *name,
   return [arguments objectAtIndex:index + 1];
 }
 
+
+static IOSurfaceRef RICreateBenchmarkSurface(size_t width, size_t height) {
+  const size_t bytesPerElement = 4;
+  const size_t bytesPerRow = width * bytesPerElement;
+  NSDictionary *properties = @{
+    (NSString *)kIOSurfaceWidth: @(width),
+    (NSString *)kIOSurfaceHeight: @(height),
+    (NSString *)kIOSurfaceBytesPerElement: @(bytesPerElement),
+    (NSString *)kIOSurfaceBytesPerRow: @(bytesPerRow),
+    (NSString *)kIOSurfaceAllocSize: @(bytesPerRow * height)
+  };
+
+  IOSurfaceRef surface = IOSurfaceCreate((CFDictionaryRef)properties);
+  if (!surface) return NULL;
+
+  if (IOSurfaceLock(surface, 0, NULL) != kIOReturnSuccess) {
+    CFRelease(surface);
+    return NULL;
+  }
+
+  uint8_t *base = (uint8_t *)IOSurfaceGetBaseAddress(surface);
+  if (!base) {
+    IOSurfaceUnlock(surface, 0, NULL);
+    CFRelease(surface);
+    return NULL;
+  }
+
+  for (size_t y = 0; y < height; y += 1) {
+    uint8_t *row = base + y * bytesPerRow;
+    for (size_t x = 0; x < width; x += 1) {
+      const BOOL light = (((x / 48) + (y / 48)) % 2) == 0;
+      const uint8_t accent = (uint8_t)((x * 17 + y * 11) & 0xff);
+      const size_t offset = x * 4;
+
+      row[offset + 0] = light ? accent : (uint8_t)(255 - accent);
+      row[offset + 1] = (uint8_t)((x * 5 + y * 13) & 0xff);
+      row[offset + 2] = light ? 228 : 28;
+      row[offset + 3] = 255;
+    }
+  }
+
+  IOSurfaceUnlock(surface, 0, NULL);
+  return surface;
+}
+
+static double RIPercentile(NSArray<NSNumber *> *sorted, double percentile) {
+  if ([sorted count] == 0) return 0;
+  const double index = percentile * ([sorted count] - 1);
+  const NSUInteger lower = (NSUInteger)floor(index);
+  const NSUInteger upper = (NSUInteger)ceil(index);
+  if (lower == upper) return [[sorted objectAtIndex:lower] doubleValue];
+  const double fraction = index - lower;
+  const double a = [[sorted objectAtIndex:lower] doubleValue];
+  const double b = [[sorted objectAtIndex:upper] doubleValue];
+  return a + ((b - a) * fraction);
+}
+
+static int RIRunBenchmark(NSArray<NSString *> *arguments) {
+  const NSInteger sourceWidth = MAX(
+    320,
+    [RIArgumentValue(arguments, @"--source-width", @"1320") integerValue]
+  );
+  const NSInteger sourceHeight = MAX(
+    640,
+    [RIArgumentValue(arguments, @"--source-height", @"2868") integerValue]
+  );
+  const NSInteger outputWidth = MAX(
+    240,
+    MIN(1320, [RIArgumentValue(arguments, @"--width", @"600") integerValue])
+  );
+  const CGFloat quality = MAX(
+    0.2,
+    MIN(0.95, [RIArgumentValue(arguments, @"--quality", @"0.65") doubleValue])
+  );
+  const NSInteger warmup = MAX(
+    0,
+    [RIArgumentValue(arguments, @"--warmup", @"12") integerValue]
+  );
+  const NSInteger iterations = MAX(
+    1,
+    [RIArgumentValue(arguments, @"--iterations", @"80") integerValue]
+  );
+
+  IOSurfaceRef surface = RICreateBenchmarkSurface(
+    (size_t)sourceWidth,
+    (size_t)sourceHeight
+  );
+  if (!surface) {
+    fprintf(stderr, "Could not create deterministic benchmark IOSurface.\n");
+    return 5;
+  }
+
+  for (NSInteger index = 0; index < warmup; index += 1) {
+    @autoreleasepool {
+      uint32_t encodedWidth = 0;
+      uint32_t encodedHeight = 0;
+      NSData *jpeg = RIEncodeSurfaceJPEG(
+        surface,
+        (size_t)outputWidth,
+        quality,
+        &encodedWidth,
+        &encodedHeight
+      );
+      if (!jpeg) {
+        CFRelease(surface);
+        fprintf(stderr, "Framebuffer benchmark warmup encode failed.\n");
+        return 6;
+      }
+    }
+  }
+
+  NSMutableArray<NSNumber *> *durations = [NSMutableArray arrayWithCapacity:(NSUInteger)iterations];
+  uint64_t totalBytes = 0;
+  uint32_t lastWidth = 0;
+  uint32_t lastHeight = 0;
+
+  for (NSInteger index = 0; index < iterations; index += 1) {
+    @autoreleasepool {
+      const CFAbsoluteTime startedAt = CFAbsoluteTimeGetCurrent();
+      uint32_t encodedWidth = 0;
+      uint32_t encodedHeight = 0;
+      NSData *jpeg = RIEncodeSurfaceJPEG(
+        surface,
+        (size_t)outputWidth,
+        quality,
+        &encodedWidth,
+        &encodedHeight
+      );
+      const double durationMs =
+        (CFAbsoluteTimeGetCurrent() - startedAt) * 1000.0;
+
+      if (!jpeg) {
+        CFRelease(surface);
+        fprintf(stderr, "Framebuffer benchmark encode failed.\n");
+        return 7;
+      }
+
+      [durations addObject:@(durationMs)];
+      totalBytes += [jpeg length];
+      lastWidth = encodedWidth;
+      lastHeight = encodedHeight;
+    }
+  }
+
+  CFRelease(surface);
+
+  NSArray<NSNumber *> *sorted = [durations sortedArrayUsingSelector:@selector(compare:)];
+  double totalMs = 0;
+  for (NSNumber *value in durations) {
+    totalMs += [value doubleValue];
+  }
+
+  const double averageMs = totalMs / MAX(1, [durations count]);
+  const double p50Ms = RIPercentile(sorted, 0.50);
+  const double p95Ms = RIPercentile(sorted, 0.95);
+  const double p99Ms = RIPercentile(sorted, 0.99);
+  const double maxMs = [[sorted lastObject] doubleValue];
+  const double averageBytes =
+    (double)totalBytes / MAX(1, [durations count]);
+
+  NSDictionary *result = @{
+    @"sourceWidth": @(sourceWidth),
+    @"sourceHeight": @(sourceHeight),
+    @"outputWidth": @(lastWidth),
+    @"outputHeight": @(lastHeight),
+    @"quality": @(quality),
+    @"warmup": @(warmup),
+    @"iterations": @(iterations),
+    @"avgMs": @(averageMs),
+    @"p50Ms": @(p50Ms),
+    @"p95Ms": @(p95Ms),
+    @"p99Ms": @(p99Ms),
+    @"maxMs": @(maxMs),
+    @"avgBytes": @(averageBytes),
+    @"capacityFpsP95": @(p95Ms > 0 ? 1000.0 / p95Ms : 0)
+  };
+
+  NSData *json = [NSJSONSerialization dataWithJSONObject:result options:0 error:nil];
+  if (!json) return 8;
+  NSString *line = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
+  fprintf(stdout, "%s\n", [line UTF8String]);
+  fflush(stdout);
+  return 0;
+}
+
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
     NSArray<NSString *> *arguments = [[NSProcessInfo processInfo] arguments];
+
+    if ([arguments containsObject:@"--benchmark"]) {
+      return RIRunBenchmark(arguments);
+    }
+
     NSString *udid = RIArgumentValue(arguments, @"--udid", nil);
     const NSInteger fps = MAX(1, MIN(60, [RIArgumentValue(arguments, @"--fps", @"60") integerValue]));
     const NSInteger outputWidth = MAX(
