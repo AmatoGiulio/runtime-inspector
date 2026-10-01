@@ -1,10 +1,15 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, systemPreferences } from "electron";
+import { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage, session, systemPreferences } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
-import { ensureIOSSimulatorBooted, listIOSSimulators } from "./simulator.mjs";
+import {
+  captureIOSSimulatorScreenshot,
+  ensureIOSSimulatorBooted,
+  listIOSSimulators
+} from "./simulator.mjs";
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
+import { findNormalizedCrop } from "./crop.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -153,13 +158,22 @@ function registerDesktopIpc() {
     selectedCaptureSourceId = source.id;
     selectedCaptureWindowId = windowId;
 
+    let crop;
+    try {
+      const reference = await captureIOSSimulatorScreenshot(selectedSimulator.udid);
+      crop = await calibrateSimulatorCrop(source.id, reference);
+    } catch {
+      // Device-only crop is an optimization. Full-window capture remains a valid fallback.
+    }
+
     return {
       device: selectedSimulator,
       source: {
         id: source.id,
         name: source.name,
         windowId
-      }
+      },
+      crop
     };
   });
 }
@@ -190,6 +204,35 @@ function registerDisplayCaptureHandler() {
     } catch {
       callback({});
     }
+  });
+}
+
+async function calibrateSimulatorCrop(sourceId, referenceBuffer) {
+  const sources = await desktopCapturer.getSources({
+    types: ["window"],
+    thumbnailSize: { width: 180, height: 420 },
+    fetchWindowIcons: false
+  });
+  const source = sources.find((item) => item.id === sourceId);
+  if (!source || source.thumbnail.isEmpty()) return undefined;
+
+  const captureImage = source.thumbnail;
+  const referenceImage = nativeImage.createFromBuffer(referenceBuffer);
+  if (referenceImage.isEmpty()) return undefined;
+
+  const captureSize = captureImage.getSize();
+  const referenceSize = referenceImage.getSize();
+  const referenceWidth = Math.min(100, referenceSize.width);
+  const referenceThumb = referenceImage.resize({ width: referenceWidth });
+  const resizedReferenceSize = referenceThumb.getSize();
+
+  return findNormalizedCrop({
+    capture: captureImage.toBitmap(),
+    captureWidth: captureSize.width,
+    captureHeight: captureSize.height,
+    reference: referenceThumb.toBitmap(),
+    referenceWidth: resizedReferenceSize.width,
+    referenceHeight: resizedReferenceSize.height
   });
 }
 
