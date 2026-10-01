@@ -148,7 +148,7 @@ Runtime unit tests use an offline in-memory socket by default; transport-specifi
 - the example exposes `card-transition.moveX` as the first probe;
 - a real timing → spring transition produced a continuous trace at ~57.2 measured Hz in the observed validation run, with 204 samples and no reported sequence gap.
 
-**M3a implemented on `feat/runtime-workbench-ios-viewport`, pending manual viewport validation**
+**M3a validated manually on macOS, 2026-10-01**
 
 - browser-native live window capture in the central Runtime surface;
 - explicit Attach/Detach flow;
@@ -157,16 +157,13 @@ Runtime unit tests use an offline in-memory socket by default; transport-specifi
 
 **Still not production-ready**
 
-- automatic Simulator discovery;
-- pointer/touch forwarding and coordinate mapping;
-- native desktop host selection (Electron/Tauri/native);
 - Android scrcpy viewport;
 - physical-device viewport;
 - runtime time travel/scrubbing.
 
 M3a validated live Simulator pixels before committing to a desktop shell.
 
-**M3b.1 implemented on `feat/runtime-workbench-desktop`, pending local validation**
+**M3b.1 validated manually on macOS, 2026-10-01**
 
 - Electron 44 desktop shell around the existing Workbench renderer;
 - context-isolated preload bridge;
@@ -176,12 +173,23 @@ M3a validated live Simulator pixels before committing to a desktop shell.
 - automatic source grant through Electron's display-media request handler, removing the browser sharing picker;
 - browser M3a capture remains available when the Workbench is opened outside Electron.
 
-**M3b.2 still outstanding**
+**M3b.2 implemented on `feat/runtime-workbench-desktop`, pending manual input validation**
 
-- pointer/touch forwarding;
-- device-screen crop / coordinate mapping;
-- Accessibility permission flow;
-- packaging/signing.
+- normalized pointer coordinates from the embedded Runtime surface;
+- persistent Swift/Core Graphics input helper;
+- direct mouse down/drag/up posting to the Simulator process by macOS window id;
+- explicit Accessibility-permission check/prompt flow;
+- pointer input remains transport-local and does not alter RIP semantics.
+
+**Packaging/TCC requirement recorded**
+
+In development macOS attributed Screen Recording permission to the VS Code host. Release work must package/sign Runtime Inspector and its helper so Screen Recording and Accessibility permissions are presented under the correct product identity, with first-run permission UX.
+
+**Still outstanding**
+
+- device-screen-only crop;
+- multi-touch / keyboard forwarding;
+- production packaging/signing and TCC validation.
 
 ## Explicitly not implemented in this phase
 
