@@ -22,6 +22,13 @@ import {
 } from "@runtime-inspector/protocol";
 import { NativeModules, Platform, TurboModuleRegistry } from "react-native";
 import { getBrokerCandidates, resolveScriptUrl } from "./discovery";
+import {
+  getTraceSchema,
+  handleRecordingStart,
+  handleRecordingStop,
+  setRuntimeTraceEmitter,
+  stopRuntimeRecordingsForSchema
+} from "./recording";
 
 declare const __DEV__: boolean | undefined;
 
@@ -76,6 +83,8 @@ interface Session {
 const sessions = new Map<string, Session>();
 const MAX_DISCOVERY_DELAY_MS = 10_000;
 let warnedUnreachable = false;
+
+setRuntimeTraceEmitter(sendRuntimeMessage);
 
 function getScriptUrl(): Array<string | undefined> {
   let fromNativeModules: string | undefined;
@@ -352,6 +361,11 @@ export type { InspectMeta } from "./auto";
 export { useRuntimeValue, useAction } from "./use-runtime-value";
 export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";
 
+export { useRuntimeProbe } from "./use-runtime-probe";
+export type { RuntimeProbeOptions } from "./use-runtime-probe";
+export { registerRuntimeProbe } from "./recording";
+export type { RuntimeProbeSource } from "./recording";
+
 function connectRuntime(session: Session) {
   const registeredSession = sessions.get(session.schema.id);
   if (registeredSession && registeredSession !== session) {
@@ -373,6 +387,10 @@ function connectRuntime(session: Session) {
       clientId: session.options.clientId ?? `runtime-${session.schema.id}`,
       schemaId: session.schema.id
     });
+    const traceSchema = getTraceSchema(session.schema.id);
+    if (traceSchema) {
+      broadcastDirect(traceSchema);
+    }
   }
 
   if (
@@ -437,6 +455,10 @@ function connectRuntime(session: Session) {
       })
     );
     socket.send(JSON.stringify({ type: "schema.publish", schema }));
+    const traceSchema = getTraceSchema(schema.id);
+    if (traceSchema) {
+      socket.send(JSON.stringify(traceSchema));
+    }
   };
 
   socket.onmessage = (event) => {
@@ -487,6 +509,12 @@ function dispatchRuntimeMessage(message: RIPMessage) {
   if (message.type === "control.commit") {
     applyControlCommit(message);
   }
+  if (message.type === "recording.start") {
+    handleRecordingStart(message);
+  }
+  if (message.type === "recording.stop") {
+    handleRecordingStop(message);
+  }
 }
 
 function replayActiveSchemas(sink: RuntimeInspectorProtocolSink) {
@@ -499,6 +527,10 @@ function replayActiveSchemas(sink: RuntimeInspectorProtocolSink) {
       clientId: session.options.clientId ?? `runtime-${session.schema.id}`,
       schemaId: session.schema.id
     });
+    const traceSchema = getTraceSchema(session.schema.id);
+    if (traceSchema) {
+      sink.send(traceSchema);
+    }
   }
 }
 
@@ -507,6 +539,18 @@ function broadcastDirect(message: RIPMessage) {
     if (client.accepted) {
       client.sink.send(message);
     }
+  }
+}
+
+function sendRuntimeMessage(schemaId: string, message: RIPMessage) {
+  broadcastDirect(message);
+  const session = sessions.get(schemaId);
+  const socket = session?.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  try {
+    socket.send(JSON.stringify(message));
+  } catch {
+    // best-effort trace delivery; recording chunks are not replayable
   }
 }
 
@@ -535,6 +579,7 @@ function disconnectRuntime(session: Session) {
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = undefined;
   }
+  stopRuntimeRecordingsForSchema(session.schema.id);
   sendSchemaDispose(session);
   session.active = false;
   session.socket?.close();
@@ -550,6 +595,7 @@ function teardownSession(session: Session) {
     clearTimeout(session.reconnectTimer);
     session.reconnectTimer = undefined;
   }
+  stopRuntimeRecordingsForSchema(session.schema.id);
   sendSchemaDispose(session);
   session.active = false;
   session.socket?.close();
