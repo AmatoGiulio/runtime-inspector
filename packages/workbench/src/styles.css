@@ -371,6 +371,12 @@ button {
   font-weight: 560;
 }
 
+.input-status.pending {
+  border-color: #3a3a40;
+  background: #202023;
+  color: #8a8a91;
+}
+
 .runtime-video-caption {
   position: absolute;
   left: 10px;
