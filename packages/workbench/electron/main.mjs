@@ -195,6 +195,7 @@ function registerDesktopIpc() {
       fps: 60,
       width: RUNTIME_FRAMEBUFFER_PROFILE.width,
       quality: RUNTIME_FRAMEBUFFER_PROFILE.quality,
+      pollIntervalUs: RUNTIME_FRAMEBUFFER_PROFILE.pollIntervalUs,
       onFrame: (frame) => {
         if (sender.isDestroyed()) return;
         sender.send("runtime-desktop:simulator-framebuffer-frame", {
