@@ -7,8 +7,7 @@ contextBridge.exposeInMainWorld("runtimeDesktop", {
   prepareSimulatorCapture: (udid) =>
     ipcRenderer.invoke("runtime-desktop:prepare-simulator-capture", udid),
   getScreenPermission: () => ipcRenderer.invoke("runtime-desktop:get-screen-permission"),
-  getInputPermission: () => ipcRenderer.invoke("runtime-desktop:get-input-permission"),
-  requestInputPermission: () => ipcRenderer.invoke("runtime-desktop:request-input-permission"),
+  prepareSimulatorInput: () => ipcRenderer.invoke("runtime-desktop:prepare-simulator-input"),
   sendSimulatorPointer: (event) =>
     ipcRenderer.send("runtime-desktop:simulator-pointer", event)
 });
