@@ -164,3 +164,29 @@ During the 2026-10-01 development validation, macOS attributed Screen Recording 
 - production packaging/signing implementation.
 
 These remain device-adapter concerns and must not leak into RIP.
+
+## M3c decision — direct Simulator framebuffer
+
+The `simctl io recordVideo` help on Xcode 26.3 was checked manually on 2026-10-01. It records a QuickTime movie to a file or URL and only finalizes after SIGINT; unlike `screenshot`, it does not advertise `-`/stdout streaming. It is therefore not the live viewport primitive.
+
+The window-crop experiments are closed. Simulator window geometry is not the iOS framebuffer and produced incorrect crops/mapping.
+
+The next Runtime surface must read the Simulator display directly:
+
+~~~text
+CoreSimulator display
+    -> IOSurface framebuffer
+    -> RuntimeSurface
+~~~
+
+Input remains a separate native HID channel:
+
+~~~text
+Workbench pointer
+    -> normalized framebuffer coordinates
+    -> Simulator HID
+~~~
+
+The existing full Simulator-window capture remains only as a safe visual fallback while M3c is implemented. It must not be treated as the final viewport or used for coordinate mapping.
+
+Meta FBSimulatorControl is the implementation reference for this direction: it exposes the booted Simulator framebuffer as an IOSurface and supports live frame delivery. Runtime Inspector should keep this behind `IOSSimulatorAdapter` so private-Xcode compatibility does not leak into RIP or the Workbench renderer.
