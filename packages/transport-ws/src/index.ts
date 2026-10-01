@@ -113,6 +113,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
 
       if (message.type === "schema.dispose" && record.role === "runtime") {
         schemasByRuntime.delete(record.id);
+        traceSchemasByRuntime.delete(record.id);
       }
 
       if (message.type === "trace.schema.publish" && record.role === "runtime") {
