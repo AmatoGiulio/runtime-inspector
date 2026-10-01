@@ -714,6 +714,125 @@ describe("Runtime Inspector workspace role (RFC 0004)", () => {
   });
 });
 
+describe("Runtime Inspector recording transport (RFC 0005 M0)", () => {
+  it("caches trace schema for late panels but never replays recording chunks", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const runtime = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    runtime.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "runtime",
+        clientId: "runtime-trace"
+      })
+    );
+    await wait(20);
+
+    runtime.send(
+      JSON.stringify({
+        type: "trace.schema.publish",
+        schemaId: "card-transition",
+        probes: [{ id: "moveX", valueType: "number", unit: "px" }]
+      })
+    );
+    runtime.send(
+      JSON.stringify({
+        type: "recording.chunk",
+        recordingId: "rec-early",
+        schemaId: "card-transition",
+        sequence: 0,
+        samples: [{ t: 0, values: { moveX: 0 } }]
+      })
+    );
+    await wait(30);
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const messages: Array<{ type?: string; schemaId?: string }> = [];
+    panel.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-trace-late"
+      })
+    );
+    await wait(50);
+
+    runtime.close();
+    panel.close();
+
+    expect(
+      messages.some(
+        (message) =>
+          message.type === "trace.schema.publish" &&
+          message.schemaId === "card-transition"
+      )
+    ).toBe(true);
+    expect(messages.some((message) => message.type === "recording.chunk")).toBe(false);
+  });
+
+  it("routes recording.start to runtime and recording.chunk back to panel", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const runtime = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const runtimeMessages: Array<{ type?: string }> = [];
+    runtime.on("message", (data) => runtimeMessages.push(JSON.parse(data.toString())));
+    runtime.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "runtime",
+        clientId: "runtime-record"
+      })
+    );
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    const panelMessages: Array<{ type?: string }> = [];
+    panel.on("message", (data) => panelMessages.push(JSON.parse(data.toString())));
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-record"
+      })
+    );
+    await wait(30);
+
+    panel.send(
+      JSON.stringify({
+        type: "recording.start",
+        recordingId: "rec-1",
+        schemaId: "card-transition",
+        probeIds: ["moveX"],
+        sampleRateHz: 60
+      })
+    );
+    await wait(30);
+
+    runtime.send(
+      JSON.stringify({
+        type: "recording.chunk",
+        recordingId: "rec-1",
+        schemaId: "card-transition",
+        sequence: 0,
+        samples: [{ t: 0, values: { moveX: 0 } }]
+      })
+    );
+    await wait(30);
+
+    runtime.close();
+    panel.close();
+
+    expect(runtimeMessages.some((message) => message.type === "recording.start")).toBe(true);
+    expect(panelMessages.some((message) => message.type === "recording.chunk")).toBe(true);
+  });
+});
+
 function openSocket(url: string) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(url);
