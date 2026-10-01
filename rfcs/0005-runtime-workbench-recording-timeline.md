@@ -539,7 +539,7 @@ Nothing in this list requires universal time travel or reconstruction of arbitra
 
 These are spikes, not product-level uncertainty:
 
-1. Electron vs Tauri/native shell for the desktop container.
+1. Desktop shell: Electron 44 is selected for the M3b implementation spike because it preserves the existing Vite/React Workbench and exposes desktop capture; this is not yet a permanent packaging commitment.
 2. Best low-copy path from iOS window capture into the Workbench renderer.
 3. Best embeddable scrcpy decoding path for Electron/Tauri.
 4. Reanimated sampling implementation and measurable overhead.
