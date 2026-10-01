@@ -504,7 +504,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       recording: {
         ...recording,
         samples: [...recording.samples, ...message.samples],
-        nextSequence: message.sequence + 1,
+        nextSequence: Math.max(recording.nextSequence, message.sequence + 1),
         incomplete: recording.incomplete || sequenceGap
       }
     });
