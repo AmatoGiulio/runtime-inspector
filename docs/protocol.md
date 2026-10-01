@@ -206,7 +206,7 @@ M0 accepts 1–60 Hz and at most 16 probes. The runtime replies with `recording.
 
 `recording.stop` is a **Command**. The runtime flushes its final chunk and emits `recording.complete` with duration and sample count. M0 recordings are capped at 10 seconds.
 
-The initial sampler is intentionally a vertical-spike implementation using the React Native frame loop and batched transport. Its overhead must be validated on the simulator/device before the recording path is considered production-ready. A later implementation may move collection fully onto the Reanimated/UI execution path without changing these protocol semantics.
+The initial sampler is intentionally a vertical-spike implementation using JavaScript `requestAnimationFrame` and batched transport. Its overhead must be validated on the simulator/device before the recording path is considered production-ready. A later implementation may move collection fully onto the Reanimated/UI execution path without changing these protocol semantics.
 
 ### `control.patch`
 
