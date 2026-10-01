@@ -42,7 +42,7 @@ function App() {
   const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
   const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
   const [desktopBusy, setDesktopBusy] = useState(false);
-  const [inputPermission, setInputPermission] = useState<boolean>();
+  const [inputReady, setInputReady] = useState(false);
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -57,11 +57,11 @@ function App() {
     if (!desktop) return;
 
     let cancelled = false;
-    Promise.all([desktop.listSimulators(), desktop.getInputPermission()])
-      .then(([items, trusted]) => {
+    desktop
+      .listSimulators()
+      .then((items) => {
         if (cancelled) return;
         setSimulators(items);
-        setInputPermission(trusted);
         setSelectedSimulatorUdid((current) => {
           if (current && items.some((item) => item.udid === current)) return current;
           return items.find((item) => item.state === "Booted")?.udid ?? items[0]?.udid;
@@ -164,6 +164,17 @@ function App() {
         prepared = await desktop.prepareSimulatorCapture(selectedSimulatorUdid);
         setSelectedSimulatorUdid(prepared.device.udid);
         setSimulators(await desktop.listSimulators());
+        const ready = Boolean(prepared.input.ready && prepared.crop);
+        setInputReady(ready);
+        if (!prepared.input.ready) {
+          setRuntimeCaptureError(prepared.input.error ?? "Simulator HID input is unavailable.");
+        } else if (!prepared.crop) {
+          setRuntimeCaptureError(
+            "Simulator HID is ready, but the device-screen crop could not be calibrated. Re-attach the Simulator before testing embedded input."
+          );
+        }
+      } else {
+        setInputReady(false);
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -202,6 +213,7 @@ function App() {
           runtimeVideoRef.current.srcObject = null;
         }
         setRuntimeCapture(undefined);
+        setInputReady(false);
       };
     } catch (error) {
       if (error instanceof DOMException && error.name === "NotAllowedError") {
@@ -224,34 +236,31 @@ function App() {
     }
     setRuntimeCapture(undefined);
     setRuntimeCaptureError(undefined);
+    setInputReady(false);
   }
 
-  async function requestSimulatorInput() {
+  async function retrySimulatorInput() {
     const desktop = window.runtimeDesktop;
-    if (!desktop) return;
+    if (!desktop || !runtimeCapture?.crop) return;
 
     setRuntimeCaptureError(undefined);
     try {
-      const trusted = await desktop.requestInputPermission();
-      setInputPermission(trusted);
-      if (!trusted) {
-        setRuntimeCaptureError(
-          "Accessibility permission was requested. Enable the Runtime Inspector development host in System Settings → Privacy & Security → Accessibility, then click Enable Input again."
-        );
-      }
+      await desktop.prepareSimulatorInput();
+      setInputReady(true);
     } catch (error) {
+      setInputReady(false);
       setRuntimeCaptureError(
-        error instanceof Error ? error.message : "Could not request Simulator input permission."
+        error instanceof Error ? error.message : "Could not prepare native Simulator HID input."
       );
     }
   }
 
   function sendSimulatorPointer(
-    event: ReactPointerEvent<HTMLVideoElement>,
+    event: ReactPointerEvent<HTMLDivElement>,
     type: "down" | "drag" | "up"
   ) {
     const desktop = window.runtimeDesktop;
-    if (!desktop || !inputPermission) return;
+    if (!desktop || !inputReady) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -261,21 +270,21 @@ function App() {
     desktop.sendSimulatorPointer({ type, x, y });
   }
 
-  function handleRuntimePointerDown(event: ReactPointerEvent<HTMLVideoElement>) {
-    if (!window.runtimeDesktop || !inputPermission) return;
+  function handleRuntimePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!window.runtimeDesktop || !inputReady) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     sendSimulatorPointer(event, "down");
   }
 
-  function handleRuntimePointerMove(event: ReactPointerEvent<HTMLVideoElement>) {
-    if (!window.runtimeDesktop || !inputPermission || (event.buttons & 1) === 0) return;
+  function handleRuntimePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!window.runtimeDesktop || !inputReady || (event.buttons & 1) === 0) return;
     event.preventDefault();
     sendSimulatorPointer(event, "drag");
   }
 
-  function handleRuntimePointerUp(event: ReactPointerEvent<HTMLVideoElement>) {
-    if (!window.runtimeDesktop || !inputPermission) return;
+  function handleRuntimePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!window.runtimeDesktop || !inputReady) return;
     event.preventDefault();
     sendSimulatorPointer(event, "up");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -363,13 +372,18 @@ function App() {
                 </select>
               ) : null}
               {runtimeCapture && window.runtimeDesktop ? (
-                inputPermission ? (
-                  <span className="input-status" title="Pointer forwarding enabled">
+                inputReady ? (
+                  <span className="input-status" title="Native Simulator HID input enabled">
                     Input on
                   </span>
                 ) : (
-                  <button className="stage-action" type="button" onClick={requestSimulatorInput}>
-                    Enable Input
+                  <button
+                    className="stage-action"
+                    type="button"
+                    onClick={retrySimulatorInput}
+                    disabled={!runtimeCapture.crop}
+                  >
+                    Retry Input
                   </button>
                 )
               ) : null}
@@ -393,37 +407,34 @@ function App() {
           <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
             {runtimeCapture ? (
               <div
-                className={
-                  runtimeCapture.crop
-                    ? "runtime-video-shell device-crop"
-                    : "runtime-video-shell"
-                }
+                className={[
+                  runtimeCapture.crop ? "runtime-video-shell device-crop" : "runtime-video-shell",
+                  inputReady ? "interactive" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 style={runtimeShellStyle(runtimeCapture)}
+                onPointerDown={handleRuntimePointerDown}
+                onPointerMove={handleRuntimePointerMove}
+                onPointerUp={handleRuntimePointerUp}
+                onPointerCancel={handleRuntimePointerUp}
               >
                 <video
                   ref={runtimeVideoRef}
-                  className={
-                    window.runtimeDesktop && inputPermission
-                      ? "runtime-video interactive"
-                      : "runtime-video"
-                  }
+                  className="runtime-video"
                   style={runtimeVideoStyle(runtimeCapture)}
                   autoPlay
                   muted
                   playsInline
-                  onPointerDown={handleRuntimePointerDown}
-                  onPointerMove={handleRuntimePointerMove}
-                  onPointerUp={handleRuntimePointerUp}
-                  onPointerCancel={handleRuntimePointerUp}
                 />
                 {!runtimeCapture.crop ? (
                   <div className="runtime-video-caption">
                     <span>{runtimeCapture.label}</span>
                     <span>
                       {window.runtimeDesktop
-                        ? inputPermission
-                          ? "Interactive · click and drag directly in this viewport"
-                          : "Desktop capture attached · enable input for click/drag forwarding"
+                        ? inputReady
+                          ? "Interactive · native Simulator HID"
+                          : "Desktop capture attached · native input unavailable"
                         : "Interact in the Simulator window · browser capture is view-only"}
                     </span>
                   </div>
