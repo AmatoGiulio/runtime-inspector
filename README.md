@@ -119,9 +119,13 @@ Protocol changes go through an RFC in [`rfcs/`](rfcs/) with conformance fixtures
 pnpm build && pnpm typecheck && pnpm test
 ```
 
+## Workbench experiment
+
+RFC 0005 defines a future Runtime Workbench around the real running app. The `feat/runtime-workbench-m0` branch contains the first bounded spike: explicit runtime probes → 60 Hz recording → broker → timeline graph. Simulator/emulator embedding starts only after that path passes runtime/performance validation.
+
 ## Not in scope yet
 
-Timeline/recording tooling is the next design topic and will start as an RFC. Also out of scope for now: native (Nitro) transport, desktop or VS Code apps, a generic plugin system, and production/remote networking.
+Full Workbench/device viewport work remains experimental and RFC-governed. Also out of scope for now: native (Nitro) transport, desktop or VS Code apps, a generic plugin system, and production/remote networking.
 
 ## Docs
 
