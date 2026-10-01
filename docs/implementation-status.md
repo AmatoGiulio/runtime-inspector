@@ -135,9 +135,9 @@ Broker discovery warns once per process (not per schema or per attempt) and back
 
 Runtime unit tests use an offline in-memory socket by default; transport-specific suites install their own socket doubles. This avoids accidental native Node WebSocket connections from declaration/hook tests. The former baseline stack-overflow failure is resolved.
 
-## Runtime Workbench / recording — RFC 0005 M0
+## Runtime Workbench / recording — RFC 0005
 
-**Implemented on `feat/runtime-workbench-m0`, pending macOS validation**
+**M0 validated on macOS, 2026-10-01**
 
 - additive RIP messages for trace schemas and bounded recording lifecycle;
 - explicit scalar runtime probes through `useRuntimeProbe`;
@@ -145,17 +145,26 @@ Runtime unit tests use an offline in-memory socket by default; transport-specifi
 - trace-schema caching and recording routing through the WebSocket broker;
 - recording state and sequence-gap detection in `panel-core`;
 - a Vite Workbench shell with Outline / Runtime / Inspector / Timeline regions;
-- the example exposes `card-transition.moveX` as the first probe.
+- the example exposes `card-transition.moveX` as the first probe;
+- a real timing → spring transition produced a continuous trace at ~57.2 measured Hz in the observed validation run, with 204 samples and no reported sequence gap.
 
-**Not yet validated / not yet production-ready**
+**M3a implemented on `feat/runtime-workbench-ios-viewport`, pending manual viewport validation**
 
-- measured animation overhead of the JS-frame-loop sampler;
-- the live iOS Simulator viewport;
+- browser-native live window capture in the central Runtime surface;
+- explicit Attach/Detach flow;
+- capture resolution / reported frame-rate metadata;
+- view-only fallback: interaction remains on the actual Simulator window.
+
+**Still not production-ready**
+
+- automatic Simulator discovery;
+- pointer/touch forwarding and coordinate mapping;
+- native desktop host selection (Electron/Tauri/native);
 - Android scrcpy viewport;
 - physical-device viewport;
 - runtime time travel/scrubbing.
 
-M0 is a vertical architecture/performance spike. The device viewport starts only after the trace path is validated.
+M3a intentionally validates live Simulator pixels before committing to a native desktop shell.
 
 ## Explicitly not implemented in this phase
 
