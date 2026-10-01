@@ -313,3 +313,49 @@ The Live Runtime toolbar reports a rolling window in the form:
 ~~~
 
 Because the IOSurface stream intentionally skips unchanged surface seeds, the FPS value represents cadence while the screen is changing, not an idle heartbeat. These numbers are the decision gate for whether M3c.1 MJPEG is sufficient or whether the same IOSurface adapter should move to persistent VideoToolbox H.264.
+
+## M3c.2 — deterministic encoder benchmark
+
+Encoder tuning must not be driven by ad-hoc Replay runs alone.
+
+The Workbench now includes a deterministic native benchmark workload that exercises the **same** `RIEncodeSurfaceJPEG` path used by the live IOSurface stream:
+
+~~~bash
+pnpm benchmark:framebuffer
+~~~
+
+The fixture is fixed and reproducible:
+
+- synthetic IOSurface: 1320×2868;
+- deterministic BGRA pixel pattern;
+- fixed warm-up count;
+- fixed measured iteration count;
+- three rounds per profile by default;
+- the same native resize + ImageIO JPEG path as production.
+
+Default profiles:
+
+| profile | width | JPEG quality |
+| --- | ---: | ---: |
+| baseline | 600 | 0.65 |
+| balanced | 560 | 0.60 |
+| fast | 520 | 0.58 |
+| lean | 480 | 0.55 |
+
+The benchmark reports median-of-rounds p50/p95 encode time, p95 theoretical encode capacity, average payload size, and relative deltas from `baseline`.
+
+Wall-clock time itself is not deterministic across machines. The **workload is deterministic**. Performance acceptance therefore uses a same-run relative gate rather than putting an absolute M4-Pro number into the normal unit-test suite:
+
+~~~bash
+pnpm benchmark:framebuffer:gate
+~~~
+
+The initial gate requires the `balanced` profile to use no more than 90% of baseline p95 encode time and no more than 100% of baseline payload bytes. The gate can be tightened after the first benchmark result.
+
+Normal `pnpm test` also runs a small deterministic encoder fixture and verifies exact source/output dimensions, fixed JPEG payload size across repeated runs, and the native benchmark result schema. It intentionally does **not** assert wall-clock milliseconds.
+
+This separation is deliberate:
+
+- correctness/regression test → deterministic and CI-safe;
+- performance gate → deterministic workload + relative same-machine comparison;
+- live aggressive Replay → integration validation after a profile passes the benchmark.
