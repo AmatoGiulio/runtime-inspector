@@ -194,7 +194,7 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 **Still outstanding**
 
-- final pixel-accurate device-screen crop / pointer alignment across Simulator scales;
+- M3c direct CoreSimulator/IOSurface framebuffer viewport; window-crop approaches are abandoned;
 - Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
 - production packaging/signing and TCC validation.
