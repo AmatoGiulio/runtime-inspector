@@ -10,7 +10,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const sourcePath = path.join(here, "simulator-framebuffer.m");
 const buildDir = path.join(os.tmpdir(), "runtime-inspector");
 const binaryPath = path.join(buildDir, "simulator-framebuffer");
-const HEADER_SIZE = 20;
+const HEADER_SIZE = 32;
 const MAGIC = 0x52494642;
 
 export class SimulatorFramebufferParser {
@@ -38,6 +38,8 @@ export class SimulatorFramebufferParser {
       const width = this.buffer.readUInt32BE(8);
       const height = this.buffer.readUInt32BE(12);
       const sequence = this.buffer.readUInt32BE(16);
+      const capturedAtMs = Number(this.buffer.readBigUInt64BE(20));
+      const encodeDurationUs = this.buffer.readUInt32BE(28);
       const frameLength = HEADER_SIZE + payloadLength;
       if (this.buffer.length < frameLength) return;
 
@@ -48,6 +50,8 @@ export class SimulatorFramebufferParser {
         sequence,
         width,
         height,
+        capturedAtMs,
+        encodeDurationUs,
         mimeType: "image/jpeg",
         bytes
       });
@@ -71,7 +75,7 @@ export class SimulatorFramebufferHelper {
     const parser = new SimulatorFramebufferParser((frame) => {
       onFrame?.({
         ...frame,
-        timestamp: Date.now()
+        receivedAtMs: Date.now()
       });
     });
 
