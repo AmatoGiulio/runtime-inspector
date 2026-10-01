@@ -32,6 +32,25 @@ declare global {
     };
   }
 
+  interface RuntimeDesktopFramebufferPreparation {
+    device: RuntimeDesktopSimulator;
+    mode: string;
+    targetFrameRate: number;
+    input: {
+      ready: boolean;
+      error?: string;
+    };
+  }
+
+  interface RuntimeDesktopFramebufferFrame {
+    sequence: number;
+    timestamp: number;
+    width: number;
+    height: number;
+    mimeType: string;
+    bytes: ArrayBuffer;
+  }
+
   interface RuntimeDesktopApi {
     platform: string;
     getInfo(): Promise<{
@@ -41,6 +60,14 @@ declare global {
     }>;
     listSimulators(): Promise<RuntimeDesktopSimulator[]>;
     prepareSimulatorCapture(udid?: string): Promise<RuntimeDesktopCapturePreparation>;
+    startSimulatorFramebuffer(udid?: string): Promise<RuntimeDesktopFramebufferPreparation>;
+    stopSimulatorFramebuffer(): Promise<boolean>;
+    onSimulatorFramebufferFrame(
+      callback: (frame: RuntimeDesktopFramebufferFrame) => void
+    ): () => void;
+    onSimulatorFramebufferError(
+      callback: (error: { message: string }) => void
+    ): () => void;
     getScreenPermission(): Promise<string>;
     prepareSimulatorInput(): Promise<boolean>;
     sendSimulatorPointer(event: {
