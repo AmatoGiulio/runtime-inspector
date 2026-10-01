@@ -65,6 +65,12 @@ static id RISafePerform(id object, SEL selector) {
     return nil;
   }
 }
+static id RISafeGet(id object, NSString *key, SEL selector) {
+  id value = RISafePerform(object, selector);
+  if (value) return value;
+  return RISafeValue(object, key);
+}
+
 
 static NSString *RIDeviceUDID(id device) {
   id value = RISafeValue(device, @"UDID");
@@ -125,39 +131,93 @@ static id RIFindDevice(NSString *udid, NSString *developerDir, NSString **errorM
   return nil;
 }
 
-static IOSurfaceRef RICopyMainDisplaySurface(id device) {
-  id io = RISafeValue(device, @"io");
+static IOSurfaceRef RICopyMainDisplaySurface(id device, NSString **diagnosticOut) {
+  id io = RISafeGet(device, @"io", @selector(io));
   if (!io) {
-    io = RISafePerform(device, NSSelectorFromString(@"io"));
+    if (diagnosticOut) {
+      *diagnosticOut = [NSString stringWithFormat:@"device %@ has no io client", NSStringFromClass([device class])];
+    }
+    return NULL;
   }
 
   NSArray *ports = RISafePerform(io, @selector(ioPorts));
-  if (![ports isKindOfClass:[NSArray class]]) return NULL;
+  if (![ports isKindOfClass:[NSArray class]]) {
+    if (diagnosticOut) {
+      *diagnosticOut = [NSString stringWithFormat:@"io client %@ returned no ioPorts", NSStringFromClass([io class])];
+    }
+    return NULL;
+  }
 
   IOSurfaceRef fallback = NULL;
+  NSMutableArray<NSString *> *observations = [NSMutableArray array];
 
   for (id port in ports) {
-    id descriptor = RISafeValue(port, @"descriptor");
-    if (!descriptor) continue;
-
-    id state = RISafeValue(descriptor, @"state");
-    NSNumber *displayClass = RISafeValue(state, @"displayClass");
-
-    id surfaceObject = RISafeValue(descriptor, @"framebufferSurface");
-    if (!surfaceObject) {
-      surfaceObject = RISafeValue(descriptor, @"ioSurface");
+    id descriptor = RISafeGet(port, @"descriptor", @selector(descriptor));
+    if (!descriptor) {
+      [observations addObject:[NSString stringWithFormat:@"port %@: no descriptor", NSStringFromClass([port class])]];
+      continue;
     }
-    if (!surfaceObject) continue;
+
+    id state = RISafeGet(descriptor, @"state", @selector(state));
+    id displayClassValue = state
+      ? RISafeGet(state, @"displayClass", @selector(displayClass))
+      : nil;
+
+    unsigned int displayClass = UINT_MAX;
+    if ([displayClassValue respondsToSelector:@selector(unsignedIntValue)]) {
+      displayClass = [displayClassValue unsignedIntValue];
+    } else if (state && [state respondsToSelector:@selector(displayClass)]) {
+      NSMethodSignature *signature = [state methodSignatureForSelector:@selector(displayClass)];
+      if (signature && [signature methodReturnLength] <= sizeof(unsigned int)) {
+        @try {
+          NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+          [invocation setTarget:state];
+          [invocation setSelector:@selector(displayClass)];
+          [invocation invoke];
+          unsigned int raw = 0;
+          [invocation getReturnValue:&raw];
+          displayClass = raw;
+        } @catch (__unused NSException *exception) {
+          displayClass = UINT_MAX;
+        }
+      }
+    }
+
+    id surfaceObject = RISafePerform(descriptor, NSSelectorFromString(@"framebufferSurface"));
+    if (!surfaceObject) {
+      surfaceObject = RISafePerform(descriptor, NSSelectorFromString(@"ioSurface"));
+    }
+
+    if (!surfaceObject) {
+      [observations addObject:[
+        NSString stringWithFormat:
+          @"descriptor %@ class=%@ displayClass=%@ has no framebufferSurface/ioSurface",
+          descriptor,
+          NSStringFromClass([descriptor class]),
+          displayClass == UINT_MAX ? @"?" : [NSString stringWithFormat:@"%u", displayClass]
+      ]];
+      continue;
+    }
 
     CFTypeRef value = (__bridge CFTypeRef)surfaceObject;
-    if (CFGetTypeID(value) != IOSurfaceGetTypeID()) continue;
+    if (CFGetTypeID(value) != IOSurfaceGetTypeID()) {
+      [observations addObject:[
+        NSString stringWithFormat:
+          @"descriptor %@ returned surface type %@",
+          NSStringFromClass([descriptor class]),
+          NSStringFromClass([surfaceObject class])
+      ]];
+      continue;
+    }
 
     IOSurfaceRef surface = (IOSurfaceRef)value;
     CFRetain(surface);
 
-    if ([displayClass respondsToSelector:@selector(unsignedIntValue)] &&
-        [displayClass unsignedIntValue] == 0) {
+    if (displayClass == 0) {
       if (fallback) CFRelease(fallback);
+      if (diagnosticOut) {
+        *diagnosticOut = [NSString stringWithFormat:@"main display surface=%u", IOSurfaceGetID(surface)];
+      }
       return surface;
     }
 
@@ -168,7 +228,23 @@ static IOSurfaceRef RICopyMainDisplaySurface(id device) {
     }
   }
 
-  return fallback;
+  if (fallback) {
+    if (diagnosticOut) {
+      *diagnosticOut = [NSString stringWithFormat:@"using fallback display surface=%u", IOSurfaceGetID(fallback)];
+    }
+    return fallback;
+  }
+
+  if (diagnosticOut) {
+    NSString *joined = [observations componentsJoinedByString:@"; "];
+    *diagnosticOut = [NSString stringWithFormat:
+      @"io=%@ ports=%lu %@",
+      NSStringFromClass([io class]),
+      (unsigned long)[ports count],
+      [joined length] ? joined : @"no renderable display descriptors"
+    ];
+  }
+  return NULL;
 }
 
 static NSData *RIEncodeSurfaceJPEG(
@@ -349,13 +425,17 @@ int main(int argc, const char *argv[]) {
     const useconds_t frameInterval = (useconds_t)(1000000 / fps);
     CFAbsoluteTime lastSurfaceRefresh = 0;
     const CFAbsoluteTime streamStartedAt = CFAbsoluteTimeGetCurrent();
+    NSString *lastSurfaceDiagnostic = nil;
 
     while (true) {
       @autoreleasepool {
         const CFAbsoluteTime frameStart = CFAbsoluteTimeGetCurrent();
 
         if (!surface || frameStart - lastSurfaceRefresh > 1.0) {
-          IOSurfaceRef nextSurface = RICopyMainDisplaySurface(device);
+          NSString *surfaceDiagnostic = nil;
+          IOSurfaceRef nextSurface = RICopyMainDisplaySurface(device, &surfaceDiagnostic);
+          [lastSurfaceDiagnostic release];
+          lastSurfaceDiagnostic = [surfaceDiagnostic copy];
           lastSurfaceRefresh = frameStart;
           if (nextSurface) {
             uint32_t nextID = IOSurfaceGetID(nextSurface);
@@ -374,9 +454,11 @@ int main(int argc, const char *argv[]) {
           if (frameStart - streamStartedAt > 5.0) {
             fprintf(
               stderr,
-              "Could not locate the main CoreSimulator IOSurface for %s within 5 seconds.\n",
-              [udid UTF8String]
+              "Could not locate the main CoreSimulator IOSurface for %s within 5 seconds. %s\n",
+              [udid UTF8String],
+              [[lastSurfaceDiagnostic ?: @"No surface diagnostics available." description] UTF8String]
             );
+            [lastSurfaceDiagnostic release];
             return 4;
           }
           usleep(100000);
