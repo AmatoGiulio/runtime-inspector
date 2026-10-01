@@ -7,18 +7,19 @@ import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const source = path.join(here, "simulator-input.swift");
+const source = path.join(here, "simulator-hid.m");
 
 test(
-  "Simulator input Swift helper typechecks on macOS",
+  "Simulator HID Objective-C helper typechecks on macOS",
   { skip: process.platform !== "darwin" },
   async () => {
     const { stderr } = await execFileAsync("xcrun", [
-      "swiftc",
+      "clang",
+      "-fsyntax-only",
+      "-fno-objc-arc",
       source,
-      "-typecheck",
       "-framework",
-      "ApplicationServices",
+      "Foundation",
       "-framework",
       "CoreGraphics"
     ]);
