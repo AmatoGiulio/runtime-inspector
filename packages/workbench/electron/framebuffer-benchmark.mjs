@@ -26,6 +26,7 @@ const sourceHeight = integerArg("--source-height", 2868);
 const gateProfile = stringArg("--gate-profile");
 const maxRelativeP95 = numberArg("--max-relative-p95", 0.9);
 const maxRelativeBytes = numberArg("--max-relative-bytes", 1.0);
+const minPsnrDb = numberArg("--min-psnr-db");
 
 if (process.platform !== "darwin") {
   console.error("Framebuffer benchmark requires macOS.");
@@ -50,6 +51,7 @@ for (const profile of PROFILES) {
     avgMs: median(runs.map((run) => run.avgMs)),
     avgBytes: median(runs.map((run) => run.avgBytes)),
     capacityFpsP95: median(runs.map((run) => run.capacityFpsP95)),
+    psnrDb: median(runs.map((run) => run.psnrDb)),
     outputHeight: runs[0].outputHeight
   });
 }
@@ -176,34 +178,4 @@ function median(values) {
   return sorted.length % 2 === 0
     ? (sorted[middle - 1] + sorted[middle]) / 2
     : sorted[middle];
-}
-
-function integerArg(name, fallback) {
-  const value = stringArg(name);
-  if (value === undefined) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`);
-  }
-  return parsed;
-}
-
-function numberArg(name, fallback) {
-  const value = stringArg(name);
-  if (value === undefined) return fallback;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive number.`);
-  }
-  return parsed;
-}
-
-function stringArg(name) {
-  const index = process.argv.indexOf(name);
-  if (index === -1) return undefined;
-  return process.argv[index + 1];
-}
-
-function formatPercent(ratio) {
-  return `${(ratio * 100).toFixed(0)}%`;
 }
