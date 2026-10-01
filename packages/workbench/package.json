@@ -11,7 +11,9 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist",
     "desktop": "electron electron/main.mjs --dev",
-    "test": "node --test electron/*.test.mjs"
+    "test": "node --test electron/*.test.mjs",
+    "benchmark:framebuffer": "node electron/framebuffer-benchmark.mjs",
+    "benchmark:framebuffer:gate": "node electron/framebuffer-benchmark.mjs --gate-profile balanced --max-relative-p95 0.90 --max-relative-bytes 1.00"
   },
   "dependencies": {
     "@runtime-inspector/panel-core": "workspace:*",
