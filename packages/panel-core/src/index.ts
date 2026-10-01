@@ -199,9 +199,14 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       if (socket === nextSocket) {
         socket = null;
       }
+      const interruptedRecording =
+        state.recording && !state.recording.complete
+          ? { ...state.recording, complete: true, incomplete: true }
+          : state.recording;
       setState({
         status: stopReconnecting ? "rejected" : "disconnected",
-        notice: stopReconnecting ? state.notice : "Broker disconnected. Reconnecting..."
+        notice: stopReconnecting ? state.notice : "Broker disconnected. Reconnecting...",
+        recording: interruptedRecording
       });
       if (!disposed && !stopReconnecting) {
         reconnectTimer = setTimeout(connectSocket, 1000);
@@ -248,8 +253,22 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       if (message.type === "runtime.status") {
         if (message.schemaId) {
           if (schemasById.has(message.schemaId)) {
+            const recordingWentOffline =
+              !message.online &&
+              state.recording?.schemaId === message.schemaId &&
+              !state.recording.complete;
             setState({
-              staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online }
+              staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online },
+              ...(recordingWentOffline
+                ? {
+                    recording: {
+                      ...state.recording!,
+                      complete: true,
+                      incomplete: true
+                    },
+                    notice: "Runtime disconnected during recording; trace is incomplete."
+                  }
+                : {})
             });
           }
         }
@@ -705,9 +724,23 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     probeIds: string[],
     sampleRateHz = 60
   ): string | undefined {
+    if (state.status !== "connected" || !socket || socket.readyState !== WEBSOCKET_OPEN) {
+      setState({ notice: "Connect to the Runtime Inspector broker before recording." });
+      return undefined;
+    }
     if (blockIfStale(schemaId)) return undefined;
     if (probeIds.length === 0) {
       setState({ notice: "Select at least one runtime probe to record." });
+      return undefined;
+    }
+    const availableProbeIds = new Set((state.traceSchemas[schemaId] ?? []).map((probe) => probe.id));
+    const unavailableProbeIds = probeIds.filter((probeId) => !availableProbeIds.has(probeId));
+    if (unavailableProbeIds.length > 0) {
+      setState({ notice: `Unavailable runtime probe(s): ${unavailableProbeIds.join(", ")}.` });
+      return undefined;
+    }
+    if (sampleRateHz < 1 || sampleRateHz > 60 || !Number.isInteger(sampleRateHz)) {
+      setState({ notice: "Recording sample rate must be an integer between 1 and 60 Hz." });
       return undefined;
     }
     if (state.recording && !state.recording.complete) {
