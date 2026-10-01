@@ -129,6 +129,7 @@ async function compile() {
     "-framework",
     "IOSurface",
     "-fno-objc-arc",
+        "-fblocks",
     "-O3"
   ]);
 }
