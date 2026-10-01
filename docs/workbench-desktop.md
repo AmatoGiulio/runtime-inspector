@@ -276,3 +276,11 @@ The desktop adapter now handles this automatically:
 - Simulator.app is opened with `open -g` so attaching should not steal focus from Runtime Inspector.
 
 The steady-state transport remains the persistent IOSurface helper.
+
+### M3c.1 bootstrap race fix
+
+A second startup issue was isolated after the first priming pass. The one-shot bootstrap frame and the first persistent IOSurface frame could both arrive over Electron IPC before React had mounted the framebuffer canvas. Those frames were valid but had nowhere to render, so the Workbench stayed on `Connecting…` until the next real display change (for example a button press in Simulator).
+
+The bootstrap frame is now returned as part of the start IPC response and retained by the renderer until the framebuffer canvas has mounted. It is drawn on the next animation frame, after which the persistent IOSurface stream owns subsequent updates.
+
+Expected startup behavior: the iOS screen appears immediately after **Launch & Attach**, without touching the external Simulator window.
