@@ -272,8 +272,7 @@ function App() {
         setFramebufferHasFrame(false);
         setRuntimeCapture({
           label: `${prepared.device.name} · ${prepared.device.runtime}`,
-          source: "framebuffer",
-          frameRate: prepared.targetFrameRate
+          source: "framebuffer"
         });
         if (!prepared.input.ready) {
           setRuntimeCaptureError(prepared.input.error ?? "Simulator HID input is unavailable.");
