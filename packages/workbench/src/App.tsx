@@ -28,6 +28,9 @@ interface RuntimeCaptureInfo {
   width?: number;
   height?: number;
   frameRate?: number;
+  latencyMs?: number;
+  encodeMs?: number;
+  decodeMs?: number;
   displaySurface?: string;
 }
 
@@ -48,6 +51,9 @@ function App() {
   const framebufferCanvasRef = useRef<HTMLCanvasElement>(null);
   const framebufferBootstrapRef = useRef<RuntimeDesktopFramebufferFrame | undefined>(undefined);
   const framebufferTimesRef = useRef<number[]>([]);
+  const framebufferLatencyRef = useRef<number[]>([]);
+  const framebufferEncodeRef = useRef<number[]>([]);
+  const framebufferDecodeRef = useRef<number[]>([]);
   const framebufferStatsUpdateRef = useRef(0);
 
   useEffect(() => {
@@ -100,6 +106,7 @@ function App() {
           const frame = pendingFrame;
           pendingFrame = undefined;
 
+          const decodeStartedAt = performance.now();
           const bitmap = await createImageBitmap(
             new Blob([new Uint8Array(frame.bytes)], { type: frame.mimeType })
           );
@@ -119,6 +126,13 @@ function App() {
           }
 
           bitmap.close();
+
+          const decodeMs = performance.now() - decodeStartedAt;
+          pushRolling(framebufferDecodeRef.current, decodeMs);
+          pushRolling(
+            framebufferLatencyRef.current,
+            Math.max(0, Date.now() - frame.capturedAtMs)
+          );
         }
       } catch (error) {
         if (!disposed) {
@@ -139,8 +153,9 @@ function App() {
       void drawLatestFrame();
 
       const times = framebufferTimesRef.current;
-      times.push(frame.timestamp);
+      times.push(frame.capturedAtMs);
       if (times.length > 60) times.shift();
+      pushRolling(framebufferEncodeRef.current, frame.encodeDurationUs / 1000);
 
       const now = performance.now();
       const shouldUpdateStats =
@@ -161,7 +176,10 @@ function App() {
               ...current,
               width: frame.width,
               height: frame.height,
-              frameRate: measuredFrameRate ?? current.frameRate
+              frameRate: measuredFrameRate ?? current.frameRate,
+              latencyMs: average(framebufferLatencyRef.current),
+              encodeMs: average(framebufferEncodeRef.current),
+              decodeMs: average(framebufferDecodeRef.current)
             }
           : current
       );
@@ -211,7 +229,7 @@ function App() {
           bitmap.close();
 
           framebufferBootstrapRef.current = undefined;
-          framebufferTimesRef.current = [frame.timestamp];
+          framebufferTimesRef.current = [frame.capturedAtMs];
           setFramebufferHasFrame(true);
           setRuntimeCapture((current) =>
             current?.source === "framebuffer"
@@ -331,6 +349,9 @@ function App() {
         setInputReady(prepared.input.ready);
         framebufferBootstrapRef.current = prepared.bootstrapFrame;
         framebufferTimesRef.current = [];
+        framebufferLatencyRef.current = [];
+        framebufferEncodeRef.current = [];
+        framebufferDecodeRef.current = [];
         framebufferStatsUpdateRef.current = 0;
         setFramebufferHasFrame(false);
         setRuntimeCapture({
@@ -413,6 +434,9 @@ function App() {
     setFramebufferHasFrame(false);
     framebufferBootstrapRef.current = undefined;
     framebufferTimesRef.current = [];
+    framebufferLatencyRef.current = [];
+    framebufferEncodeRef.current = [];
+    framebufferDecodeRef.current = [];
     framebufferStatsUpdateRef.current = 0;
     setRuntimeCapture(undefined);
     setRuntimeCaptureError(undefined);
@@ -791,8 +815,25 @@ function captureSummary(capture: RuntimeCaptureInfo) {
   const size =
     capture.width && capture.height ? `${capture.width}×${capture.height}` : undefined;
   const fps = capture.frameRate ? `${capture.frameRate.toFixed(0)} fps` : undefined;
+  const latency =
+    capture.latencyMs !== undefined ? `${capture.latencyMs.toFixed(0)} ms` : undefined;
+  const encode =
+    capture.encodeMs !== undefined ? `enc ${capture.encodeMs.toFixed(1)}` : undefined;
+  const decode =
+    capture.decodeMs !== undefined ? `dec ${capture.decodeMs.toFixed(1)}` : undefined;
   const source = capture.source === "framebuffer" ? "direct framebuffer" : undefined;
-  return [size, fps, source].filter(Boolean).join(" · ") || "attached";
+  return [size, fps, latency, encode, decode, source].filter(Boolean).join(" · ") || "attached";
+}
+
+function pushRolling(values: number[], value: number, max = 60) {
+  if (!Number.isFinite(value)) return;
+  values.push(value);
+  if (values.length > max) values.shift();
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return undefined;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function measuredHz(samples: Array<{ t: number; value: number }>) {
