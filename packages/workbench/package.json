@@ -13,7 +13,7 @@
     "desktop": "electron electron/main.mjs --dev",
     "test": "node --test electron/*.test.mjs",
     "benchmark:framebuffer": "node electron/framebuffer-benchmark.mjs",
-    "benchmark:framebuffer:gate": "node electron/framebuffer-benchmark.mjs --gate-profile balanced --max-relative-p95 0.90 --max-relative-bytes 0.85 --max-psnr-loss-db 1.10"
+    "benchmark:framebuffer:gate": "node electron/framebuffer-benchmark.mjs --gate-profile balanced"
   },
   "dependencies": {
     "@runtime-inspector/panel-core": "workspace:*",
