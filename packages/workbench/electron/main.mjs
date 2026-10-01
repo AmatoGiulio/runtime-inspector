@@ -18,6 +18,7 @@ import {
 } from "./simulator.mjs";
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
 import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
+import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -192,8 +193,8 @@ function registerDesktopIpc() {
     await simulatorFramebuffer.start({
       udid: selectedSimulator.udid,
       fps: 60,
-      width: 560,
-      quality: 0.60,
+      width: RUNTIME_FRAMEBUFFER_PROFILE.width,
+      quality: RUNTIME_FRAMEBUFFER_PROFILE.quality,
       onFrame: (frame) => {
         if (sender.isDestroyed()) return;
         sender.send("runtime-desktop:simulator-framebuffer-frame", {
