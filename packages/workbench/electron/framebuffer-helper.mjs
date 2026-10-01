@@ -13,6 +13,20 @@ const binaryPath = path.join(buildDir, "simulator-framebuffer");
 const HEADER_SIZE = 32;
 const MAGIC = 0x52494642;
 
+export function parseSimulatorFramebufferStatusLine(line) {
+  if (typeof line !== "string" || !line.startsWith("RI_STATUS:")) return undefined;
+
+  const message = line.slice("RI_STATUS:".length).trim();
+  const frameSourceMatch = message.match(/^frame-source=([^\s]+)(?:\s+(.*))?$/);
+  if (!frameSourceMatch) return { message };
+
+  return {
+    message,
+    frameSource: frameSourceMatch[1],
+    detail: frameSourceMatch[2]
+  };
+}
+
 export class SimulatorFramebufferParser {
   constructor(onFrame) {
     this.onFrame = onFrame;
@@ -74,6 +88,7 @@ export class SimulatorFramebufferHelper {
     quality = 0.72,
     pollIntervalUs = 500,
     onFrame,
+    onStatus,
     onError
   }) {
     await this.stop();
@@ -115,8 +130,10 @@ export class SimulatorFramebufferHelper {
     child.stderr.on("data", (chunk) => {
       this.stderrBuffer += chunk;
       for (const line of String(chunk).split(/\r?\n/)) {
-        if (line.startsWith("RI_STATUS:")) {
-          console.log(`[Runtime Inspector] ${line.slice("RI_STATUS:".length)}`);
+        const status = parseSimulatorFramebufferStatusLine(line);
+        if (status) {
+          console.log(`[Runtime Inspector] ${status.message}`);
+          onStatus?.(status);
         }
       }
       if (this.stderrBuffer.length > 16000) {
