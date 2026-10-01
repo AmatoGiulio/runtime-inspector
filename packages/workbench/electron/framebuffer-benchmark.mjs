@@ -148,6 +148,7 @@ function printTable(rows) {
     "p95 ms".padStart(8),
     "p95 fps".padStart(8),
     "avg KB".padStart(8),
+    "PSNR".padStart(8),
     "p95 Δ".padStart(8),
     "bytes Δ".padStart(8)
   ].join("  ");
@@ -165,6 +166,7 @@ function printTable(rows) {
         row.p95Ms.toFixed(2).padStart(8),
         row.capacityFpsP95.toFixed(1).padStart(8),
         (row.avgBytes / 1024).toFixed(1).padStart(8),
+        row.psnrDb.toFixed(2).padStart(8),
         formatPercent(row.relativeP95).padStart(8),
         formatPercent(row.relativeBytes).padStart(8)
       ].join("  ")
