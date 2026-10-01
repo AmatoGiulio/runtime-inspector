@@ -215,7 +215,7 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 **Still outstanding**
 
-- measure achieved motion cadence and end-to-end interaction latency on the M4 Pro test host;
+- run the deterministic live viewport benchmark with the promoted balanced profile and record sustained motion cadence / latency;
 - if needed, replace JPEG with persistent VideoToolbox H.264 without changing the adapter boundary;
 - Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
@@ -249,10 +249,10 @@ Observed local deterministic sweep on the M4 Pro test host:
 
 | profile | p95 encode | p95 capacity | avg payload | PSNR | delta vs baseline |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| baseline 600/0.65 | 16.04 ms | 62.3 fps | 513.5 KB | 19.41 dB | — |
-| balanced 560/0.60 | 13.90 ms | 71.9 fps | 400.7 KB | 18.41 dB | -0.99 dB |
-| fast 520/0.58 | 12.60 ms | 79.3 fps | 340.5 KB | 17.88 dB | -1.52 dB |
-| lean 480/0.55 | 11.56 ms | 86.5 fps | 277.1 KB | 17.31 dB | -2.10 dB |
+| baseline 600/0.65 | 16.29 ms | 61.4 fps | 513.5 KB | 19.41 dB | — |
+| balanced 560/0.60 | 14.01 ms | 71.4 fps | 400.7 KB | 18.41 dB | -0.99 dB |
+| fast 520/0.58 | 12.79 ms | 78.2 fps | 340.5 KB | 17.88 dB | -1.52 dB |
+| lean 480/0.55 | 11.64 ms | 85.9 fps | 277.1 KB | 17.31 dB | -2.10 dB |
 
 Commands:
 
@@ -260,3 +260,18 @@ Commands:
 pnpm benchmark:framebuffer
 pnpm benchmark:framebuffer:gate
 ~~~
+
+### M3c.3 deterministic live viewport benchmark
+
+**Implemented on `feat/runtime-workbench-desktop`, pending first measured run**
+
+The example runtime now exposes a dedicated viewport benchmark trigger. It drives the card through a fixed 24-repetition, 140 ms linear back-and-forth animation so the framebuffer transport sees sustained, repeatable motion rather than manual Replay clicks.
+
+The Workbench adds **Benchmark viewport**. A run:
+
+- resets a dedicated measurement window;
+- fires the benchmark trigger exactly once;
+- samples the persistent framebuffer for 3.6 seconds;
+- reports sustained FPS, frame-interval p95, encode p95, decode p95, latency p95, and received frame count.
+
+This is separate from the normal rolling toolbar statistics and is intended to be the deterministic end-to-end validation for the promoted framebuffer profile.
