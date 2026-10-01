@@ -173,21 +173,29 @@ M3a validated live Simulator pixels before committing to a desktop shell.
 - automatic source grant through Electron's display-media request handler, removing the browser sharing picker;
 - browser M3a capture remains available when the Workbench is opened outside Electron.
 
-**M3b.2 implemented on `feat/runtime-workbench-desktop`, pending manual input validation**
+**M3b.2 reworked on `feat/runtime-workbench-desktop`, pending manual HID validation**
 
-- normalized pointer coordinates from the embedded Runtime surface;
-- persistent Swift/Core Graphics input helper;
-- direct mouse down/drag/up posting to the Simulator process by macOS window id;
-- explicit Accessibility-permission check/prompt flow;
+The first CGEvent/`postToPid` implementation was manually tested and did **not** deliver touches to the iOS app surface. It has been removed.
+
+Current spike:
+
+- device-screen crop calibration against a `simctl io screenshot` reference;
+- normalized pointer coordinates from the cropped Runtime surface;
+- persistent Objective-C helper using SimulatorKit IndigoHID / `SimDeviceLegacyHIDClient`;
+- direct touch down/drag/up delivery to the selected Simulator UDID;
+- no Accessibility permission dependency for the native HID path;
 - pointer input remains transport-local and does not alter RIP semantics.
+
+This uses private Xcode Simulator frameworks. It is viable for a developer tool spike but is an explicit compatibility/maintenance risk and is not yet a permanent product commitment.
 
 **Packaging/TCC requirement recorded**
 
-In development macOS attributed Screen Recording permission to the VS Code host. Release work must package/sign Runtime Inspector and its helper so Screen Recording and Accessibility permissions are presented under the correct product identity, with first-run permission UX.
+In development macOS attributed Screen Recording permission to the VS Code host. Release work must package/sign Runtime Inspector and its native helper so Screen Recording is presented under the correct product identity, with first-run permission UX.
 
 **Still outstanding**
 
-- device-screen-only crop;
+- manual validation of IndigoHID tap/drag on the embedded crop;
+- Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
 - production packaging/signing and TCC validation.
 
