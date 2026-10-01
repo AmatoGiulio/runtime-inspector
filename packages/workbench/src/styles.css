@@ -180,6 +180,29 @@ button {
   color: #65656a;
 }
 
+.stage-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.simulator-select {
+  max-width: 290px;
+  height: 24px;
+  border: 1px solid #36363a;
+  border-radius: 6px;
+  padding: 0 24px 0 8px;
+  color: #c7c7cc;
+  background: #202023;
+  font: inherit;
+  font-size: 10px;
+  outline: none;
+}
+
+.simulator-select:focus {
+  border-color: #515158;
+}
+
 .stage-action,
 .device-attach {
   border: 1px solid #36363a;
@@ -195,9 +218,16 @@ button {
   font-size: 10px;
 }
 
-.stage-action:hover,
-.device-attach:hover {
+.stage-action:hover:not(:disabled),
+.device-attach:hover:not(:disabled) {
   background: #2b2b30;
+}
+
+.stage-action:disabled,
+.device-attach:disabled,
+.simulator-select:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .capture-status {
