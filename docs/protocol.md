@@ -401,7 +401,14 @@ Derived from `packages/transport-ws/src/index.ts`.
 | `control.trigger` | opposite role (runtime) | never | never |
 | `control.commit` | opposite role (runtime) | no | no |
 | `runtime.status` | broadcast to all panels, from broker (on runtime connect/disconnect) | no | no |
-| `error` | sender only, from broker | no | no |
+| `trace.schema.publish` | opposite role (panel) | yes, keyed by sending runtime's `clientId` | yes, to panels that complete handshake afterward |
+| `trace.schema.dispose` | opposite role (panel) | deletes the trace-schema cache entry | n/a |
+| `recording.start` | opposite role (runtime) | no | no |
+| `recording.started` | opposite role (panel) | no | no |
+| `recording.chunk` | opposite role (panel) | never | never |
+| `recording.stop` | opposite role (runtime) | no | no |
+| `recording.complete` | opposite role (panel) | no | no |
+| `error` | sender only, from broker/runtime | no | no |
 | `source.apply` | `workspace` clients only (from a `panel`) | no | no |
 | `source.applyResult` | `panel` clients only (from a `workspace`) | no | no |
 
@@ -409,9 +416,10 @@ Derived from `packages/transport-ws/src/index.ts`.
 
 Additional broker behavior:
 
-- The schema cache entry for a runtime is deleted **only** by an explicit `schema.dispose` from that runtime, or when a different schema with the same id is republished. A silent disconnect (socket close without a preceding `schema.dispose`) keeps the cache entry — see the `runtime.status` section above.
-- `control.trigger` is never cached or replayed, by design: replaying a command on late-panel-join would re-execute it, which is exactly the taxonomy violation 0.3 fixes.
-- All `runtime`/`panel` messages (everything except `source.apply`/`source.applyResult`) are relayed strictly between clients of the **opposite** role, `runtime` and `panel` only (`forwardToOppositeRole`); a message from a `panel` never reaches another `panel`, a `runtime`, or a `workspace`, and vice versa.
+- The control-schema cache entry for a runtime is deleted **only** by an explicit `schema.dispose` from that runtime, or when a different schema is republished for that runtime. A silent disconnect (socket close without a preceding `schema.dispose`) keeps the cache entry — see the `runtime.status` section above.
+- Trace schemas follow the same late-join principle: the latest `trace.schema.publish` is cached per runtime. `trace.schema.dispose` removes only the trace cache; a normal `schema.dispose` also removes the trace cache owned by that runtime so a disposed runtime cannot leave orphan probe metadata behind.
+- `control.trigger`, `recording.start`, `recording.stop`, and `recording.chunk` are never cached or replayed. In particular, a late panel may recover probe metadata but never inherits samples from an earlier recording.
+- Ordinary `runtime`/`panel` messages (everything except `source.apply`/`source.applyResult`) are relayed strictly between the **opposite** runtime/panel roles (`forwardToOppositeRole`): panel → runtime and runtime → panel. They never fan out to a sender's own role or to `workspace` clients.
 - `source.apply` and `source.applyResult` are routed explicitly by target role rather than by "opposite role": `source.apply` from a `panel` is forwarded only to `workspace` clients (never to `runtime`), and `source.applyResult` from a `workspace` is forwarded only to `panel` clients. Neither is ever cached or replayed to a late joiner, like `control.trigger`.
 - Unparseable JSON is answered with an `error` (`INVALID_MESSAGE`) and otherwise dropped — it is never forwarded.
 
@@ -446,10 +454,11 @@ RIP deliberately does not specify how messages move between runtime and client. 
 Current concrete paths:
 
 ```text
-Web panel -> panel-core -> WebSocket broker -> runtime
-MCP       -------------> WebSocket broker -> runtime
-CLI (workspace) <-------- WebSocket broker <- panel (source.apply)
-Rozenite  -> panel-core -> plugin bridge ----> runtime
+Web panel  -> panel-core -> WebSocket broker -> runtime
+Workbench  -> panel-core -> WebSocket broker -> runtime
+MCP        -------------> WebSocket broker -> runtime
+CLI (workspace) <--------- WebSocket broker <- panel (source.apply)
+Rozenite   -> panel-core -> plugin bridge ----> runtime
 ```
 
 Transport-specific lifecycle signals may exist outside RIP, but they must not redefine protocol semantics. The Rozenite `runtime-inspector:ready` generation event is one such transport-local signal; it results in existing RIP stale/re-handshake behavior rather than a new protocol message.
