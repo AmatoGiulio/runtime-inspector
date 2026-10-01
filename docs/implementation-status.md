@@ -135,12 +135,33 @@ Broker discovery warns once per process (not per schema or per attempt) and back
 
 Runtime unit tests use an offline in-memory socket by default; transport-specific suites install their own socket doubles. This avoids accidental native Node WebSocket connections from declaration/hook tests. The former baseline stack-overflow failure is resolved.
 
+## Runtime Workbench / recording — RFC 0005 M0
+
+**Implemented on `feat/runtime-workbench-m0`, pending macOS validation**
+
+- additive RIP messages for trace schemas and bounded recording lifecycle;
+- explicit scalar runtime probes through `useRuntimeProbe`;
+- batched 1–60 Hz M0 recorder with a 10 second cap;
+- trace-schema caching and recording routing through the WebSocket broker;
+- recording state and sequence-gap detection in `panel-core`;
+- a Vite Workbench shell with Outline / Runtime / Inspector / Timeline regions;
+- the example exposes `card-transition.moveX` as the first probe.
+
+**Not yet validated / not yet production-ready**
+
+- measured animation overhead of the JS-frame-loop sampler;
+- the live iOS Simulator viewport;
+- Android scrcpy viewport;
+- physical-device viewport;
+- runtime time travel/scrubbing.
+
+M0 is a vertical architecture/performance spike. The device viewport starts only after the trace path is validated.
+
 ## Explicitly not implemented in this phase
 
 - Nitro Modules integration;
 - standalone desktop application;
 - VSCode extension;
-- recording/timeline tooling;
 - generic plugin system;
 - production/remote networking;
 - monetization features.
