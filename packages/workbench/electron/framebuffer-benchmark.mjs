@@ -187,3 +187,33 @@ function median(values) {
     ? (sorted[middle - 1] + sorted[middle]) / 2
     : sorted[middle];
 }
+
+function integerArg(name, fallback) {
+  const value = stringArg(name);
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
+}
+
+function numberArg(name, fallback) {
+  const value = stringArg(name);
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive number.`);
+  }
+  return parsed;
+}
+
+function stringArg(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return undefined;
+  return process.argv[index + 1];
+}
+
+function formatPercent(ratio) {
+  return `${(ratio * 100).toFixed(0)}%`;
+}
