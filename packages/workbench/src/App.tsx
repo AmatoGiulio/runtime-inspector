@@ -385,6 +385,13 @@ function App() {
       return;
     }
 
+    if (state.status !== "connected") {
+      setRuntimeCaptureError(
+        "Runtime disconnected. Start the Runtime Inspector broker, reconnect the app, then run the viewport benchmark."
+      );
+      return;
+    }
+
     const schema = state.schemas.find((item) => item.id === schemaId);
     const benchmarkControl = schema?.groups
       .flatMap((group) => group.controls)
@@ -848,6 +855,7 @@ function App() {
             onClick={runViewportBenchmark}
             disabled={
               !schemaId ||
+              state.status !== "connected" ||
               runtimeCapture?.source !== "framebuffer" ||
               viewportBenchmarkBusy
             }
