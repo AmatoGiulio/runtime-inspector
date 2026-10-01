@@ -99,9 +99,9 @@ The original implementation attempted to forward macOS mouse events to Simulator
 
 The current M3b.2 spike follows the mechanism used by Simulator-focused developer tooling instead:
 
-- a `simctl io screenshot` provides the exact device framebuffer reference;
-- the desktop adapter matches that reference inside the captured Simulator window and derives a normalized device-screen crop;
-- the Workbench renders only that cropped device surface;
+- a `simctl io screenshot` provides the exact device framebuffer aspect;
+- the desktop adapter reads Simulator's Accessibility `AXGroup` bounds for the actual device-screen region and normalizes those bounds against the Simulator window;
+- the Workbench renders only that deterministic device surface;
 - pointer positions in the crop are already normalized iOS-screen coordinates;
 - a persistent Objective-C helper loads Xcode's private SimulatorKit and opens a `SimDeviceLegacyHIDClient` for the selected Simulator UDID;
 - down / drag / up are sent through Simulator's IndigoHID path rather than macOS mouse-event routing;
@@ -133,7 +133,7 @@ No external implementation is vendored as a package dependency.
 
 Manual validation on 2026-10-01 confirmed that the native IndigoHID path reaches the app: the embedded `TAP TEST` counter increments from Runtime Inspector. The remaining defect is crop precision: the first matcher can include part of the Simulator/device bezel, which introduces a small pointer offset.
 
-The crop matcher is therefore required to lock onto high-information framebuffer features (status bar, Dynamic Island, app/card/button edges) rather than mostly-dark interior samples.
+The first visual/template crop matcher was rejected after it mis-identified a top/status-bar region and produced a badly zoomed viewport. It has been removed. Crop now comes from Simulator Accessibility geometry, with full-window capture as the safe fallback if geometry is unavailable.
 
 - Launch & Attach reports **Input on** only after the native HID client is prepared;
 - the central viewport shows the device screen crop rather than Simulator chrome;
