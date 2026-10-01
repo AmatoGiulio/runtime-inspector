@@ -1,0 +1,5 @@
+{
+  "type": "recording.stop",
+  "recordingId": "rec-1",
+  "schemaId": "card-transition"
+}
