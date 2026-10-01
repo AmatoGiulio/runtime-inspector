@@ -707,3 +707,53 @@ describe("recording timeline state (RFC 0005 M0)", () => {
     expect(session.getState().recording?.incomplete).toBe(true);
   });
 });
+
+describe("recording lifecycle guards", () => {
+  it("refuses recording before the broker is connected", () => {
+    const { session } = createSession();
+    expect(session.startRecording("demo", ["speed"], 60)).toBeUndefined();
+    expect(session.getState().notice).toContain("Connect to the Runtime Inspector broker");
+  });
+
+  it("refuses unavailable probes and unsupported sample rates", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({
+      type: "trace.schema.publish",
+      schemaId: "demo",
+      probes: [{ id: "speed", valueType: "number" }]
+    });
+
+    expect(session.startRecording("demo", ["missing"], 60)).toBeUndefined();
+    expect(session.getState().notice).toContain("Unavailable runtime probe");
+
+    expect(session.startRecording("demo", ["speed"], 120)).toBeUndefined();
+    expect(session.getState().notice).toContain("between 1 and 60 Hz");
+  });
+
+  it("marks an active trace incomplete when the runtime goes offline", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({
+      type: "trace.schema.publish",
+      schemaId: "demo",
+      probes: [{ id: "speed", valueType: "number" }]
+    });
+
+    session.startRecording("demo", ["speed"], 60);
+    socket.receive({
+      type: "runtime.status",
+      online: false,
+      clientId: "runtime-demo",
+      schemaId: "demo"
+    });
+
+    expect(session.getState().recording?.complete).toBe(true);
+    expect(session.getState().recording?.incomplete).toBe(true);
+    expect(session.getState().notice).toContain("trace is incomplete");
+  });
+});
