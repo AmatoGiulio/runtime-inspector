@@ -142,17 +142,18 @@ function App() {
       return;
     }
 
+    const desktop = window.runtimeDesktop;
     setRuntimeCaptureError(undefined);
-    setDesktopBusy(Boolean(window.runtimeDesktop));
+    setDesktopBusy(Boolean(desktop));
 
     try {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
 
       let prepared: RuntimeDesktopCapturePreparation | undefined;
-      if (window.runtimeDesktop) {
-        prepared = await window.runtimeDesktop.prepareSimulatorCapture(selectedSimulatorUdid);
+      if (desktop) {
+        prepared = await desktop.prepareSimulatorCapture(selectedSimulatorUdid);
         setSelectedSimulatorUdid(prepared.device.udid);
-        setSimulators(await window.runtimeDesktop.listSimulators());
+        setSimulators(await desktop.listSimulators());
       }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
