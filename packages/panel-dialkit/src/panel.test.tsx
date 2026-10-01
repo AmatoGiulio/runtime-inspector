@@ -56,6 +56,9 @@ function makeSession(): PanelSession {
     applyCompareSlot: vi.fn(),
     exportTypeScript: vi.fn(() => "export const card = {};"),
     applySource: vi.fn(),
+    startRecording: vi.fn(),
+    stopRecording: vi.fn(),
+    clearRecording: vi.fn(),
   };
 }
 
@@ -65,6 +68,7 @@ function makeState(overrides: Partial<PanelState> = {}): PanelState {
     schemas: [schema],
     staleSchemaIds: {},
     values: { card: { blur: 20 } },
+    traceSchemas: {},
     compareSlots: {},
     ...overrides,
   };
