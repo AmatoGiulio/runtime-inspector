@@ -26,6 +26,10 @@ declare global {
       windowId: number;
     };
     crop?: RuntimeDesktopCrop;
+    input: {
+      ready: boolean;
+      error?: string;
+    };
   }
 
   interface RuntimeDesktopApi {
@@ -38,8 +42,7 @@ declare global {
     listSimulators(): Promise<RuntimeDesktopSimulator[]>;
     prepareSimulatorCapture(udid?: string): Promise<RuntimeDesktopCapturePreparation>;
     getScreenPermission(): Promise<string>;
-    getInputPermission(): Promise<boolean>;
-    requestInputPermission(): Promise<boolean>;
+    prepareSimulatorInput(): Promise<boolean>;
     sendSimulatorPointer(event: {
       type: "down" | "drag" | "up";
       x: number;
