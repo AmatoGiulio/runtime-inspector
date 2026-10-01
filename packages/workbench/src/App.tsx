@@ -168,10 +168,6 @@ function App() {
         setInputReady(ready);
         if (!prepared.input.ready) {
           setRuntimeCaptureError(prepared.input.error ?? "Simulator HID input is unavailable.");
-        } else if (!prepared.crop) {
-          setRuntimeCaptureError(
-            "Simulator HID is ready, but the device-screen crop could not be calibrated. Re-attach the Simulator before testing embedded input."
-          );
         }
       } else {
         setInputReady(false);
@@ -376,15 +372,21 @@ function App() {
                   <span className="input-status" title="Native Simulator HID input enabled">
                     Input on
                   </span>
-                ) : (
+                ) : runtimeCapture.crop ? (
                   <button
                     className="stage-action"
                     type="button"
                     onClick={retrySimulatorInput}
-                    disabled={!runtimeCapture.crop}
                   >
                     Retry Input
                   </button>
+                ) : (
+                  <span
+                    className="input-status pending"
+                    title="Window capture is view-only until the direct CoreSimulator framebuffer adapter lands."
+                  >
+                    Framebuffer pending
+                  </span>
                 )
               ) : null}
               <button
@@ -434,7 +436,7 @@ function App() {
                       {window.runtimeDesktop
                         ? inputReady
                           ? "Interactive · native Simulator HID"
-                          : "Desktop capture attached · native input unavailable"
+                          : "Window fallback · direct framebuffer pending"
                         : "Interact in the Simulator window · browser capture is view-only"}
                     </span>
                   </div>
