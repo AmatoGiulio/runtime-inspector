@@ -4,7 +4,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -30,7 +29,6 @@ interface RuntimeCaptureInfo {
   height?: number;
   frameRate?: number;
   displaySurface?: string;
-  crop?: RuntimeDesktopCrop;
 }
 
 function App() {
@@ -47,7 +45,7 @@ function App() {
   const [framebufferUrl, setFramebufferUrl] = useState<string>();
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
-  const framebufferUrlRef = useRef<string>();
+  const framebufferUrlRef = useRef<string | undefined>(undefined);
   const framebufferTimesRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -667,33 +665,6 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
       </div>
     </div>
   );
-}
-
-function runtimeShellStyle(capture: RuntimeCaptureInfo): CSSProperties | undefined {
-  const crop = capture.crop;
-  if (!crop || !capture.width || !capture.height) return undefined;
-
-  const cropWidthPx = crop.width * capture.width;
-  const cropHeightPx = crop.height * capture.height;
-  if (cropWidthPx <= 0 || cropHeightPx <= 0) return undefined;
-
-  return {
-    aspectRatio: String(cropWidthPx / cropHeightPx)
-  };
-}
-
-function runtimeVideoStyle(capture: RuntimeCaptureInfo): CSSProperties | undefined {
-  const crop = capture.crop;
-  if (!crop) return undefined;
-
-  return {
-    position: "absolute",
-    width: `${100 / crop.width}%`,
-    maxWidth: "none",
-    maxHeight: "none",
-    left: `${(-crop.x / crop.width) * 100}%`,
-    top: `${(-crop.y / crop.height) * 100}%`
-  };
 }
 
 function captureSummary(capture: RuntimeCaptureInfo) {
