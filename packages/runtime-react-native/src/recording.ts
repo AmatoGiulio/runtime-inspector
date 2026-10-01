@@ -159,6 +159,15 @@ export function stopAllRuntimeRecordings() {
   }
 }
 
+export function stopRuntimeRecordingsForSchema(schemaId: string) {
+  const end = nowMs();
+  for (const recording of Array.from(activeRecordings.values())) {
+    if (recording.request.schemaId === schemaId) {
+      finishRecording(recording, end);
+    }
+  }
+}
+
 function publishTraceSchema(schemaId: string) {
   const message = getTraceSchema(schemaId);
   if (message) emitRuntimeTrace?.(schemaId, message);
