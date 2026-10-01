@@ -1,0 +1,7 @@
+{
+  "type": "recording.start",
+  "recordingId": "rec-fast",
+  "schemaId": "card-transition",
+  "probeIds": ["moveX"],
+  "sampleRateHz": 120
+}
