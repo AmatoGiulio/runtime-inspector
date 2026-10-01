@@ -386,3 +386,60 @@ describe("serializeValueExpression", () => {
     expect(() => serializeValueExpression("spring", { damping: 10 })).toThrow(/spring/i);
   });
 });
+
+describe("recording protocol (RFC 0005 M0)", () => {
+  it("parses trace schema and recording lifecycle messages", () => {
+    expect(
+      parseRIPMessage({
+        type: "trace.schema.publish",
+        schemaId: "card-transition",
+        probes: [{ id: "moveX", valueType: "number", unit: "px" }]
+      }).type
+    ).toBe("trace.schema.publish");
+
+    expect(
+      parseRIPMessage({
+        type: "recording.start",
+        recordingId: "rec-1",
+        schemaId: "card-transition",
+        probeIds: ["moveX"],
+        sampleRateHz: 60
+      }).type
+    ).toBe("recording.start");
+
+    expect(
+      parseRIPMessage({
+        type: "recording.chunk",
+        recordingId: "rec-1",
+        schemaId: "card-transition",
+        sequence: 0,
+        samples: [
+          { t: 0, values: { moveX: 0 } },
+          { t: 16.67, values: { moveX: -12.5 } }
+        ]
+      }).type
+    ).toBe("recording.chunk");
+  });
+
+  it("rejects unsupported M0 sampling rates and non-finite samples", () => {
+    expect(() =>
+      parseRIPMessage({
+        type: "recording.start",
+        recordingId: "rec-fast",
+        schemaId: "card-transition",
+        probeIds: ["moveX"],
+        sampleRateHz: 120
+      })
+    ).toThrow();
+
+    expect(() =>
+      parseRIPMessage({
+        type: "recording.chunk",
+        recordingId: "rec-1",
+        schemaId: "card-transition",
+        sequence: 0,
+        samples: [{ t: 0, values: { moveX: Number.NaN } }]
+      })
+    ).toThrow();
+  });
+});
