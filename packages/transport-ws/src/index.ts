@@ -5,6 +5,7 @@ import {
   parseRIPMessage,
   RIP_VERSION,
   type SchemaMessage,
+  type TraceSchemaPublish,
   type RIPMessage,
   type RIPRole
 } from "@runtime-inspector/protocol";
@@ -36,6 +37,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
   const server = new WebSocketServer({ host, port });
   const clients = new Map<WebSocket, ClientRecord>();
   const schemasByRuntime = new Map<string, SchemaMessage>();
+  const traceSchemasByRuntime = new Map<string, TraceSchemaPublish>();
   const onlineRuntimeIds = new Set<string>();
 
   server.on("connection", (socket) => {
@@ -96,6 +98,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         send(socket, accept);
         if (message.role === "panel") {
           replaySchemas(socket, schemasByRuntime, onlineRuntimeIds);
+          replayTraceSchemas(socket, traceSchemasByRuntime);
         }
         if (message.role === "runtime") {
           onlineRuntimeIds.add(record.id);
@@ -110,6 +113,14 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
 
       if (message.type === "schema.dispose" && record.role === "runtime") {
         schemasByRuntime.delete(record.id);
+      }
+
+      if (message.type === "trace.schema.publish" && record.role === "runtime") {
+        traceSchemasByRuntime.set(record.id, message);
+      }
+
+      if (message.type === "trace.schema.dispose" && record.role === "runtime") {
+        traceSchemasByRuntime.delete(record.id);
       }
 
       routeMessage(clients, record, message);
@@ -163,6 +174,15 @@ function replaySchemas(
         schemaId: schemaMessage.schema.id
       });
     }
+  }
+}
+
+function replayTraceSchemas(
+  socket: WebSocket,
+  traceSchemasByRuntime: Map<string, TraceSchemaPublish>
+) {
+  for (const traceSchema of traceSchemasByRuntime.values()) {
+    send(socket, traceSchema);
   }
 }
 
