@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type PointerEvent as ReactPointerEvent
+} from "react";
 import { createRoot } from "react-dom/client";
 import { createPanelSession } from "@runtime-inspector/panel-core";
 import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
@@ -237,7 +244,7 @@ function App() {
   }
 
   function sendSimulatorPointer(
-    event: React.PointerEvent<HTMLVideoElement>,
+    event: ReactPointerEvent<HTMLVideoElement>,
     type: "down" | "drag" | "up"
   ) {
     const desktop = window.runtimeDesktop;
@@ -251,20 +258,20 @@ function App() {
     desktop.sendSimulatorPointer({ type, x, y });
   }
 
-  function handleRuntimePointerDown(event: React.PointerEvent<HTMLVideoElement>) {
+  function handleRuntimePointerDown(event: ReactPointerEvent<HTMLVideoElement>) {
     if (!window.runtimeDesktop || !inputPermission) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     sendSimulatorPointer(event, "down");
   }
 
-  function handleRuntimePointerMove(event: React.PointerEvent<HTMLVideoElement>) {
+  function handleRuntimePointerMove(event: ReactPointerEvent<HTMLVideoElement>) {
     if (!window.runtimeDesktop || !inputPermission || (event.buttons & 1) === 0) return;
     event.preventDefault();
     sendSimulatorPointer(event, "drag");
   }
 
-  function handleRuntimePointerUp(event: React.PointerEvent<HTMLVideoElement>) {
+  function handleRuntimePointerUp(event: ReactPointerEvent<HTMLVideoElement>) {
     if (!window.runtimeDesktop || !inputPermission) return;
     event.preventDefault();
     sendSimulatorPointer(event, "up");
