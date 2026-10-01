@@ -9,7 +9,9 @@
     "dev": "vite --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "desktop": "electron electron/main.mjs --dev",
+    "test": "node --test electron/*.test.mjs"
   },
   "dependencies": {
     "@runtime-inspector/panel-core": "workspace:*",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2"
+    "@types/react-dom": "^19.0.2",
+    "electron": "44.0.0"
   }
 }
