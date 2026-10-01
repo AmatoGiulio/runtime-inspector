@@ -221,3 +221,16 @@ CoreSimulator
 ~~~
 
 The Workbench API and HID coordinate semantics should remain the same, so this upgrade is a transport/performance change rather than another UI rewrite.
+
+### M3c.0 validation result
+
+Manual validation on 2026-10-01 confirmed:
+
+- the direct framebuffer shows only the iOS screen;
+- embedded HID taps reach the app correctly;
+- framebuffer-normalized input coordinates are correct;
+- the screenshot-per-frame proof runs at only ~9 fps in the observed run.
+
+The performance result is expected from spawning `simctl`, encoding a JPEG, copying it through IPC, creating a Blob URL, decoding it, and replacing the renderer image for every frame. M3c.0 is therefore architecture proof only and must not be optimized further.
+
+M3c.1 must replace the entire per-frame process/encode/decode loop with one persistent CoreSimulator framebuffer stream.
