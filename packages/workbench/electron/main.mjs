@@ -158,8 +158,8 @@ function registerDesktopIpc() {
     await simulatorFramebuffer.start({
       udid: selectedSimulator.udid,
       fps: 60,
-      width: 640,
-      quality: 0.72,
+      width: 600,
+      quality: 0.65,
       onFrame: (frame) => {
         if (sender.isDestroyed()) return;
         sender.send("runtime-desktop:simulator-framebuffer-frame", {
