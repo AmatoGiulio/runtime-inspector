@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RIPMessage } from "@runtime-inspector/protocol";
 import {
   handleRecordingStart,
   handleRecordingStop,
@@ -32,9 +33,9 @@ describe("runtime recording M0", () => {
     const now = vi.spyOn(performance, "now");
     now.mockReturnValue(100);
 
-    const messages: Array<{ type: string; [key: string]: unknown }> = [];
+    const messages: RIPMessage[] = [];
     setRuntimeTraceEmitter((_schemaId, message) => {
-      messages.push(message as { type: string; [key: string]: unknown });
+      messages.push(message);
     });
 
     const source = { value: 0 };
@@ -66,14 +67,15 @@ describe("runtime recording M0", () => {
       schemaId: "card-transition"
     });
 
-    const chunks = messages.filter((message) => message.type === "recording.chunk");
+    const chunks = messages.filter(
+      (message): message is Extract<RIPMessage, { type: "recording.chunk" }> =>
+        message.type === "recording.chunk"
+    );
     expect(messages.some((message) => message.type === "recording.started")).toBe(true);
     expect(chunks.length).toBeGreaterThan(0);
     expect(
       chunks.some((chunk) =>
-        (chunk.samples as Array<{ values: Record<string, number> }>).some(
-          (sample) => typeof sample.values.moveX === "number"
-        )
+        chunk.samples.some((sample) => typeof sample.values.moveX === "number")
       )
     ).toBe(true);
     expect(messages.some((message) => message.type === "recording.complete")).toBe(true);
@@ -82,9 +84,9 @@ describe("runtime recording M0", () => {
   });
 
   it("rejects a recording request for an unknown probe", () => {
-    const messages: Array<{ type: string; code?: string }> = [];
+    const messages: RIPMessage[] = [];
     setRuntimeTraceEmitter((_schemaId, message) => {
-      messages.push(message as { type: string; code?: string });
+      messages.push(message);
     });
 
     handleRecordingStart({
