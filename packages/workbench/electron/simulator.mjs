@@ -230,7 +230,7 @@ export async function ensureIOSSimulatorBooted(udid) {
     }
   }
 
-  await execFileAsync("open", ["-a", "Simulator"]);
+  await execFileAsync("open", ["-g", "-a", "Simulator"]);
 
   try {
     await execFileAsync("xcrun", ["simctl", "bootstatus", udid, "-b"], {
