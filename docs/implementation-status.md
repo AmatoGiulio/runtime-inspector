@@ -209,6 +209,8 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 - pre-encode downscale to a 600 px Workbench stream;
 - framed JPEG transport over one long-lived process;
 - coalesced canvas decoding in the renderer;
+- per-frame capture timestamp + native encode timing;
+- rolling motion FPS, capture-to-canvas latency, encode cost, and decode/draw cost visible in the Workbench;
 - HID stays on the same normalized framebuffer coordinate system.
 
 **Still outstanding**
