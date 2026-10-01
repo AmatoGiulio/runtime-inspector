@@ -173,7 +173,7 @@ M3a validated live Simulator pixels before committing to a desktop shell.
 - automatic source grant through Electron's display-media request handler, removing the browser sharing picker;
 - browser M3a capture remains available when the Workbench is opened outside Electron.
 
-**M3b.2 reworked on `feat/runtime-workbench-desktop`, pending manual HID validation**
+**M3b.2 native HID path validated manually on macOS, 2026-10-01; crop alignment refinement pending**
 
 The first CGEvent/`postToPid` implementation was manually tested and did **not** deliver touches to the iOS app surface. It has been removed.
 
@@ -194,7 +194,7 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 **Still outstanding**
 
-- manual validation of IndigoHID tap/drag on the embedded crop;
+- final pixel-accurate device-screen crop / pointer alignment across Simulator scales;
 - Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
 - production packaging/signing and TCC validation.
