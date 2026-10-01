@@ -15,6 +15,7 @@ declare global {
     source: {
       id: string;
       name: string;
+      windowId: number;
     };
   }
 
@@ -28,6 +29,13 @@ declare global {
     listSimulators(): Promise<RuntimeDesktopSimulator[]>;
     prepareSimulatorCapture(udid?: string): Promise<RuntimeDesktopCapturePreparation>;
     getScreenPermission(): Promise<string>;
+    getInputPermission(): Promise<boolean>;
+    requestInputPermission(): Promise<boolean>;
+    sendSimulatorPointer(event: {
+      type: "down" | "drag" | "up";
+      x: number;
+      y: number;
+    }): void;
   }
 
   interface Window {
