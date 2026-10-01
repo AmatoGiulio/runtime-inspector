@@ -560,14 +560,20 @@ function sendSchemaDispose(session: Session) {
     schemaId: session.schema.id,
     source: "runtime"
   };
+  const traceDispose: RIPMessage = {
+    type: "trace.schema.dispose",
+    schemaId: session.schema.id
+  };
   if (session.active) {
     broadcastDirect(message);
+    broadcastDirect(traceDispose);
   }
 
   const socket = session.socket;
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   try {
     socket.send(JSON.stringify(message));
+    socket.send(JSON.stringify(traceDispose));
   } catch {
     // best-effort: disposal is not guaranteed delivery
   }
