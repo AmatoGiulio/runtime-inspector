@@ -10,6 +10,14 @@ declare global {
     isAvailable: boolean;
   }
 
+  interface RuntimeDesktopCrop {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    score: number;
+  }
+
   interface RuntimeDesktopCapturePreparation {
     device: RuntimeDesktopSimulator;
     source: {
@@ -17,6 +25,7 @@ declare global {
       name: string;
       windowId: number;
     };
+    crop?: RuntimeDesktopCrop;
   }
 
   interface RuntimeDesktopApi {
