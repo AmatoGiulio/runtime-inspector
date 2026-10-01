@@ -169,9 +169,12 @@ function registerDesktopIpc() {
       const bootstrapSize = bootstrapImage.getSize();
 
       if (!bootstrapImage.isEmpty() && bootstrapSize.width > 0 && bootstrapSize.height > 0) {
+        const now = Date.now();
         bootstrapFrame = {
           sequence: 0,
-          timestamp: Date.now(),
+          capturedAtMs: now,
+          receivedAtMs: now,
+          encodeDurationUs: 0,
           width: bootstrapSize.width,
           height: bootstrapSize.height,
           mimeType: "image/jpeg",
@@ -195,7 +198,9 @@ function registerDesktopIpc() {
         if (sender.isDestroyed()) return;
         sender.send("runtime-desktop:simulator-framebuffer-frame", {
           sequence: frame.sequence,
-          timestamp: frame.timestamp,
+          capturedAtMs: frame.capturedAtMs,
+          receivedAtMs: frame.receivedAtMs,
+          encodeDurationUs: frame.encodeDurationUs,
           width: frame.width,
           height: frame.height,
           mimeType: frame.mimeType,
