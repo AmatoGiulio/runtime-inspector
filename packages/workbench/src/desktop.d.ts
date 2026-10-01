@@ -43,6 +43,12 @@ declare global {
     bootstrapFrame?: RuntimeDesktopFramebufferFrame;
   }
 
+  interface RuntimeDesktopFramebufferStatus {
+    message: string;
+    frameSource?: "simscreen-callbacks" | "seed-polling" | string;
+    detail?: string;
+  }
+
   interface RuntimeDesktopFramebufferFrame {
     sequence: number;
     capturedAtMs: number;
@@ -67,6 +73,9 @@ declare global {
     stopSimulatorFramebuffer(): Promise<boolean>;
     onSimulatorFramebufferFrame(
       callback: (frame: RuntimeDesktopFramebufferFrame) => void
+    ): () => void;
+    onSimulatorFramebufferStatus(
+      callback: (status: RuntimeDesktopFramebufferStatus) => void
     ): () => void;
     onSimulatorFramebufferError(
       callback: (error: { message: string }) => void
