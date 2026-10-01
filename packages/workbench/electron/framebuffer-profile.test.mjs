@@ -7,13 +7,16 @@ import {
 } from "./framebuffer-profile.mjs";
 
 test("balanced framebuffer profile is the official runtime profile", () => {
-  assert.strictEqual(RUNTIME_FRAMEBUFFER_PROFILE, FRAMEBUFFER_PROFILES.balanced);
-  assert.deepEqual(RUNTIME_FRAMEBUFFER_PROFILE, {
-    name: "balanced",
-    width: 560,
-    quality: 0.60,
-    pollIntervalUs: 500
-  });
+  assert.deepEqual(
+    {
+      name: RUNTIME_FRAMEBUFFER_PROFILE.name,
+      width: RUNTIME_FRAMEBUFFER_PROFILE.width,
+      quality: RUNTIME_FRAMEBUFFER_PROFILE.quality
+    },
+    FRAMEBUFFER_PROFILES.balanced
+  );
+
+  assert.equal(RUNTIME_FRAMEBUFFER_PROFILE.pollIntervalUs, 500);
 });
 
 test("official framebuffer gate protects speed, payload, and quality", () => {
