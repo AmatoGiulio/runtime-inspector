@@ -88,12 +88,18 @@ if (gateProfile) {
 
   const p95Pass = candidate.relativeP95 <= maxRelativeP95;
   const bytesPass = candidate.relativeBytes <= maxRelativeBytes;
+  const qualityPass = minPsnrDb === undefined || candidate.psnrDb >= minPsnrDb;
+
+  const qualityText =
+    minPsnrDb === undefined
+      ? ""
+      : `; PSNR ${candidate.psnrDb.toFixed(2)} dB >= ${minPsnrDb.toFixed(2)} dB`;
 
   console.log(
-    `\nGate ${gateProfile}: p95 ${formatPercent(candidate.relativeP95)} <= ${formatPercent(maxRelativeP95)}; bytes ${formatPercent(candidate.relativeBytes)} <= ${formatPercent(maxRelativeBytes)}`
+    `\nGate ${gateProfile}: p95 ${formatPercent(candidate.relativeP95)} <= ${formatPercent(maxRelativeP95)}; bytes ${formatPercent(candidate.relativeBytes)} <= ${formatPercent(maxRelativeBytes)}${qualityText}`
   );
 
-  if (!p95Pass || !bytesPass) {
+  if (!p95Pass || !bytesPass || !qualityPass) {
     process.exit(1);
   }
 }
