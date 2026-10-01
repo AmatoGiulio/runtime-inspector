@@ -441,6 +441,29 @@ static IOSurfaceRef RICreateBenchmarkSurface(size_t width, size_t height) {
   return surface;
 }
 
+static double RIPSNRRGB(NSData *reference, NSData *candidate) {
+  if (!reference || !candidate || [reference length] != [candidate length]) return 0;
+
+  const uint8_t *a = (const uint8_t *)[reference bytes];
+  const uint8_t *b = (const uint8_t *)[candidate bytes];
+  const NSUInteger length = [reference length];
+  double squaredError = 0;
+  uint64_t samples = 0;
+
+  for (NSUInteger offset = 0; offset + 3 < length; offset += 4) {
+    for (NSUInteger channel = 0; channel < 3; channel += 1) {
+      const double delta = (double)a[offset + channel] - (double)b[offset + channel];
+      squaredError += delta * delta;
+      samples += 1;
+    }
+  }
+
+  if (samples == 0) return 0;
+  const double mse = squaredError / (double)samples;
+  if (mse <= 0.0000001) return 99.0;
+  return 10.0 * log10((255.0 * 255.0) / mse);
+}
+
 static double RIPercentile(NSArray<NSNumber *> *sorted, double percentile) {
   if ([sorted count] == 0) return 0;
   const double index = percentile * ([sorted count] - 1);
