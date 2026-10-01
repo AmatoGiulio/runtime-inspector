@@ -15,7 +15,9 @@
     "lint": "pnpm -r lint",
     "verify": "pnpm -r test && pnpm -r typecheck",
     "clean": "pnpm -r clean",
-    "workbench:desktop": "pnpm --filter @runtime-inspector/workbench desktop"
+    "workbench:desktop": "pnpm --filter @runtime-inspector/workbench desktop",
+    "benchmark:framebuffer": "pnpm --filter @runtime-inspector/workbench benchmark:framebuffer",
+    "benchmark:framebuffer:gate": "pnpm --filter @runtime-inspector/workbench benchmark:framebuffer:gate"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
