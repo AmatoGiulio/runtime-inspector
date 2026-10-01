@@ -30,6 +30,9 @@ function App() {
   const [probeId, setProbeId] = useState<string>();
   const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
   const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
+  const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
+  const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
+  const [desktopBusy, setDesktopBusy] = useState(false);
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -38,6 +41,33 @@ function App() {
       setSchemaId(traceEntries[0][0]);
     }
   }, [schemaId, traceEntries]);
+
+  useEffect(() => {
+    const desktop = window.runtimeDesktop;
+    if (!desktop) return;
+
+    let cancelled = false;
+    desktop
+      .listSimulators()
+      .then((items) => {
+        if (cancelled) return;
+        setSimulators(items);
+        setSelectedSimulatorUdid((current) => {
+          if (current && items.some((item) => item.udid === current)) return current;
+          return items.find((item) => item.state === "Booted")?.udid ?? items[0]?.udid;
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setRuntimeCaptureError(
+          error instanceof Error ? error.message : "Could not discover iOS Simulator devices."
+        );
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const probes = schemaId ? state.traceSchemas[schemaId] ?? [] : [];
 
@@ -108,14 +138,22 @@ function App() {
 
   async function attachRuntimeCapture() {
     if (!navigator.mediaDevices?.getDisplayMedia) {
-      setRuntimeCaptureError("This browser does not support window capture.");
+      setRuntimeCaptureError("This runtime does not support window capture.");
       return;
     }
 
     setRuntimeCaptureError(undefined);
+    setDesktopBusy(Boolean(window.runtimeDesktop));
 
     try {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+      let prepared: RuntimeDesktopCapturePreparation | undefined;
+      if (window.runtimeDesktop) {
+        prepared = await window.runtimeDesktop.prepareSimulatorCapture(selectedSimulatorUdid);
+        setSelectedSimulatorUdid(prepared.device.udid);
+        setSimulators(await window.runtimeDesktop.listSimulators());
+      }
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -137,7 +175,9 @@ function App() {
 
       runtimeStreamRef.current = stream;
       setRuntimeCapture({
-        label: track.label || "Captured window",
+        label: prepared?.device
+          ? `${prepared.device.name} · ${prepared.device.runtime}`
+          : track.label || "Captured window",
         width: settings.width,
         height: settings.height,
         frameRate: settings.frameRate,
@@ -159,6 +199,8 @@ function App() {
       setRuntimeCaptureError(
         error instanceof Error ? error.message : "Could not attach the runtime window."
       );
+    } finally {
+      setDesktopBusy(false);
     }
   }
 
@@ -228,17 +270,44 @@ function App() {
                   <span className="capture-status-dot" />
                   {captureSummary(runtimeCapture)}
                 </span>
+              ) : window.runtimeDesktop ? (
+                <span className="stage-note">Desktop adapter · iOS Simulator</span>
               ) : (
-                <span className="stage-note">iOS Simulator · M3 capture spike</span>
+                <span className="stage-note">Browser capture · iOS Simulator</span>
               )}
             </div>
-            <button
-              className="stage-action"
-              type="button"
-              onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
-            >
-              {runtimeCapture ? "Detach" : "Attach Simulator"}
-            </button>
+            <div className="stage-controls">
+              {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
+                <select
+                  className="simulator-select"
+                  aria-label="iOS Simulator target"
+                  value={selectedSimulatorUdid ?? ""}
+                  onChange={(event) => setSelectedSimulatorUdid(event.target.value)}
+                  disabled={desktopBusy}
+                >
+                  {simulators.map((simulator) => (
+                    <option key={simulator.udid} value={simulator.udid}>
+                      {simulator.name} · {simulator.runtime}
+                      {simulator.state === "Booted" ? " · Booted" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <button
+                className="stage-action"
+                type="button"
+                onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
+                disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
+              >
+                {runtimeCapture
+                  ? "Detach"
+                  : desktopBusy
+                    ? "Launching…"
+                    : window.runtimeDesktop
+                      ? "Launch & Attach"
+                      : "Attach Simulator"}
+              </button>
+            </div>
           </div>
 
           <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
@@ -253,20 +322,36 @@ function App() {
                 />
                 <div className="runtime-video-caption">
                   <span>{runtimeCapture.label}</span>
-                  <span>Interact in the Simulator window · capture is view-only in M3a</span>
+                  <span>
+                    {window.runtimeDesktop
+                      ? "Desktop capture attached · input forwarding is the next adapter step"
+                      : "Interact in the Simulator window · browser capture is view-only"}
+                  </span>
                 </div>
               </div>
             ) : (
               <div className="device-placeholder">
                 <div className="device-screen">
                   <div className="device-eyebrow">REAL RUNTIME</div>
-                  <div className="device-title">Attach the iOS Simulator</div>
-                  <div className="device-copy">
-                    Choose the Simulator window in the macOS/Chrome sharing picker. Runtime
-                    Inspector will render that live window here while trace recording stays on RIP.
+                  <div className="device-title">
+                    {window.runtimeDesktop ? "Launch the iOS Simulator" : "Attach the iOS Simulator"}
                   </div>
-                  <button className="device-attach" type="button" onClick={attachRuntimeCapture}>
-                    Attach Simulator
+                  <div className="device-copy">
+                    {window.runtimeDesktop
+                      ? "Runtime Inspector can discover installed simulators, boot the selected target, find its window and attach it without a sharing picker."
+                      : "Choose the Simulator window in the macOS sharing picker. Runtime Inspector will render that live window here while trace recording stays on RIP."}
+                  </div>
+                  <button
+                    className="device-attach"
+                    type="button"
+                    onClick={attachRuntimeCapture}
+                    disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
+                  >
+                    {desktopBusy
+                      ? "Launching…"
+                      : window.runtimeDesktop
+                        ? "Launch & Attach"
+                        : "Attach Simulator"}
                   </button>
                 </div>
               </div>
