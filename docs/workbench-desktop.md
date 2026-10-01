@@ -95,25 +95,48 @@ Only the narrow Simulator operations required by the Workbench are exposed throu
 
 ## M3b.2 — interactive viewport
 
-The desktop adapter now includes the first pointer-forwarding implementation:
+The original implementation attempted to forward macOS mouse events to Simulator with `CGEvent.postToPid`. Manual validation on 2026-10-01 showed that this does not produce touches inside the simulated iOS app. That path is removed.
 
-- the Electron capture source id is resolved to the underlying macOS window id;
-- the Workbench maps pointer coordinates to normalized capture coordinates;
-- a small persistent Swift helper resolves the Simulator window bounds and owner PID through Core Graphics;
-- left-button down / drag / up are emitted with `CGEvent` and posted directly to the Simulator process;
-- the renderer exposes an explicit **Enable Input** action;
-- Accessibility permission is checked before forwarding;
-- pointer streaming stays outside RIP.
+The current M3b.2 spike follows the mechanism used by Simulator-focused developer tooling instead:
 
-The Swift helper is compiled once into the temporary Runtime Inspector development directory and reused for the session. Production packaging should ship/sign the helper rather than compile it at runtime.
+- a `simctl io screenshot` provides the exact device framebuffer reference;
+- the desktop adapter matches that reference inside the captured Simulator window and derives a normalized device-screen crop;
+- the Workbench renders only that cropped device surface;
+- pointer positions in the crop are already normalized iOS-screen coordinates;
+- a persistent Objective-C helper loads Xcode's private SimulatorKit and opens a `SimDeviceLegacyHIDClient` for the selected Simulator UDID;
+- down / drag / up are sent through Simulator's IndigoHID path rather than macOS mouse-event routing;
+- the HID helper stays outside RIP.
+
+### Why the implementation changed
+
+Simulator.app does not simply forward arbitrary macOS mouse events to the iOS process. Its own input path translates desktop interaction into Simulator HID/touch events. Posting a Quartz mouse event to the Simulator process can reach Simulator chrome without becoming an iOS touch.
+
+The private HID approach is intentionally isolated behind the device adapter. It is a developer-tool technique, not a protocol dependency.
+
+### Structural risk
+
+SimulatorKit / IndigoHID are private Xcode frameworks. Therefore:
+
+- this path can break with an Xcode update;
+- M3b.2 currently targets Apple Silicon;
+- compatibility must be tested against supported Xcode versions;
+- a slower public automation fallback (for example XCUITest/WebDriverAgent) may be needed if a stable fallback becomes a product requirement.
+
+Reference implementations studied for this spike:
+
+- Meta `idb` / FBSimulatorControl HID transport;
+- `ios-simulator-mcp` native IndigoHID experiment.
+
+No external implementation is vendored as a package dependency.
 
 ### M3b.2 acceptance gate
 
-- **Enable Input** causes the macOS Accessibility permission flow when required;
-- clicking inside the embedded Simulator performs the corresponding Simulator tap;
-- dragging in the embedded viewport produces a continuous drag in Simulator;
-- input still works when the actual Simulator window is behind the Workbench;
-- pointer coordinates remain aligned after moving the Simulator window;
+- Launch & Attach reports **Input on** only after the native HID client is prepared;
+- the central viewport shows the device screen crop rather than Simulator chrome;
+- clicking the demo `TAP TEST` in the embedded viewport increments its counter;
+- holding the pointer visibly reaches `PRESSED`;
+- dragging produces continuous touch motion;
+- the actual Simulator window may remain behind Runtime Inspector;
 - Record → Replay and the motion timeline remain unaffected.
 
 ## Packaging / TCC TODO — required before release
@@ -125,15 +148,15 @@ During the 2026-10-01 development validation, macOS attributed Screen Recording 
 - package and sign the desktop app as **Runtime Inspector**;
 - ship and sign the native input helper with the app rather than compiling it in `/tmp`;
 - verify Screen Recording / Screen & System Audio permission is attributed to Runtime Inspector;
-- verify Accessibility permission used for input forwarding is attributed to Runtime Inspector (or its correctly signed helper, depending on final helper architecture);
-- provide first-run permission UX and deep links/instructions for both privacy categories;
+- verify the native helper is correctly signed/bundled and still loads the intended Simulator private frameworks;
+- provide first-run Screen Recording permission UX;
 - test permission reset/relaunch/update behavior on a clean macOS account.
 
 ## Still deferred
 
-- exact device-screen crop instead of the whole Simulator window;
 - multi-touch;
 - hardware-key forwarding;
+- public/stable input fallback;
 - production packaging/signing implementation.
 
 These remain device-adapter concerns and must not leak into RIP.
