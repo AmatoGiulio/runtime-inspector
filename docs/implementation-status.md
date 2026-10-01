@@ -192,12 +192,12 @@ This uses private Xcode Simulator frameworks. It is viable for a developer tool 
 
 In development macOS attributed Screen Recording permission to the VS Code host. Release work must package/sign Runtime Inspector and its native helper so Screen Recording is presented under the correct product identity, with first-run permission UX.
 
-**M3c.0 implemented on `feat/runtime-workbench-desktop`, pending manual validation**
+**M3c.0 validated manually on macOS, 2026-10-01**
 
 - exact iOS framebuffer frames from `simctl io screenshot`, pushed over Electron IPC;
 - no Simulator-window crop or coordinate mapping;
-- native HID can use framebuffer-normalized pointer coordinates directly;
-- current proof targets 15 fps and is explicitly temporary.
+- native HID input validated from the embedded viewport;
+- observed cadence ~9 fps on the validation run, confirming the screenshot-per-frame transport is far too slow for product use.
 
 **Still outstanding**
 
