@@ -186,6 +186,19 @@ export async function listIOSSimulators() {
   return flattenSimulatorDevices(JSON.parse(stdout));
 }
 
+export async function captureIOSSimulatorFrame(udid, type = "jpeg") {
+  const { stdout } = await execFileAsync(
+    "xcrun",
+    ["simctl", "io", udid, "screenshot", "--type", type, "--mask", "ignored", "-"],
+    {
+      encoding: "buffer",
+      maxBuffer: 32 * 1024 * 1024
+    }
+  );
+
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout);
+}
+
 export async function captureIOSSimulatorScreenshot(udid) {
   const { stdout } = await execFileAsync(
     "xcrun",
