@@ -1,122 +1,3 @@
-# Implementation status
-
-This document is a code-and-test inventory, not a roadmap. When older prose disagrees with implementation or tests, implementation/tests are authoritative.
-
-Status vocabulary:
-
-- **implemented** — present in code and exercised by existing tests or by the current client implementation;
-- **partially implemented** — meaningful code exists, but an important validation or behavior is incomplete;
-- **planned** — not implemented and should not be presented as current functionality.
-
-## Protocol 0.3
-
-**Implemented**
-
-- `schema.publish`
-- `schema.dispose`
-- `control.patch`
-- `control.commit`
-- `control.batchPatch`
-- `control.trigger`
-- `runtime.status`
-- handshake accept/reject and protocol version enforcement
-- shared Zod message parsing/validation
-- value validation by control kind, including slider bounds and finite-number validation
-- protocol conformance fixtures
-
-No Rozenite-specific RIP message was added.
-
-## Session / panel behavior
-
-**Implemented in `panel-core`**
-
-- multiple schemas;
-- per-schema values;
-- throttled preview patches;
-- explicit commits;
-- triggers;
-- incoming patch/commit/batch application;
-- stale-schema protection;
-- cached/replayed schema consumption;
-- reconnect behavior for its socket-backed session;
-- A/B slots and committed batch apply;
-- copy-as-TypeScript export.
-
-The core is framework-agnostic at the state/semantics level. Its injected transport seam is still named `WebSocketLike`; Rozenite currently fits that seam without requiring a core rewrite.
-
-## Web panel
-
-Rendered by the shared DialKit `InspectorPanel` in `panel-dialkit` (also used by Rozenite). Checked in a browser against a live broker: DialKit layout, drag → throttled patches + one commit, and Apply to code round-trip with the result shown in the panel.
-
-**Implemented**
-
-- slider;
-- toggle;
-- color;
-- spring editor;
-- bezier editor/preview;
-- trigger/replay action;
-- multi-schema UI;
-- stale state;
-- A/B comparison;
-- copy-as-code;
-- Apply to code (per control and per schema) through the CLI workspace.
-
-Older text claiming that spring/bezier were only reserved for a future pass is stale.
-
-## React Native runtime
-
-**Implemented**
-
-- explicit `definePanel` API;
-- `bindSharedValue`, `bindValue`, `bindTrigger`;
-- SharedValue/Reanimated application path;
-- `useInspector`;
-- `useRuntimeValue`;
-- `useAction`;
-- `// @inspect` Babel auto-binding;
-- runtime-side patch, commit, batch patch, and trigger application;
-- multiple runtime sessions/schemas;
-- schema disposal;
-- broker discovery from Metro / LAN override;
-- reconnect to the WebSocket broker;
-- direct RIP client attachment used by transport-local clients such as Rozenite.
-
-## CLI / physical-device path
-
-**Implemented**
-
-- local WebSocket broker + web panel startup;
-- LAN address output;
-- QR output;
-- automatic physical-device broker discovery in the common Metro LAN path;
-- explicit broker URL override;
-- per-session panel token.
-
-The existing WebSocket/physical-device path predates the Rozenite work and is separate from the direct DevTools bridge.
-
-## MCP client
-
-**Implemented**
-
-- `get_schema`;
-- `set_control_value`;
-- `batch_set`;
-- trigger/action support;
-- broker/session-token connection as a panel-role RIP client.
-
-## Rozenite / React Native DevTools
-
-**Implemented in the current Rozenite client branch**
-
-- a real Rozenite panel registered in React Native DevTools;
-- direct app-to-DevTools RIP carriage via `@rozenite/plugin-bridge`;
-- `panel-core` reuse rather than duplicated client semantics;
-- multi-schema reception;
-- live/stale schema distinction;
-- slider, toggle, color, trigger, spring, and bezier rendering;
-- live patch + committed value flow;
-- trigger flow;
 - runtime generation replacement / re-handshake;
 - stale protection across generation replacement;
 - A/B and copy-as-code through `panel-core`;
@@ -215,8 +96,8 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 **Still outstanding**
 
-- run the deterministic live viewport benchmark with the promoted balanced profile and record sustained motion cadence / latency;
-- if needed, replace JPEG with persistent VideoToolbox H.264 without changing the adapter boundary;
+- keep the validated SimScreen callback path covered across supported Xcode versions;
+- revisit VideoToolbox H.264 only if future CPU/bandwidth targets require it;
 - Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
 - production packaging/signing and TCC validation.
@@ -263,7 +144,7 @@ pnpm benchmark:framebuffer:gate
 
 ### M3c.3 deterministic live viewport benchmark
 
-**Implemented on `feat/runtime-workbench-desktop`, pending first measured run**
+**Implemented and manually validated on `feat/runtime-workbench-desktop`, 2026-10-01**
 
 The example runtime now exposes a dedicated viewport benchmark trigger. It drives the card through a fixed 24-repetition, 140 ms linear back-and-forth animation so the framebuffer transport sees sustained, repeatable motion rather than manual Replay clicks.
 
@@ -274,11 +155,11 @@ The Workbench adds **Benchmark viewport**. A run:
 - samples the persistent framebuffer for 3.6 seconds;
 - reports sustained FPS, frame-interval p95, encode p95, decode p95, latency p95, and received frame count.
 
-This is separate from the normal rolling toolbar statistics and is intended to be the deterministic end-to-end validation for the promoted framebuffer profile.
+This is separate from the normal rolling toolbar statistics and is the repeatable live-transport validation for the promoted framebuffer profile. It measures framebuffer capture-to-canvas behavior; it is not a HID-input-to-visual-response measurement.
 
 ### M3c.4 high-frequency IOSurface seed polling
 
-**Implemented on `feat/runtime-workbench-desktop`, pending live benchmark validation**
+**Implemented and manually validated on `feat/runtime-workbench-desktop`, 2026-10-01**
 
 The first deterministic live viewport benchmark with the balanced profile measured:
 
@@ -297,11 +178,11 @@ The persistent helper now decouples:
 
 Previously the helper checked the IOSurface only once per ~16.67 ms encode cadence. That can alias against Simulator presentation timing and miss a fresh frame until the next polling cycle. The new path detects presents at much finer granularity without encoding unchanged frames or increasing JPEG quality loss.
 
-If the live benchmark still stays materially below 60 fps, the next structural step is `SimScreen` frame callbacks rather than further JPEG quality reduction.
+Manual validation after decoupling seed polling from encode cadence measured **58.7 fps**, frame-interval p95 **18.0 ms**, encode p95 **10.4 ms**, decode/draw p95 **2.0 ms**, and capture-to-canvas latency p95 **12 ms**. This confirmed that JPEG quality was not the limiting factor and justified moving frame detection to `SimScreen` callbacks.
 
 ### M3c.5 SimScreen present callbacks
 
-**Implemented on `feat/runtime-workbench-desktop`, pending live benchmark validation**
+**Implemented and manually validated on `feat/runtime-workbench-desktop`, 2026-10-01**
 
 The high-frequency seed-polling experiment raised the deterministic live viewport result from 54.4 fps to 58.7 fps while leaving encode/decode/latency essentially unchanged. That confirms the remaining loss is in frame detection rather than JPEG quality.
 
@@ -327,8 +208,16 @@ or, on compatibility fallback:
 [Runtime Inspector] frame-source=seed-polling fallback=...
 ~~~
 
-Acceptance is the same deterministic **Benchmark viewport** run. If callback mode is active, the next result is compared directly against the validated polling result:
+Manual validation with callback mode active produced:
+
+~~~text
+60.4 fps · frame p95 19.3 ms · enc p95 11.5 · dec p95 2.0 · lat p95 13 ms · 215 frames
+~~~
+
+The comparison baseline was the validated high-frequency polling result:
 
 ~~~text
 58.7 fps · frame p95 18.0 ms · enc p95 10.4 · dec p95 2.0 · lat p95 12 ms
 ~~~
+
+The callback path therefore reached the 60 fps target while preserving the promoted `balanced` quality profile. The Workbench now also surfaces the active native frame source in the Runtime toolbar (`SimScreen callbacks` or `seed polling`) instead of requiring terminal inspection.
