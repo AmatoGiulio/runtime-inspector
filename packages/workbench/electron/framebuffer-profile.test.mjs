@@ -11,7 +11,8 @@ test("balanced framebuffer profile is the official runtime profile", () => {
   assert.deepEqual(RUNTIME_FRAMEBUFFER_PROFILE, {
     name: "balanced",
     width: 560,
-    quality: 0.60
+    quality: 0.60,
+    pollIntervalUs: 500
   });
 });
 
