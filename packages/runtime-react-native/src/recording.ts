@@ -103,6 +103,18 @@ export function listTraceSchemas(): TraceSchemaPublish[] {
 export function handleRecordingStart(message: RecordingStart) {
   if (activeRecordings.has(message.recordingId)) return;
 
+  const activeForSchema = Array.from(activeRecordings.values()).some(
+    (recording) => recording.request.schemaId === message.schemaId
+  );
+  if (activeForSchema) {
+    emitRuntimeTrace?.(message.schemaId, {
+      type: "error",
+      code: "RECORDING_ACTIVE",
+      message: `A recording is already active for schema "${message.schemaId}".`
+    });
+    return;
+  }
+
   const probes = probesBySchema.get(message.schemaId);
   if (!probes) {
     emitRuntimeTrace?.(message.schemaId, {
