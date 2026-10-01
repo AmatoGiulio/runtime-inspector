@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import {
+  FRAMEBUFFER_PERFORMANCE_GATE,
+  FRAMEBUFFER_PROFILES
+} from "./framebuffer-profile.mjs";
 
 const execFileAsync = promisify(execFile);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -11,12 +15,7 @@ const source = path.join(here, "simulator-framebuffer.m");
 const buildDir = path.join(os.tmpdir(), "runtime-inspector");
 const binary = path.join(buildDir, "simulator-framebuffer-benchmark");
 
-const PROFILES = [
-  { name: "baseline", width: 600, quality: 0.65 },
-  { name: "balanced", width: 560, quality: 0.60 },
-  { name: "fast", width: 520, quality: 0.58 },
-  { name: "lean", width: 480, quality: 0.55 }
-];
+const PROFILES = Object.values(FRAMEBUFFER_PROFILES);
 
 const rounds = integerArg("--rounds", 3);
 const warmup = integerArg("--warmup", 12);
@@ -24,9 +23,18 @@ const iterations = integerArg("--iterations", 80);
 const sourceWidth = integerArg("--source-width", 1320);
 const sourceHeight = integerArg("--source-height", 2868);
 const gateProfile = stringArg("--gate-profile");
-const maxRelativeP95 = numberArg("--max-relative-p95", 0.9);
-const maxRelativeBytes = numberArg("--max-relative-bytes", 1.0);
-const maxPsnrLossDb = numberArg("--max-psnr-loss-db");
+const maxRelativeP95 = numberArg(
+  "--max-relative-p95",
+  FRAMEBUFFER_PERFORMANCE_GATE.maxRelativeP95
+);
+const maxRelativeBytes = numberArg(
+  "--max-relative-bytes",
+  FRAMEBUFFER_PERFORMANCE_GATE.maxRelativeBytes
+);
+const maxPsnrLossDb = numberArg(
+  "--max-psnr-loss-db",
+  FRAMEBUFFER_PERFORMANCE_GATE.maxPsnrLossDb
+);
 
 if (process.platform !== "darwin") {
   console.error("Framebuffer benchmark requires macOS.");
