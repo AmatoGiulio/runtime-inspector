@@ -237,10 +237,12 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         clearPendingPatchesForSchema(message.schemaId);
         const { [message.schemaId]: _removedStale, ...restStale } = state.staleSchemaIds;
         const { [message.schemaId]: _removedValues, ...restValues } = state.values;
+        const { [message.schemaId]: _removedTrace, ...restTrace } = state.traceSchemas;
         setState({
           schemas: Array.from(schemasById.values()),
           staleSchemaIds: restStale,
-          values: restValues
+          values: restValues,
+          traceSchemas: restTrace
         });
       }
       if (message.type === "runtime.status") {
