@@ -5,7 +5,10 @@ export const FRAMEBUFFER_PROFILES = Object.freeze({
   lean: Object.freeze({ name: "lean", width: 480, quality: 0.55 })
 });
 
-export const RUNTIME_FRAMEBUFFER_PROFILE = FRAMEBUFFER_PROFILES.balanced;
+export const RUNTIME_FRAMEBUFFER_PROFILE = Object.freeze({
+  ...FRAMEBUFFER_PROFILES.balanced,
+  pollIntervalUs: 500
+});
 
 export const FRAMEBUFFER_PERFORMANCE_GATE = Object.freeze({
   profile: "balanced",
