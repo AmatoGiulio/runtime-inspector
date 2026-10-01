@@ -1,9 +1,18 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain, session, systemPreferences } from "electron";
+import {
+  app,
+  BrowserWindow,
+  desktopCapturer,
+  ipcMain,
+  nativeImage,
+  session,
+  systemPreferences
+} from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import { createServer } from "vite";
 import {
+  captureIOSSimulatorFrame,
   ensureIOSSimulatorBooted,
   listIOSSimulators
 } from "./simulator.mjs";
@@ -19,6 +28,7 @@ let viteServer;
 let selectedCaptureSourceId;
 let selectedCaptureWindowId;
 let selectedSimulator;
+let framebufferSession;
 const simulatorInput = new SimulatorInputHelper();
 
 app.setName("Runtime Inspector");
@@ -46,6 +56,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", async () => {
+  stopFramebufferSession();
   simulatorInput.dispose();
   if (viteServer) {
     try {
@@ -116,6 +127,52 @@ function registerDesktopIpc() {
     return listIOSSimulators();
   });
 
+  ipcMain.handle("runtime-desktop:start-simulator-framebuffer", async (event, udid) => {
+    ensureDarwin();
+
+    const devices = await listIOSSimulators();
+    const requested =
+      (typeof udid === "string" && devices.find((device) => device.udid === udid)) ||
+      devices.find((device) => device.state === "Booted") ||
+      devices[0];
+
+    if (!requested) {
+      throw new Error("No available iOS Simulator devices were found.");
+    }
+
+    selectedSimulator = await ensureIOSSimulatorBooted(requested.udid);
+
+    let input = { ready: false, error: undefined };
+    try {
+      await simulatorInput.prepare(selectedSimulator.udid);
+      input = { ready: true, error: undefined };
+    } catch (error) {
+      input = {
+        ready: false,
+        error: error instanceof Error ? error.message : "Simulator HID input could not be prepared."
+      };
+    }
+
+    stopFramebufferSession();
+
+    const token = {};
+    const sender = event.sender;
+    framebufferSession = { token, sender, udid: selectedSimulator.udid };
+    void pumpSimulatorFramebuffer(token, sender, selectedSimulator.udid);
+
+    return {
+      device: selectedSimulator,
+      mode: "simctl-screenshot-poll",
+      targetFrameRate: 15,
+      input
+    };
+  });
+
+  ipcMain.handle("runtime-desktop:stop-simulator-framebuffer", async () => {
+    stopFramebufferSession();
+    return true;
+  });
+
   ipcMain.handle("runtime-desktop:prepare-simulator-input", async () => {
     ensureDarwin();
     if (!selectedSimulator) {
@@ -182,6 +239,52 @@ function registerDesktopIpc() {
       input
     };
   });
+}
+
+function stopFramebufferSession() {
+  framebufferSession = undefined;
+}
+
+async function pumpSimulatorFramebuffer(token, sender, udid) {
+  const targetIntervalMs = 1000 / 15;
+  let sequence = 0;
+
+  while (framebufferSession?.token === token && !sender.isDestroyed()) {
+    const startedAt = Date.now();
+
+    try {
+      const frame = await captureIOSSimulatorFrame(udid, "jpeg");
+      if (framebufferSession?.token !== token || sender.isDestroyed()) break;
+
+      const image = nativeImage.createFromBuffer(frame);
+      const size = image.getSize();
+      const bytes = Uint8Array.from(frame).buffer;
+
+      sender.send("runtime-desktop:simulator-framebuffer-frame", {
+        sequence,
+        timestamp: Date.now(),
+        width: size.width,
+        height: size.height,
+        mimeType: "image/jpeg",
+        bytes
+      });
+      sequence += 1;
+    } catch (error) {
+      if (framebufferSession?.token !== token || sender.isDestroyed()) break;
+      sender.send("runtime-desktop:simulator-framebuffer-error", {
+        message:
+          error instanceof Error ? error.message : "Could not capture the Simulator framebuffer."
+      });
+      stopFramebufferSession();
+      break;
+    }
+
+    const elapsed = Date.now() - startedAt;
+    const delay = Math.max(0, targetIntervalMs - elapsed);
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 function registerDisplayCaptureHandler() {
