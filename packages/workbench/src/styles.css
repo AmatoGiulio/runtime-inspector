@@ -348,10 +348,14 @@ button {
   background: #050506;
 }
 
-.runtime-video.interactive {
+.runtime-video-shell.interactive {
   cursor: default;
   touch-action: none;
   user-select: none;
+}
+
+.runtime-video-shell.interactive .runtime-video {
+  pointer-events: none;
 }
 
 .input-status {
