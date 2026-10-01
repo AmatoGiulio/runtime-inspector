@@ -9,6 +9,7 @@ import {
 import { createRoot } from "react-dom/client";
 import { createPanelSession } from "@runtime-inspector/panel-core";
 import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
+import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
@@ -55,8 +56,20 @@ interface ViewportBenchmarkResult {
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const traceEntries = Object.entries(state.traceSchemas);
+  const schemaIds = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...state.schemas.map((schema) => schema.id),
+          ...Object.keys(state.traceSchemas)
+        ])
+      ),
+    [state.schemas, state.traceSchemas]
+  );
   const [schemaId, setSchemaId] = useState<string>();
   const [probeId, setProbeId] = useState<string>();
+  const [selectedControlId, setSelectedControlId] = useState<string>();
+  const [inspectorMode, setInspectorMode] = useState<"probe" | "control">("probe");
   const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
   const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
   const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
@@ -87,10 +100,23 @@ function App() {
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!schemaId && traceEntries[0]) {
-      setSchemaId(traceEntries[0][0]);
+    if (schemaId || !schemaIds[0]) return;
+
+    const firstSchemaId = schemaIds[0];
+    const firstProbe = state.traceSchemas[firstSchemaId]?.[0];
+    const firstControl = state.schemas
+      .find((schema) => schema.id === firstSchemaId)
+      ?.groups.flatMap((group) => group.controls)[0];
+
+    setSchemaId(firstSchemaId);
+    if (firstProbe) {
+      setProbeId(firstProbe.id);
+      setInspectorMode("probe");
+    } else if (firstControl) {
+      setSelectedControlId(firstControl.id);
+      setInspectorMode("control");
     }
-  }, [schemaId, traceEntries]);
+  }, [schemaId, schemaIds, state.schemas, state.traceSchemas]);
 
   useEffect(() => {
     const desktop = window.runtimeDesktop;
@@ -315,6 +341,13 @@ function App() {
   }, [probeId, probes]);
 
   const selectedProbe = probes.find((probe) => probe.id === probeId);
+  const selectedControlSchema = state.schemas.find((schema) => schema.id === schemaId);
+  const selectedControl = selectedControlSchema?.groups
+    .flatMap((group) => group.controls)
+    .find((control) => control.id === selectedControlId);
+  const selectedControlValue =
+    schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
+  const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
 
   useEffect(() => {
@@ -662,36 +695,99 @@ function App() {
       <section className="workspace">
         <aside className="outline panel">
           <div className="panel-title">Outline</div>
-          {traceEntries.length === 0 ? (
-            <Empty text="No runtime probes yet." />
+          {schemaIds.length === 0 ? (
+            <Empty text="No runtime semantics yet." />
           ) : (
-            traceEntries.map(([id, schemaProbes]) => (
-              <div className="schema" key={id}>
-                <button
-                  className={id === schemaId ? "schema-button active" : "schema-button"}
-                  onClick={() => {
-                    setSchemaId(id);
-                    setProbeId(schemaProbes[0]?.id);
-                  }}
-                >
-                  {id}
-                </button>
-                {id === schemaId && (
-                  <div className="probe-list">
-                    {schemaProbes.map((probe) => (
-                      <button
-                        key={probe.id}
-                        className={probe.id === probeId ? "probe active" : "probe"}
-                        onClick={() => setProbeId(probe.id)}
-                      >
-                        <span className="probe-icon">⌁</span>
-                        <span>{probe.label ?? probe.id}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))
+            schemaIds.map((id) => {
+              const schema = state.schemas.find((item) => item.id === id);
+              const schemaProbes = state.traceSchemas[id] ?? [];
+              const controls =
+                schema?.groups.flatMap((group) =>
+                  group.controls.map((control) => ({ group, control }))
+                ) ?? [];
+
+              return (
+                <div className="schema" key={id}>
+                  <button
+                    className={id === schemaId ? "schema-button active" : "schema-button"}
+                    onClick={() => {
+                      setSchemaId(id);
+                      if (schemaProbes[0]) {
+                        setProbeId(schemaProbes[0].id);
+                        setInspectorMode("probe");
+                      } else if (controls[0]) {
+                        setSelectedControlId(controls[0].control.id);
+                        setInspectorMode("control");
+                      }
+                    }}
+                  >
+                    {schema?.title ?? id}
+                  </button>
+
+                  {id === schemaId ? (
+                    <div className="outline-sections">
+                      {controls.length > 0 ? (
+                        <div className="outline-section">
+                          <div className="outline-section-label">Controls</div>
+                          {controls.map(({ group, control }) => (
+                            <button
+                              key={control.id}
+                              className={
+                                inspectorMode === "control" &&
+                                control.id === selectedControlId
+                                  ? "outline-item active"
+                                  : "outline-item"
+                              }
+                              onClick={() => {
+                                setSchemaId(id);
+                                setSelectedControlId(control.id);
+                                setInspectorMode("control");
+                              }}
+                              title={group.label}
+                            >
+                              <span className="outline-item-icon">
+                                {controlGlyph(control.kind)}
+                              </span>
+                              <span className="outline-item-copy">
+                                <span>{control.label}</span>
+                                <small>{control.kind}</small>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {schemaProbes.length > 0 ? (
+                        <div className="outline-section">
+                          <div className="outline-section-label">Probes</div>
+                          {schemaProbes.map((probe) => (
+                            <button
+                              key={probe.id}
+                              className={
+                                inspectorMode === "probe" && probe.id === probeId
+                                  ? "outline-item active"
+                                  : "outline-item"
+                              }
+                              onClick={() => {
+                                setSchemaId(id);
+                                setProbeId(probe.id);
+                                setInspectorMode("probe");
+                              }}
+                            >
+                              <span className="outline-item-icon probe-icon">⌁</span>
+                              <span className="outline-item-copy">
+                                <span>{probe.label ?? probe.id}</span>
+                                <small>{probe.valueType}</small>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
           )}
         </aside>
 
@@ -843,10 +939,20 @@ function App() {
 
         <aside className="inspector panel">
           <div className="panel-title">Inspector</div>
-          {selectedProbe ? (
+          {inspectorMode === "control" && selectedControl && schemaId ? (
+            <ControlInspector
+              control={selectedControl}
+              value={selectedControlValue}
+              stale={selectedSchemaStale}
+              onSet={(value) => session.setValue(schemaId, selectedControl.id, value)}
+              onCommit={() => session.commitValue(schemaId, selectedControl.id)}
+              onTrigger={() => session.fireTrigger(schemaId, selectedControl.id)}
+              onApplySource={() => session.applySource(schemaId, [selectedControl.id])}
+            />
+          ) : selectedProbe ? (
             <ProbeInspector probe={selectedProbe} samples={samples} />
           ) : (
-            <Empty text="Select a runtime probe." />
+            <Empty text="Select a runtime control or probe." />
           )}
         </aside>
       </section>
@@ -975,6 +1081,25 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
       </div>
     </div>
   );
+}
+
+function controlGlyph(kind: string) {
+  switch (kind) {
+    case "slider":
+      return "↔";
+    case "spring":
+      return "∿";
+    case "bezier":
+      return "⌁";
+    case "toggle":
+      return "◉";
+    case "color":
+      return "●";
+    case "trigger":
+      return "▶";
+    default:
+      return "·";
+  }
 }
 
 function captureSummary(capture: RuntimeCaptureInfo, frameSource?: string) {
