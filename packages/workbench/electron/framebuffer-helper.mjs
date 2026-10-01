@@ -67,7 +67,15 @@ export class SimulatorFramebufferHelper {
     this.stderrBuffer = "";
   }
 
-  async start({ udid, fps = 60, width = 640, quality = 0.72, onFrame, onError }) {
+  async start({
+    udid,
+    fps = 60,
+    width = 640,
+    quality = 0.72,
+    pollIntervalUs = 500,
+    onFrame,
+    onError
+  }) {
     await this.stop();
     await this.ensureBuilt();
 
@@ -89,7 +97,9 @@ export class SimulatorFramebufferHelper {
         "--width",
         String(width),
         "--quality",
-        String(quality)
+        String(quality),
+        "--poll-us",
+        String(pollIntervalUs)
       ],
       {
         stdio: ["ignore", "pipe", "pipe"],
