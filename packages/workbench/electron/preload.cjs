@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld("runtimeDesktop", {
     ipcRenderer.on("runtime-desktop:simulator-framebuffer-frame", handler);
     return () => ipcRenderer.removeListener("runtime-desktop:simulator-framebuffer-frame", handler);
   },
+  onSimulatorFramebufferStatus: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on("runtime-desktop:simulator-framebuffer-status", handler);
+    return () => ipcRenderer.removeListener("runtime-desktop:simulator-framebuffer-status", handler);
+  },
   onSimulatorFramebufferError: (callback) => {
     const handler = (_event, error) => callback(error);
     ipcRenderer.on("runtime-desktop:simulator-framebuffer-error", handler);
