@@ -8,7 +8,7 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useInspector, useRuntimeValue } from "@runtime-inspector/react-native";
+import { useInspector, useRuntimeProbe, useRuntimeValue } from "@runtime-inspector/react-native";
 
 export default function App() {
   // @inspect min=8 max=48
@@ -58,6 +58,12 @@ export default function App() {
       onChange: () => schedulePreview()
     },
     replay: () => replayTransition()
+  });
+
+  useRuntimeProbe("card-transition", "moveX", card.moveX, {
+    label: "Move X",
+    group: "Motion",
+    unit: "px"
   });
 
   function replayTransition() {
