@@ -46,7 +46,7 @@ function App() {
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
   const framebufferCanvasRef = useRef<HTMLCanvasElement>(null);
-  const framebufferBootstrapRef = useRef<RuntimeDesktopFramebufferFrame>();
+  const framebufferBootstrapRef = useRef<RuntimeDesktopFramebufferFrame | undefined>(undefined);
   const framebufferTimesRef = useRef<number[]>([]);
   const framebufferStatsUpdateRef = useRef(0);
 
