@@ -302,6 +302,25 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       if (message.type === "source.applyResult") {
         applySourceResult(message);
       }
+      if (
+        message.type === "error" &&
+        (message.code === "TRACE_SCHEMA_MISSING" ||
+          message.code === "UNKNOWN_PROBE" ||
+          message.code === "RECORDING_ACTIVE")
+      ) {
+        setState({
+          notice: message.message,
+          ...(state.recording && !state.recording.complete
+            ? {
+                recording: {
+                  ...state.recording,
+                  complete: true,
+                  incomplete: true
+                }
+              }
+            : {})
+        });
+      }
       if (message.type === "error" && message.code === "UNAUTHORIZED") {
         stopReconnecting = true;
         setState({ status: "rejected", notice: "Broker rejected this panel: missing or wrong token." });
