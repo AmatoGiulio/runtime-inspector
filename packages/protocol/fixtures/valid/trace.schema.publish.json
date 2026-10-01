@@ -1,0 +1,7 @@
+{
+  "type": "trace.schema.publish",
+  "schemaId": "card-transition",
+  "probes": [
+    { "id": "moveX", "label": "Move X", "valueType": "number", "unit": "px" }
+  ]
+}
