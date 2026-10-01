@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SimulatorFramebufferParser } from "./framebuffer-helper.mjs";
+import {
+  parseSimulatorFramebufferStatusLine,
+  SimulatorFramebufferParser
+} from "./framebuffer-helper.mjs";
 
 function frameBuffer({
   payload,
@@ -54,5 +57,29 @@ test("SimulatorFramebufferParser decodes multiple frames in one chunk", () => {
   assert.deepEqual(
     frames.map((frame) => frame.sequence),
     [1, 2]
+  );
+});
+
+test("parseSimulatorFramebufferStatusLine reads SimScreen callback mode", () => {
+  assert.deepEqual(
+    parseSimulatorFramebufferStatusLine("RI_STATUS:frame-source=simscreen-callbacks"),
+    {
+      message: "frame-source=simscreen-callbacks",
+      frameSource: "simscreen-callbacks",
+      detail: undefined
+    }
+  );
+});
+
+test("parseSimulatorFramebufferStatusLine keeps polling fallback detail", () => {
+  assert.deepEqual(
+    parseSimulatorFramebufferStatusLine(
+      "RI_STATUS:frame-source=seed-polling fallback=SimScreen descriptor unavailable"
+    ),
+    {
+      message: "frame-source=seed-polling fallback=SimScreen descriptor unavailable",
+      frameSource: "seed-polling",
+      detail: "fallback=SimScreen descriptor unavailable"
+    }
   );
 });
