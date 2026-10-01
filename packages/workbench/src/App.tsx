@@ -25,6 +25,7 @@ session.connect();
 
 interface RuntimeCaptureInfo {
   label: string;
+  source: "framebuffer" | "window";
   width?: number;
   height?: number;
   frameRate?: number;
@@ -43,8 +44,11 @@ function App() {
   const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
   const [desktopBusy, setDesktopBusy] = useState(false);
   const [inputReady, setInputReady] = useState(false);
+  const [framebufferUrl, setFramebufferUrl] = useState<string>();
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
+  const framebufferUrlRef = useRef<string>();
+  const framebufferTimesRef = useRef<number[]>([]);
 
   useEffect(() => {
     if (!schemaId && traceEntries[0]) {
@@ -79,6 +83,49 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const desktop = window.runtimeDesktop;
+    if (!desktop) return;
+
+    const unsubscribeFrame = desktop.onSimulatorFramebufferFrame((frame) => {
+      const nextUrl = URL.createObjectURL(
+        new Blob([new Uint8Array(frame.bytes)], { type: frame.mimeType })
+      );
+      const previousUrl = framebufferUrlRef.current;
+      framebufferUrlRef.current = nextUrl;
+      setFramebufferUrl(nextUrl);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+
+      const times = framebufferTimesRef.current;
+      times.push(frame.timestamp);
+      if (times.length > 30) times.shift();
+      const measuredFrameRate =
+        times.length > 1
+          ? ((times.length - 1) * 1000) / Math.max(1, times[times.length - 1] - times[0])
+          : undefined;
+
+      setRuntimeCapture((current) =>
+        current?.source === "framebuffer"
+          ? {
+              ...current,
+              width: frame.width,
+              height: frame.height,
+              frameRate: measuredFrameRate ?? current.frameRate
+            }
+          : current
+      );
+    });
+
+    const unsubscribeError = desktop.onSimulatorFramebufferError((error) => {
+      setRuntimeCaptureError(error.message);
+    });
+
+    return () => {
+      unsubscribeFrame();
+      unsubscribeError();
+    };
+  }, []);
+
   const probes = schemaId ? state.traceSchemas[schemaId] ?? [] : [];
 
   useEffect(() => {
@@ -107,6 +154,11 @@ function App() {
     return () => {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
       runtimeStreamRef.current = undefined;
+      void window.runtimeDesktop?.stopSimulatorFramebuffer();
+      if (framebufferUrlRef.current) {
+        URL.revokeObjectURL(framebufferUrlRef.current);
+        framebufferUrlRef.current = undefined;
+      }
     };
   }, []);
   const isRecording = Boolean(recording && !recording.complete);
@@ -147,11 +199,6 @@ function App() {
   }
 
   async function attachRuntimeCapture() {
-    if (!navigator.mediaDevices?.getDisplayMedia) {
-      setRuntimeCaptureError("This runtime does not support window capture.");
-      return;
-    }
-
     const desktop = window.runtimeDesktop;
     setRuntimeCaptureError(undefined);
     setDesktopBusy(Boolean(desktop));
@@ -159,19 +206,29 @@ function App() {
     try {
       runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
 
-      let prepared: RuntimeDesktopCapturePreparation | undefined;
       if (desktop) {
-        prepared = await desktop.prepareSimulatorCapture(selectedSimulatorUdid);
+        const prepared = await desktop.startSimulatorFramebuffer(selectedSimulatorUdid);
         setSelectedSimulatorUdid(prepared.device.udid);
         setSimulators(await desktop.listSimulators());
-        const ready = Boolean(prepared.input.ready && prepared.crop);
-        setInputReady(ready);
+        setInputReady(prepared.input.ready);
+        framebufferTimesRef.current = [];
+        setRuntimeCapture({
+          label: `${prepared.device.name} · ${prepared.device.runtime}`,
+          source: "framebuffer",
+          frameRate: prepared.targetFrameRate
+        });
         if (!prepared.input.ready) {
           setRuntimeCaptureError(prepared.input.error ?? "Simulator HID input is unavailable.");
         }
-      } else {
-        setInputReady(false);
+        return;
       }
+
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        setRuntimeCaptureError("This browser does not support window capture.");
+        return;
+      }
+
+      setInputReady(false);
 
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
@@ -193,14 +250,12 @@ function App() {
 
       runtimeStreamRef.current = stream;
       setRuntimeCapture({
-        label: prepared?.device
-          ? `${prepared.device.name} · ${prepared.device.runtime}`
-          : track.label || "Captured window",
+        label: track.label || "Captured window",
+        source: "window",
         width: settings.width,
         height: settings.height,
         frameRate: settings.frameRate,
-        displaySurface: settings.displaySurface,
-        crop: prepared?.crop
+        displaySurface: settings.displaySurface
       });
 
       track.onended = () => {
@@ -217,7 +272,7 @@ function App() {
         return;
       }
       setRuntimeCaptureError(
-        error instanceof Error ? error.message : "Could not attach the runtime window."
+        error instanceof Error ? error.message : "Could not attach the runtime surface."
       );
     } finally {
       setDesktopBusy(false);
@@ -225,11 +280,20 @@ function App() {
   }
 
   function detachRuntimeCapture() {
+    if (runtimeCapture?.source === "framebuffer") {
+      void window.runtimeDesktop?.stopSimulatorFramebuffer();
+    }
     runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
     runtimeStreamRef.current = undefined;
     if (runtimeVideoRef.current) {
       runtimeVideoRef.current.srcObject = null;
     }
+    if (framebufferUrlRef.current) {
+      URL.revokeObjectURL(framebufferUrlRef.current);
+      framebufferUrlRef.current = undefined;
+    }
+    setFramebufferUrl(undefined);
+    framebufferTimesRef.current = [];
     setRuntimeCapture(undefined);
     setRuntimeCaptureError(undefined);
     setInputReady(false);
@@ -237,7 +301,7 @@ function App() {
 
   async function retrySimulatorInput() {
     const desktop = window.runtimeDesktop;
-    if (!desktop || !runtimeCapture?.crop) return;
+    if (!desktop || runtimeCapture?.source !== "framebuffer") return;
 
     setRuntimeCaptureError(undefined);
     try {
@@ -340,108 +404,45 @@ function App() {
             <div className="stage-toolbar-title">
               <span>Live Runtime</span>
               {runtimeCapture ? (
-                <span className="capture-status">
-                  <span className="capture-status-dot" />
-                  {captureSummary(runtimeCapture)}
-                </span>
-              ) : window.runtimeDesktop ? (
-                <span className="stage-note">Desktop adapter · iOS Simulator</span>
-              ) : (
-                <span className="stage-note">Browser capture · iOS Simulator</span>
-              )}
-            </div>
-            <div className="stage-controls">
-              {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
-                <select
-                  className="simulator-select"
-                  aria-label="iOS Simulator target"
-                  value={selectedSimulatorUdid ?? ""}
-                  onChange={(event) => setSelectedSimulatorUdid(event.target.value)}
-                  disabled={desktopBusy}
+              runtimeCapture.source === "framebuffer" ? (
+                <div
+                  className={`runtime-framebuffer-shell${inputReady ? " interactive" : ""}`}
+                  style={
+                    runtimeCapture.width && runtimeCapture.height
+                      ? { aspectRatio: String(runtimeCapture.width / runtimeCapture.height) }
+                      : undefined
+                  }
+                  onPointerDown={handleRuntimePointerDown}
+                  onPointerMove={handleRuntimePointerMove}
+                  onPointerUp={handleRuntimePointerUp}
+                  onPointerCancel={handleRuntimePointerUp}
                 >
-                  {simulators.map((simulator) => (
-                    <option key={simulator.udid} value={simulator.udid}>
-                      {simulator.name} · {simulator.runtime}
-                      {simulator.state === "Booted" ? " · Booted" : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {runtimeCapture && window.runtimeDesktop ? (
-                inputReady ? (
-                  <span className="input-status" title="Native Simulator HID input enabled">
-                    Input on
-                  </span>
-                ) : runtimeCapture.crop ? (
-                  <button
-                    className="stage-action"
-                    type="button"
-                    onClick={retrySimulatorInput}
-                  >
-                    Retry Input
-                  </button>
-                ) : (
-                  <span
-                    className="input-status pending"
-                    title="Window capture is view-only until the direct CoreSimulator framebuffer adapter lands."
-                  >
-                    Framebuffer pending
-                  </span>
-                )
-              ) : null}
-              <button
-                className="stage-action"
-                type="button"
-                onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
-                disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
-              >
-                {runtimeCapture
-                  ? "Detach"
-                  : desktopBusy
-                    ? "Launching…"
-                    : window.runtimeDesktop
-                      ? "Launch & Attach"
-                      : "Attach Simulator"}
-              </button>
-            </div>
-          </div>
-
-          <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
-            {runtimeCapture ? (
-              <div
-                className={[
-                  runtimeCapture.crop ? "runtime-video-shell device-crop" : "runtime-video-shell",
-                  inputReady ? "interactive" : ""
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                style={runtimeShellStyle(runtimeCapture)}
-                onPointerDown={handleRuntimePointerDown}
-                onPointerMove={handleRuntimePointerMove}
-                onPointerUp={handleRuntimePointerUp}
-                onPointerCancel={handleRuntimePointerUp}
-              >
-                <video
-                  ref={runtimeVideoRef}
-                  className="runtime-video"
-                  style={runtimeVideoStyle(runtimeCapture)}
-                  autoPlay
-                  muted
-                  playsInline
-                />
-                {!runtimeCapture.crop ? (
+                  {framebufferUrl ? (
+                    <img
+                      className="runtime-framebuffer"
+                      src={framebufferUrl}
+                      alt="Live iOS Simulator framebuffer"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="framebuffer-loading">Connecting to Simulator framebuffer…</div>
+                  )}
+                </div>
+              ) : (
+                <div className="runtime-video-shell">
+                  <video
+                    ref={runtimeVideoRef}
+                    className="runtime-video"
+                    autoPlay
+                    muted
+                    playsInline
+                  />
                   <div className="runtime-video-caption">
                     <span>{runtimeCapture.label}</span>
-                    <span>
-                      {window.runtimeDesktop
-                        ? inputReady
-                          ? "Interactive · native Simulator HID"
-                          : "Window fallback · direct framebuffer pending"
-                        : "Interact in the Simulator window · browser capture is view-only"}
-                    </span>
+                    <span>Window fallback · view only</span>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              )
             ) : (
               <div className="device-placeholder">
                 <div className="device-screen">
@@ -630,8 +631,8 @@ function captureSummary(capture: RuntimeCaptureInfo) {
   const size =
     capture.width && capture.height ? `${capture.width}×${capture.height}` : undefined;
   const fps = capture.frameRate ? `${capture.frameRate.toFixed(0)} fps` : undefined;
-  const crop = capture.crop ? "device crop" : undefined;
-  return [size, fps, crop].filter(Boolean).join(" · ") || "attached";
+  const source = capture.source === "framebuffer" ? "direct framebuffer" : undefined;
+  return [size, fps, source].filter(Boolean).join(" · ") || "attached";
 }
 
 function measuredHz(samples: Array<{ t: number; value: number }>) {
