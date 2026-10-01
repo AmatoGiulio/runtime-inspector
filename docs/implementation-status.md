@@ -164,7 +164,24 @@ Runtime unit tests use an offline in-memory socket by default; transport-specifi
 - physical-device viewport;
 - runtime time travel/scrubbing.
 
-M3a intentionally validates live Simulator pixels before committing to a native desktop shell.
+M3a validated live Simulator pixels before committing to a desktop shell.
+
+**M3b.1 implemented on `feat/runtime-workbench-desktop`, pending local validation**
+
+- Electron 44 desktop shell around the existing Workbench renderer;
+- context-isolated preload bridge;
+- `simctl` discovery of installed iOS Simulator devices;
+- boot/open flow for a selected Simulator target;
+- automatic Simulator-window lookup with Electron `desktopCapturer`;
+- automatic source grant through Electron's display-media request handler, removing the browser sharing picker;
+- browser M3a capture remains available when the Workbench is opened outside Electron.
+
+**M3b.2 still outstanding**
+
+- pointer/touch forwarding;
+- device-screen crop / coordinate mapping;
+- Accessibility permission flow;
+- packaging/signing.
 
 ## Explicitly not implemented in this phase
 
