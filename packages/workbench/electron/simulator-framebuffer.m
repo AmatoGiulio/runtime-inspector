@@ -770,6 +770,10 @@ int main(int argc, const char *argv[]) {
       0.2,
       MIN(0.95, [RIArgumentValue(arguments, @"--quality", @"0.72") doubleValue])
     );
+    const NSInteger pollIntervalUs = MAX(
+      250,
+      MIN(5000, [RIArgumentValue(arguments, @"--poll-us", @"500") integerValue])
+    );
 
     if (![udid length]) {
       fprintf(stderr, "A Simulator UDID is required.\n");
@@ -792,7 +796,9 @@ int main(int argc, const char *argv[]) {
     uint32_t surfaceID = 0;
     uint32_t lastSeed = UINT32_MAX;
     uint32_t sequence = 0;
-    const useconds_t frameInterval = (useconds_t)(1000000 / fps);
+    const double frameIntervalSeconds = 1.0 / (double)fps;
+    const double pollIntervalSeconds = (double)pollIntervalUs / 1000000.0;
+    CFAbsoluteTime lastEncodedAt = 0;
     CFAbsoluteTime lastSurfaceRefresh = 0;
     const CFAbsoluteTime streamStartedAt = CFAbsoluteTimeGetCurrent();
     NSString *lastSurfaceDiagnostic = nil;
@@ -836,7 +842,12 @@ int main(int argc, const char *argv[]) {
         }
 
         const uint32_t seed = IOSurfaceGetSeed(surface);
-        if (seed != lastSeed || sequence == 0) {
+        const BOOL surfaceChanged = seed != lastSeed || sequence == 0;
+        const BOOL frameBudgetReady =
+          sequence == 0 ||
+          frameStart - lastEncodedAt >= frameIntervalSeconds;
+
+        if (surfaceChanged && frameBudgetReady) {
           const CFAbsoluteTime encodeStartedAt = CFAbsoluteTimeGetCurrent();
           const uint64_t capturedAtMs = (uint64_t)llround(
             [[NSDate date] timeIntervalSince1970] * 1000.0
@@ -869,13 +880,15 @@ int main(int argc, const char *argv[]) {
               if (surface) CFRelease(surface);
               return 0;
             }
+
             sequence += 1;
             lastSeed = seed;
+            lastEncodedAt = frameStart;
           }
         }
 
         const CFAbsoluteTime elapsed = CFAbsoluteTimeGetCurrent() - frameStart;
-        const double remaining = ((double)frameInterval / 1000000.0) - elapsed;
+        const double remaining = pollIntervalSeconds - elapsed;
         if (remaining > 0) {
           usleep((useconds_t)(remaining * 1000000.0));
         }
