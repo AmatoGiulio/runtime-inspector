@@ -67,6 +67,7 @@ test(
       assert.ok(result.p50Ms > 0);
       assert.ok(result.p95Ms > 0);
       assert.ok(result.avgBytes > 0);
+      assert.ok(result.psnrDb > 0);
     }
 
     // The workload is deterministic even though wall-clock timing is not.
