@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -28,6 +29,7 @@ interface RuntimeCaptureInfo {
   height?: number;
   frameRate?: number;
   displaySurface?: string;
+  crop?: RuntimeDesktopCrop;
 }
 
 function App() {
@@ -190,7 +192,8 @@ function App() {
         width: settings.width,
         height: settings.height,
         frameRate: settings.frameRate,
-        displaySurface: settings.displaySurface
+        displaySurface: settings.displaySurface,
+        crop: prepared?.crop
       });
 
       track.onended = () => {
@@ -389,7 +392,14 @@ function App() {
 
           <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
             {runtimeCapture ? (
-              <div className="runtime-video-shell">
+              <div
+                className={
+                  runtimeCapture.crop
+                    ? "runtime-video-shell device-crop"
+                    : "runtime-video-shell"
+                }
+                style={runtimeShellStyle(runtimeCapture)}
+              >
                 <video
                   ref={runtimeVideoRef}
                   className={
@@ -397,6 +407,7 @@ function App() {
                       ? "runtime-video interactive"
                       : "runtime-video"
                   }
+                  style={runtimeVideoStyle(runtimeCapture)}
                   autoPlay
                   muted
                   playsInline
@@ -405,16 +416,18 @@ function App() {
                   onPointerUp={handleRuntimePointerUp}
                   onPointerCancel={handleRuntimePointerUp}
                 />
-                <div className="runtime-video-caption">
-                  <span>{runtimeCapture.label}</span>
-                  <span>
-                    {window.runtimeDesktop
-                      ? inputPermission
-                        ? "Interactive · click and drag directly in this viewport"
-                        : "Desktop capture attached · enable input for click/drag forwarding"
-                      : "Interact in the Simulator window · browser capture is view-only"}
-                  </span>
-                </div>
+                {!runtimeCapture.crop ? (
+                  <div className="runtime-video-caption">
+                    <span>{runtimeCapture.label}</span>
+                    <span>
+                      {window.runtimeDesktop
+                        ? inputPermission
+                          ? "Interactive · click and drag directly in this viewport"
+                          : "Desktop capture attached · enable input for click/drag forwarding"
+                        : "Interact in the Simulator window · browser capture is view-only"}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="device-placeholder">
@@ -573,11 +586,39 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
   );
 }
 
+function runtimeShellStyle(capture: RuntimeCaptureInfo): CSSProperties | undefined {
+  const crop = capture.crop;
+  if (!crop || !capture.width || !capture.height) return undefined;
+
+  const cropWidthPx = crop.width * capture.width;
+  const cropHeightPx = crop.height * capture.height;
+  if (cropWidthPx <= 0 || cropHeightPx <= 0) return undefined;
+
+  return {
+    aspectRatio: String(cropWidthPx / cropHeightPx)
+  };
+}
+
+function runtimeVideoStyle(capture: RuntimeCaptureInfo): CSSProperties | undefined {
+  const crop = capture.crop;
+  if (!crop) return undefined;
+
+  return {
+    position: "absolute",
+    width: `${100 / crop.width}%`,
+    maxWidth: "none",
+    maxHeight: "none",
+    left: `${(-crop.x / crop.width) * 100}%`,
+    top: `${(-crop.y / crop.height) * 100}%`
+  };
+}
+
 function captureSummary(capture: RuntimeCaptureInfo) {
   const size =
     capture.width && capture.height ? `${capture.width}×${capture.height}` : undefined;
   const fps = capture.frameRate ? `${capture.frameRate.toFixed(0)} fps` : undefined;
-  return [size, fps].filter(Boolean).join(" · ") || "attached";
+  const crop = capture.crop ? "device crop" : undefined;
+  return [size, fps, crop].filter(Boolean).join(" · ") || "attached";
 }
 
 function measuredHz(samples: Array<{ t: number; value: number }>) {
