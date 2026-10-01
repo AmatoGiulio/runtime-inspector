@@ -8,12 +8,14 @@
 
 static const uint32_t RIFrameMagic = 0x52494642; // RIFB
 
-typedef struct {
+typedef struct __attribute__((packed)) {
   uint32_t magic;
   uint32_t payloadLength;
   uint32_t width;
   uint32_t height;
   uint32_t sequence;
+  uint64_t capturedAtMs;
+  uint32_t encodeDurationUs;
 } RIFrameHeader;
 
 static id RIInvokeClassObjectError(Class cls, SEL selector, id object) {
@@ -362,7 +364,14 @@ static NSData *RIEncodeSurfaceJPEG(
   return data;
 }
 
-static BOOL RIWriteFrame(NSData *payload, uint32_t width, uint32_t height, uint32_t sequence) {
+static BOOL RIWriteFrame(
+  NSData *payload,
+  uint32_t width,
+  uint32_t height,
+  uint32_t sequence,
+  uint64_t capturedAtMs,
+  uint32_t encodeDurationUs
+) {
   if (!payload || [payload length] > UINT32_MAX) return NO;
 
   RIFrameHeader header = {
@@ -370,7 +379,9 @@ static BOOL RIWriteFrame(NSData *payload, uint32_t width, uint32_t height, uint3
     .payloadLength = CFSwapInt32HostToBig((uint32_t)[payload length]),
     .width = CFSwapInt32HostToBig(width),
     .height = CFSwapInt32HostToBig(height),
-    .sequence = CFSwapInt32HostToBig(sequence)
+    .sequence = CFSwapInt32HostToBig(sequence),
+    .capturedAtMs = CFSwapInt64HostToBig(capturedAtMs),
+    .encodeDurationUs = CFSwapInt32HostToBig(encodeDurationUs)
   };
 
   if (fwrite(&header, sizeof(header), 1, stdout) != 1) return NO;
@@ -465,6 +476,10 @@ int main(int argc, const char *argv[]) {
 
         const uint32_t seed = IOSurfaceGetSeed(surface);
         if (seed != lastSeed || sequence == 0) {
+          const CFAbsoluteTime encodeStartedAt = CFAbsoluteTimeGetCurrent();
+          const uint64_t capturedAtMs = (uint64_t)llround(
+            [[NSDate date] timeIntervalSince1970] * 1000.0
+          );
           uint32_t encodedWidth = 0;
           uint32_t encodedHeight = 0;
           NSData *jpeg = RIEncodeSurfaceJPEG(
@@ -476,7 +491,20 @@ int main(int argc, const char *argv[]) {
           );
 
           if (jpeg) {
-            if (!RIWriteFrame(jpeg, encodedWidth, encodedHeight, sequence)) {
+            const double encodeSeconds = CFAbsoluteTimeGetCurrent() - encodeStartedAt;
+            const uint32_t encodeDurationUs = (uint32_t)MIN(
+              UINT32_MAX,
+              llround(encodeSeconds * 1000000.0)
+            );
+
+            if (!RIWriteFrame(
+              jpeg,
+              encodedWidth,
+              encodedHeight,
+              sequence,
+              capturedAtMs,
+              encodeDurationUs
+            )) {
               if (surface) CFRelease(surface);
               return 0;
             }
