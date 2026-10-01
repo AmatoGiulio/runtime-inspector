@@ -221,3 +221,26 @@ The comparison baseline was the validated high-frequency polling result:
 ~~~
 
 The callback path therefore reached the 60 fps target while preserving the promoted `balanced` quality profile. The Workbench now also surfaces the active native frame source in the Runtime toolbar (`SimScreen callbacks` or `seed polling`) instead of requiring terminal inspection.
+
+### M5a semantic Outline + contextual control Inspector
+
+**Implemented on `feat/runtime-workbench-desktop`, pending manual UI validation**
+
+With the iOS viewport transport now stable at ~60 fps, the Workbench begins the product-facing semantic workflow rather than further framebuffer tuning.
+
+The left Outline now merges the existing RIP control schema and trace schema for each runtime surface:
+
+- **Controls** — slider, toggle, color, spring, Bézier and trigger controls;
+- **Probes** — declared runtime trace signals.
+
+Selecting a control opens a contextual Inspector backed by the existing `panel-core` session semantics:
+
+- slider preview patches remain throttled by `panel-core`, followed by an explicit commit;
+- toggle/color/spring/Bézier values use the same validated RIP patch/commit path as the existing clients;
+- trigger controls call the existing at-most-once `control.trigger` flow;
+- controls with source anchors expose **Apply to code** through the existing RFC 0004 write-back path;
+- stale runtime schemas render their controls disabled rather than inventing a second stale-state model.
+
+Selecting a probe keeps the existing observational Inspector and timeline behavior. The timeline continues to follow the most recently selected probe even while a control is being tuned, so a developer can tune a parameter while watching the relevant runtime trace.
+
+No new RIP messages were introduced.
