@@ -13,7 +13,10 @@ import {
   type SourceApplyRequest,
   type SourceApplyResult,
   type SourceApplyResultEntry,
+  type RecordingSample,
+  type RuntimeProbeDescriptor,
   type SpringValue,
+  type TraceSchemaPublish,
   type TriggerControl
 } from "@runtime-inspector/protocol";
 
@@ -35,6 +38,20 @@ export interface LastApplyResultInfo {
   at: string;
 }
 
+export interface RecordingTraceState {
+  id: string;
+  schemaId: string;
+  probeIds: string[];
+  sampleRateHz: number;
+  startedAtRuntimeMs?: number;
+  samples: RecordingSample[];
+  nextSequence: number;
+  complete: boolean;
+  incomplete: boolean;
+  durationMs?: number;
+  sampleCount?: number;
+}
+
 export interface PanelState {
   status: ConnectionStatus;
   notice?: string;
@@ -47,6 +64,8 @@ export interface PanelState {
    */
   staleSchemaIds: Record<string, boolean>;
   values: Record<string, Record<string, unknown>>;
+  traceSchemas: Record<string, RuntimeProbeDescriptor[]>;
+  recording?: RecordingTraceState;
   lastPatch?: LastPatchInfo;
   /** Results of the most recently received `source.applyResult`, keyed by nothing (single latest snapshot). */
   lastApplyResult?: LastApplyResultInfo;
@@ -98,6 +117,9 @@ export interface PanelSession {
   applyCompareSlot(slot: CompareSlotId, schemaId: string): void;
   exportTypeScript(schemaId: string): string;
   applySource(schemaId: string, controlIds?: string[]): void;
+  startRecording(schemaId: string, probeIds: string[], sampleRateHz?: number): string | undefined;
+  stopRecording(): void;
+  clearRecording(): void;
 }
 
 function defaultCreateSocket(url: string): WebSocketLike {
@@ -120,6 +142,8 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     schemas: [],
     staleSchemaIds: {},
     values: {},
+    traceSchemas: {},
+    recording: undefined,
     lastPatch: undefined,
     compareSlots: {}
   };
@@ -127,6 +151,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   const listeners = new Set<() => void>();
   const schemasById = new Map<string, PanelSchema>();
   const pendingPatches = new Map<string, PendingPatch>();
+  let recordingCounter = 0;
 
   let socket: WebSocketLike | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -225,6 +250,39 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
               staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online }
             });
           }
+        }
+      }
+      if (message.type === "trace.schema.publish") {
+        applyTraceSchema(message);
+      }
+      if (message.type === "trace.schema.dispose") {
+        const { [message.schemaId]: _removedTrace, ...restTrace } = state.traceSchemas;
+        setState({ traceSchemas: restTrace });
+      }
+      if (message.type === "recording.started") {
+        if (state.recording?.id === message.recordingId) {
+          setState({
+            recording: {
+              ...state.recording,
+              startedAtRuntimeMs: message.startedAtRuntimeMs,
+              sampleRateHz: message.sampleRateHz
+            }
+          });
+        }
+      }
+      if (message.type === "recording.chunk") {
+        applyRecordingChunk(message);
+      }
+      if (message.type === "recording.complete") {
+        if (state.recording?.id === message.recordingId) {
+          setState({
+            recording: {
+              ...state.recording,
+              complete: true,
+              durationMs: message.durationMs,
+              sampleCount: message.sampleCount
+            }
+          });
         }
       }
       if (message.type === "control.patch") {
@@ -381,6 +439,33 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
           ...schemaValues,
           ...nextValues
         }
+      }
+    });
+  }
+
+  function applyTraceSchema(message: TraceSchemaPublish) {
+    setState({
+      traceSchemas: {
+        ...state.traceSchemas,
+        [message.schemaId]: message.probes
+      }
+    });
+  }
+
+  function applyRecordingChunk(message: {
+    recordingId: string;
+    sequence: number;
+    samples: RecordingSample[];
+  }) {
+    const recording = state.recording;
+    if (!recording || recording.id !== message.recordingId) return;
+    const sequenceGap = message.sequence !== recording.nextSequence;
+    setState({
+      recording: {
+        ...recording,
+        samples: [...recording.samples, ...message.samples],
+        nextSequence: message.sequence + 1,
+        incomplete: recording.incomplete || sequenceGap
       }
     });
   }
@@ -594,6 +679,64 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     });
   }
 
+  function startRecording(
+    schemaId: string,
+    probeIds: string[],
+    sampleRateHz = 60
+  ): string | undefined {
+    if (blockIfStale(schemaId)) return undefined;
+    if (probeIds.length === 0) {
+      setState({ notice: "Select at least one runtime probe to record." });
+      return undefined;
+    }
+    if (state.recording && !state.recording.complete) {
+      setState({ notice: "A recording is already active." });
+      return undefined;
+    }
+
+    recordingCounter += 1;
+    const recordingId = `rec-${clientId}-${Math.round(now())}-${recordingCounter}`;
+    setState({
+      recording: {
+        id: recordingId,
+        schemaId,
+        probeIds: [...probeIds],
+        sampleRateHz,
+        samples: [],
+        nextSequence: 0,
+        complete: false,
+        incomplete: false
+      },
+      notice: undefined
+    });
+    send({
+      type: "recording.start",
+      recordingId,
+      schemaId,
+      probeIds,
+      sampleRateHz
+    });
+    return recordingId;
+  }
+
+  function stopRecording() {
+    const recording = state.recording;
+    if (!recording || recording.complete) return;
+    send({
+      type: "recording.stop",
+      recordingId: recording.id,
+      schemaId: recording.schemaId
+    });
+  }
+
+  function clearRecording() {
+    if (state.recording && !state.recording.complete) {
+      setState({ notice: "Stop the active recording before clearing it." });
+      return;
+    }
+    setState({ recording: undefined });
+  }
+
   return {
     getState,
     subscribe,
@@ -605,7 +748,10 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     saveCompareSlot,
     applyCompareSlot,
     exportTypeScript,
-    applySource
+    applySource,
+    startRecording,
+    stopRecording,
+    clearRecording
   };
 }
 
