@@ -30,7 +30,7 @@ function App() {
   const [probeId, setProbeId] = useState<string>();
   const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
   const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
-  const runtimeStreamRef = useRef<MediaStream>();
+  const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
