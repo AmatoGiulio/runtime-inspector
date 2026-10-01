@@ -26,7 +26,7 @@ const sourceHeight = integerArg("--source-height", 2868);
 const gateProfile = stringArg("--gate-profile");
 const maxRelativeP95 = numberArg("--max-relative-p95", 0.9);
 const maxRelativeBytes = numberArg("--max-relative-bytes", 1.0);
-const minPsnrDb = numberArg("--min-psnr-db");
+const maxPsnrLossDb = numberArg("--max-psnr-loss-db");
 
 if (process.platform !== "darwin") {
   console.error("Framebuffer benchmark requires macOS.");
@@ -60,6 +60,7 @@ const baseline = aggregate.find((item) => item.name === "baseline");
 for (const item of aggregate) {
   item.relativeP95 = item.p95Ms / baseline.p95Ms;
   item.relativeBytes = item.avgBytes / baseline.avgBytes;
+  item.psnrLossDb = baseline.psnrDb - item.psnrDb;
 }
 
 printTable(aggregate);
@@ -88,12 +89,13 @@ if (gateProfile) {
 
   const p95Pass = candidate.relativeP95 <= maxRelativeP95;
   const bytesPass = candidate.relativeBytes <= maxRelativeBytes;
-  const qualityPass = minPsnrDb === undefined || candidate.psnrDb >= minPsnrDb;
+  const qualityPass =
+    maxPsnrLossDb === undefined || candidate.psnrLossDb <= maxPsnrLossDb;
 
   const qualityText =
-    minPsnrDb === undefined
+    maxPsnrLossDb === undefined
       ? ""
-      : `; PSNR ${candidate.psnrDb.toFixed(2)} dB >= ${minPsnrDb.toFixed(2)} dB`;
+      : `; PSNR loss ${candidate.psnrLossDb.toFixed(2)} dB <= ${maxPsnrLossDb.toFixed(2)} dB`;
 
   console.log(
     `\nGate ${gateProfile}: p95 ${formatPercent(candidate.relativeP95)} <= ${formatPercent(maxRelativeP95)}; bytes ${formatPercent(candidate.relativeBytes)} <= ${formatPercent(maxRelativeBytes)}${qualityText}`
@@ -155,6 +157,7 @@ function printTable(rows) {
     "p95 fps".padStart(8),
     "avg KB".padStart(8),
     "PSNR".padStart(8),
+    "PSNR Δ".padStart(8),
     "p95 Δ".padStart(8),
     "bytes Δ".padStart(8)
   ].join("  ");
@@ -173,6 +176,7 @@ function printTable(rows) {
         row.capacityFpsP95.toFixed(1).padStart(8),
         (row.avgBytes / 1024).toFixed(1).padStart(8),
         row.psnrDb.toFixed(2).padStart(8),
+        row.psnrLossDb.toFixed(2).padStart(8),
         formatPercent(row.relativeP95).padStart(8),
         formatPercent(row.relativeBytes).padStart(8)
       ].join("  ")
