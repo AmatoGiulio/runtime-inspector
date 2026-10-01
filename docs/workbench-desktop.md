@@ -284,3 +284,7 @@ A second startup issue was isolated after the first priming pass. The one-shot b
 The bootstrap frame is now returned as part of the start IPC response and retained by the renderer until the framebuffer canvas has mounted. It is drawn on the next animation frame, after which the persistent IOSurface stream owns subsequent updates.
 
 Expected startup behavior: the iOS screen appears immediately after **Launch & Attach**, without touching the external Simulator window.
+
+### M3c.1 cold-start validation
+
+Manual validation on 2026-10-01 confirmed that the deferred bootstrap frame fixes the first-render race: after **Launch & Attach**, the iOS framebuffer appears in Runtime Inspector without any interaction with the external Simulator window. Native HID input remains active from the embedded viewport.
