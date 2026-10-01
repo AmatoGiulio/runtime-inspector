@@ -209,6 +209,10 @@ function registerDesktopIpc() {
           bytes: Uint8Array.from(frame.bytes).buffer
         });
       },
+      onStatus: (status) => {
+        if (sender.isDestroyed()) return;
+        sender.send("runtime-desktop:simulator-framebuffer-status", status);
+      },
       onError: (error) => {
         if (sender.isDestroyed()) return;
         sender.send("runtime-desktop:simulator-framebuffer-error", {
