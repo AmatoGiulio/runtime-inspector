@@ -275,3 +275,26 @@ The Workbench adds **Benchmark viewport**. A run:
 - reports sustained FPS, frame-interval p95, encode p95, decode p95, latency p95, and received frame count.
 
 This is separate from the normal rolling toolbar statistics and is intended to be the deterministic end-to-end validation for the promoted framebuffer profile.
+
+### M3c.4 high-frequency IOSurface seed polling
+
+**Implemented on `feat/runtime-workbench-desktop`, pending live benchmark validation**
+
+The first deterministic live viewport benchmark with the balanced profile measured:
+
+- 54.4 fps sustained;
+- 19.0 ms frame-interval p95;
+- 10.5 ms native JPEG encode p95;
+- 2.1 ms decode/draw p95;
+- 12 ms capture-to-canvas latency p95.
+
+Because encode and decode are both comfortably below a 16.67 ms frame budget, the next experiment keeps the high-quality `balanced` stream unchanged at 560 px / JPEG 0.60 and changes only frame detection.
+
+The persistent helper now decouples:
+
+- **seed polling** — every 500 µs;
+- **encoding/output** — capped at the requested 60 fps and only when `IOSurfaceGetSeed` reports a changed framebuffer.
+
+Previously the helper checked the IOSurface only once per ~16.67 ms encode cadence. That can alias against Simulator presentation timing and miss a fresh frame until the next polling cycle. The new path detects presents at much finer granularity without encoding unchanged frames or increasing JPEG quality loss.
+
+If the live benchmark still stays materially below 60 fps, the next structural step is `SimScreen` frame callbacks rather than further JPEG quality reduction.
