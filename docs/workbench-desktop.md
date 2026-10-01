@@ -288,3 +288,28 @@ Expected startup behavior: the iOS screen appears immediately after **Launch & A
 ### M3c.1 cold-start validation
 
 Manual validation on 2026-10-01 confirmed that the deferred bootstrap frame fixes the first-render race: after **Launch & Attach**, the iOS framebuffer appears in Runtime Inspector without any interaction with the external Simulator window. Native HID input remains active from the embedded viewport.
+
+### M3c.1 performance instrumentation
+
+The persistent framebuffer transport now carries timing metadata per frame so the Workbench can measure the live path instead of judging it only by eye.
+
+Each native frame includes:
+
+- wall-clock capture timestamp taken immediately before IOSurface read/encode;
+- native JPEG encode duration;
+- sequence number and encoded dimensions.
+
+The renderer measures:
+
+- motion-frame cadence from native capture timestamps;
+- end-to-end capture → canvas latency;
+- native encode cost;
+- browser JPEG decode + canvas draw cost.
+
+The Live Runtime toolbar reports a rolling window in the form:
+
+~~~text
+600×1304 · 58 fps · 22 ms · enc 5.4 · dec 1.7 · direct framebuffer
+~~~
+
+Because the IOSurface stream intentionally skips unchanged surface seeds, the FPS value represents cadence while the screen is changing, not an idle heartbeat. These numbers are the decision gate for whether M3c.1 MJPEG is sufficient or whether the same IOSurface adapter should move to persistent VideoToolbox H.264.
