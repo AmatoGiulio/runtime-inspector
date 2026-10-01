@@ -40,6 +40,7 @@ declare global {
       ready: boolean;
       error?: string;
     };
+    bootstrapFrame?: RuntimeDesktopFramebufferFrame;
   }
 
   interface RuntimeDesktopFramebufferFrame {
