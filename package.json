@@ -14,7 +14,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "verify": "pnpm -r test && pnpm -r typecheck",
-    "clean": "pnpm -r clean"
+    "clean": "pnpm -r clean",
+    "workbench:desktop": "pnpm --filter @runtime-inspector/workbench desktop"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
