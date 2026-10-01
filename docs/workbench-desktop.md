@@ -131,6 +131,10 @@ No external implementation is vendored as a package dependency.
 
 ### M3b.2 acceptance gate
 
+Manual validation on 2026-10-01 confirmed that the native IndigoHID path reaches the app: the embedded `TAP TEST` counter increments from Runtime Inspector. The remaining defect is crop precision: the first matcher can include part of the Simulator/device bezel, which introduces a small pointer offset.
+
+The crop matcher is therefore required to lock onto high-information framebuffer features (status bar, Dynamic Island, app/card/button edges) rather than mostly-dark interior samples.
+
 - Launch & Attach reports **Input on** only after the native HID client is prepared;
 - the central viewport shows the device screen crop rather than Simulator chrome;
 - clicking the demo `TAP TEST` in the embedded viewport increments its counter;
