@@ -298,3 +298,37 @@ The persistent helper now decouples:
 Previously the helper checked the IOSurface only once per ~16.67 ms encode cadence. That can alias against Simulator presentation timing and miss a fresh frame until the next polling cycle. The new path detects presents at much finer granularity without encoding unchanged frames or increasing JPEG quality loss.
 
 If the live benchmark still stays materially below 60 fps, the next structural step is `SimScreen` frame callbacks rather than further JPEG quality reduction.
+
+### M3c.5 SimScreen present callbacks
+
+**Implemented on `feat/runtime-workbench-desktop`, pending live benchmark validation**
+
+The high-frequency seed-polling experiment raised the deterministic live viewport result from 54.4 fps to 58.7 fps while leaving encode/decode/latency essentially unchanged. That confirms the remaining loss is in frame detection rather than JPEG quality.
+
+The persistent native helper now prefers CoreSimulator's new-style `SimScreen` callback API:
+
+- `registerScreenCallbacksWithUUID:callbackQueue:frameCallback:surfacesChangedCallback:propertiesChangedCallback:`;
+- the callback itself stays minimal and only signals the encoder worker;
+- multiple presents that arrive while JPEG encoding are coalesced;
+- `surfacesChangedCallback` requests a safe main-thread/single-worker surface reacquire;
+- JPEG encoding remains off the CoreSimulator callback queue;
+- stream quality remains unchanged at the promoted `balanced` profile: 560 px / JPEG 0.60;
+- the 500 µs IOSurface seed poller remains as the compatibility fallback when `SimScreen` registration is unavailable or raises.
+
+The native helper prints one startup status line:
+
+~~~text
+[Runtime Inspector] frame-source=simscreen-callbacks
+~~~
+
+or, on compatibility fallback:
+
+~~~text
+[Runtime Inspector] frame-source=seed-polling fallback=...
+~~~
+
+Acceptance is the same deterministic **Benchmark viewport** run. If callback mode is active, the next result is compared directly against the validated polling result:
+
+~~~text
+58.7 fps · frame p95 18.0 ms · enc p95 10.4 · dec p95 2.0 · lat p95 12 ms
+~~~
