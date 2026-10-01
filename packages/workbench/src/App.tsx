@@ -404,6 +404,72 @@ function App() {
             <div className="stage-toolbar-title">
               <span>Live Runtime</span>
               {runtimeCapture ? (
+                <span className="capture-status">
+                  <span className="capture-status-dot" />
+                  {captureSummary(runtimeCapture)}
+                </span>
+              ) : window.runtimeDesktop ? (
+                <span className="stage-note">Desktop adapter · iOS Simulator</span>
+              ) : (
+                <span className="stage-note">Browser capture · iOS Simulator</span>
+              )}
+            </div>
+
+            <div className="stage-controls">
+              {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
+                <select
+                  className="simulator-select"
+                  aria-label="iOS Simulator target"
+                  value={selectedSimulatorUdid ?? ""}
+                  onChange={(event) => setSelectedSimulatorUdid(event.target.value)}
+                  disabled={desktopBusy}
+                >
+                  {simulators.map((simulator) => (
+                    <option key={simulator.udid} value={simulator.udid}>
+                      {simulator.name} · {simulator.runtime}
+                      {simulator.state === "Booted" ? " · Booted" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+
+              {runtimeCapture && window.runtimeDesktop ? (
+                runtimeCapture.source === "framebuffer" ? (
+                  inputReady ? (
+                    <span className="input-status" title="Native Simulator HID input enabled">
+                      Input on
+                    </span>
+                  ) : (
+                    <button className="stage-action" type="button" onClick={retrySimulatorInput}>
+                      Retry Input
+                    </button>
+                  )
+                ) : (
+                  <span className="input-status pending" title="Window fallback is view-only">
+                    View only
+                  </span>
+                )
+              ) : null}
+
+              <button
+                className="stage-action"
+                type="button"
+                onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
+                disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
+              >
+                {runtimeCapture
+                  ? "Detach"
+                  : desktopBusy
+                    ? "Launching…"
+                    : window.runtimeDesktop
+                      ? "Launch & Attach"
+                      : "Attach Simulator"}
+              </button>
+            </div>
+          </div>
+
+          <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
+            {runtimeCapture ? (
               runtimeCapture.source === "framebuffer" ? (
                 <div
                   className={`runtime-framebuffer-shell${inputReady ? " interactive" : ""}`}
@@ -448,12 +514,14 @@ function App() {
                 <div className="device-screen">
                   <div className="device-eyebrow">REAL RUNTIME</div>
                   <div className="device-title">
-                    {window.runtimeDesktop ? "Launch the iOS Simulator" : "Attach the iOS Simulator"}
+                    {window.runtimeDesktop
+                      ? "Launch the iOS Simulator"
+                      : "Attach the iOS Simulator"}
                   </div>
                   <div className="device-copy">
                     {window.runtimeDesktop
-                      ? "Runtime Inspector can discover installed simulators, boot the selected target, find its window and attach it without a sharing picker."
-                      : "Choose the Simulator window in the macOS sharing picker. Runtime Inspector will render that live window here while trace recording stays on RIP."}
+                      ? "Runtime Inspector boots the selected target and attaches directly to its iOS framebuffer."
+                      : "Choose the Simulator window in the macOS sharing picker. Browser capture is a view-only fallback."}
                   </div>
                   <button
                     className="device-attach"
@@ -470,6 +538,7 @@ function App() {
                 </div>
               </div>
             )}
+
             {runtimeCaptureError ? (
               <div className="capture-error" role="status">
                 {runtimeCaptureError}
