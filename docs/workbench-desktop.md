@@ -234,3 +234,32 @@ Manual validation on 2026-10-01 confirmed:
 The performance result is expected from spawning `simctl`, encoding a JPEG, copying it through IPC, creating a Blob URL, decoding it, and replacing the renderer image for every frame. M3c.0 is therefore architecture proof only and must not be optimized further.
 
 M3c.1 must replace the entire per-frame process/encode/decode loop with one persistent CoreSimulator framebuffer stream.
+
+## M3c.1 — persistent IOSurface stream
+
+Implemented on `feat/runtime-workbench-desktop`, pending local performance validation.
+
+The `simctl screenshot` per-frame proof is replaced by one long-lived native helper:
+
+~~~text
+CoreSimulator device
+    -> main display IOSurface
+    -> persistent native process
+    -> 60 Hz surface polling
+    -> downscaled JPEG frame
+    -> framed stdout stream
+    -> Electron main
+    -> renderer IPC
+    -> coalesced canvas decode
+~~~
+
+Important properties:
+
+- `xcrun simctl` is no longer spawned per frame;
+- the main display IOSurface is discovered once and refreshed only when its surface identity changes;
+- unchanged frames are skipped using the IOSurface seed;
+- the native helper scales before JPEG encoding (currently 600 px wide, quality 0.65) to match the actual Workbench viewport instead of transporting the full 1320×2868 framebuffer;
+- the renderer coalesces incoming frames and decodes into a canvas instead of replacing a React `<img>` / Blob URL every frame;
+- HID remains independent and uses normalized framebuffer coordinates.
+
+This is the first product-shaped live transport. If its measured motion cadence still falls materially below 60 Hz, the next optimization is not another screenshot path: replace JPEG with a persistent VideoToolbox H.264 stream while retaining the same IOSurface source and HID mapping.
