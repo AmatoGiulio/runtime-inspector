@@ -33,6 +33,7 @@ function App() {
   const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
   const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
   const [desktopBusy, setDesktopBusy] = useState(false);
+  const [inputPermission, setInputPermission] = useState<boolean>();
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
 
@@ -47,11 +48,11 @@ function App() {
     if (!desktop) return;
 
     let cancelled = false;
-    desktop
-      .listSimulators()
-      .then((items) => {
+    Promise.all([desktop.listSimulators(), desktop.getInputPermission()])
+      .then(([items, trusted]) => {
         if (cancelled) return;
         setSimulators(items);
+        setInputPermission(trusted);
         setSelectedSimulatorUdid((current) => {
           if (current && items.some((item) => item.udid === current)) return current;
           return items.find((item) => item.state === "Booted")?.udid ?? items[0]?.udid;
@@ -215,6 +216,63 @@ function App() {
     setRuntimeCaptureError(undefined);
   }
 
+  async function requestSimulatorInput() {
+    const desktop = window.runtimeDesktop;
+    if (!desktop) return;
+
+    setRuntimeCaptureError(undefined);
+    try {
+      const trusted = await desktop.requestInputPermission();
+      setInputPermission(trusted);
+      if (!trusted) {
+        setRuntimeCaptureError(
+          "Accessibility permission was requested. Enable the Runtime Inspector development host in System Settings → Privacy & Security → Accessibility, then click Enable Input again."
+        );
+      }
+    } catch (error) {
+      setRuntimeCaptureError(
+        error instanceof Error ? error.message : "Could not request Simulator input permission."
+      );
+    }
+  }
+
+  function sendSimulatorPointer(
+    event: React.PointerEvent<HTMLVideoElement>,
+    type: "down" | "drag" | "up"
+  ) {
+    const desktop = window.runtimeDesktop;
+    if (!desktop || !inputPermission) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    desktop.sendSimulatorPointer({ type, x, y });
+  }
+
+  function handleRuntimePointerDown(event: React.PointerEvent<HTMLVideoElement>) {
+    if (!window.runtimeDesktop || !inputPermission) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sendSimulatorPointer(event, "down");
+  }
+
+  function handleRuntimePointerMove(event: React.PointerEvent<HTMLVideoElement>) {
+    if (!window.runtimeDesktop || !inputPermission || (event.buttons & 1) === 0) return;
+    event.preventDefault();
+    sendSimulatorPointer(event, "drag");
+  }
+
+  function handleRuntimePointerUp(event: React.PointerEvent<HTMLVideoElement>) {
+    if (!window.runtimeDesktop || !inputPermission) return;
+    event.preventDefault();
+    sendSimulatorPointer(event, "up");
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   return (
     <main className="workbench">
       <header className="topbar">
@@ -294,6 +352,17 @@ function App() {
                   ))}
                 </select>
               ) : null}
+              {runtimeCapture && window.runtimeDesktop ? (
+                inputPermission ? (
+                  <span className="input-status" title="Pointer forwarding enabled">
+                    Input on
+                  </span>
+                ) : (
+                  <button className="stage-action" type="button" onClick={requestSimulatorInput}>
+                    Enable Input
+                  </button>
+                )
+              ) : null}
               <button
                 className="stage-action"
                 type="button"
@@ -316,16 +385,26 @@ function App() {
               <div className="runtime-video-shell">
                 <video
                   ref={runtimeVideoRef}
-                  className="runtime-video"
+                  className={
+                    window.runtimeDesktop && inputPermission
+                      ? "runtime-video interactive"
+                      : "runtime-video"
+                  }
                   autoPlay
                   muted
                   playsInline
+                  onPointerDown={handleRuntimePointerDown}
+                  onPointerMove={handleRuntimePointerMove}
+                  onPointerUp={handleRuntimePointerUp}
+                  onPointerCancel={handleRuntimePointerUp}
                 />
                 <div className="runtime-video-caption">
                   <span>{runtimeCapture.label}</span>
                   <span>
                     {window.runtimeDesktop
-                      ? "Desktop capture attached · input forwarding is the next adapter step"
+                      ? inputPermission
+                        ? "Interactive · click and drag directly in this viewport"
+                        : "Desktop capture attached · enable input for click/drag forwarding"
                       : "Interact in the Simulator window · browser capture is view-only"}
                   </span>
                 </div>
