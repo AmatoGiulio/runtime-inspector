@@ -45,6 +45,15 @@ button {
   letter-spacing: -0.01em;
 }
 
+.notice {
+  max-width: 52vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c98d8d;
+  font-size: 10px;
+}
+
 .connection {
   display: flex;
   align-items: center;
