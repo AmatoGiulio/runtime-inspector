@@ -237,6 +237,72 @@ export interface ErrorMessage {
   cause?: unknown;
 }
 
+export type RuntimeProbeValue = number | boolean;
+
+export interface RuntimeProbeDescriptor {
+  id: string;
+  label?: string;
+  group?: string;
+  valueType: "number" | "boolean";
+  unit?: string;
+}
+
+export interface TraceSchemaPublish {
+  type: "trace.schema.publish";
+  schemaId: string;
+  probes: RuntimeProbeDescriptor[];
+}
+
+export interface TraceSchemaDispose {
+  type: "trace.schema.dispose";
+  schemaId: string;
+}
+
+export interface RecordingStart {
+  type: "recording.start";
+  recordingId: string;
+  schemaId: string;
+  probeIds: string[];
+  sampleRateHz: number;
+}
+
+export interface RecordingStarted {
+  type: "recording.started";
+  recordingId: string;
+  schemaId: string;
+  probeIds: string[];
+  sampleRateHz: number;
+  startedAtRuntimeMs: number;
+}
+
+export interface RecordingSample {
+  t: number;
+  values: Record<string, RuntimeProbeValue>;
+}
+
+export interface RecordingChunk {
+  type: "recording.chunk";
+  recordingId: string;
+  schemaId: string;
+  sequence: number;
+  samples: RecordingSample[];
+}
+
+export interface RecordingStop {
+  type: "recording.stop";
+  recordingId: string;
+  schemaId: string;
+}
+
+export interface RecordingComplete {
+  type: "recording.complete";
+  recordingId: string;
+  schemaId: string;
+  durationMs: number;
+  sampleCount: number;
+  complete: true;
+}
+
 export type RIPMessage =
   | HandshakeHello
   | HandshakeAccept
@@ -249,6 +315,13 @@ export type RIPMessage =
   | SourceApply
   | SourceApplyResult
   | RuntimeStatusMessage
+  | TraceSchemaPublish
+  | TraceSchemaDispose
+  | RecordingStart
+  | RecordingStarted
+  | RecordingChunk
+  | RecordingStop
+  | RecordingComplete
   | ErrorMessage;
 
 const roleSchema = z.union([z.literal("runtime"), z.literal("panel"), z.literal("workspace")]);
@@ -500,6 +573,72 @@ export const ErrorMessageSchema = z.object({
   cause: z.unknown().optional()
 });
 
+export const RuntimeProbeDescriptorSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  group: z.string().optional(),
+  valueType: z.union([z.literal("number"), z.literal("boolean")]),
+  unit: z.string().optional()
+});
+
+export const TraceSchemaPublishSchema = z.object({
+  type: z.literal("trace.schema.publish"),
+  schemaId: z.string().min(1),
+  probes: z.array(RuntimeProbeDescriptorSchema).max(16)
+});
+
+export const TraceSchemaDisposeSchema = z.object({
+  type: z.literal("trace.schema.dispose"),
+  schemaId: z.string().min(1)
+});
+
+export const RecordingStartSchema = z.object({
+  type: z.literal("recording.start"),
+  recordingId: z.string().min(1),
+  schemaId: z.string().min(1),
+  probeIds: z.array(z.string().min(1)).min(1).max(16),
+  sampleRateHz: z.number().int().min(1).max(60)
+});
+
+export const RecordingStartedSchema = z.object({
+  type: z.literal("recording.started"),
+  recordingId: z.string().min(1),
+  schemaId: z.string().min(1),
+  probeIds: z.array(z.string().min(1)).min(1).max(16),
+  sampleRateHz: z.number().int().min(1).max(60),
+  startedAtRuntimeMs: finiteNumberSchema
+});
+
+const RuntimeProbeValueSchema = z.union([finiteNumberSchema, z.boolean()]);
+
+export const RecordingSampleSchema = z.object({
+  t: finiteNumberSchema.nonnegative(),
+  values: z.record(RuntimeProbeValueSchema)
+});
+
+export const RecordingChunkSchema = z.object({
+  type: z.literal("recording.chunk"),
+  recordingId: z.string().min(1),
+  schemaId: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+  samples: z.array(RecordingSampleSchema).max(64)
+});
+
+export const RecordingStopSchema = z.object({
+  type: z.literal("recording.stop"),
+  recordingId: z.string().min(1),
+  schemaId: z.string().min(1)
+});
+
+export const RecordingCompleteSchema = z.object({
+  type: z.literal("recording.complete"),
+  recordingId: z.string().min(1),
+  schemaId: z.string().min(1),
+  durationMs: finiteNumberSchema.nonnegative(),
+  sampleCount: z.number().int().nonnegative(),
+  complete: z.literal(true)
+});
+
 export const RIPMessageSchema = z.discriminatedUnion("type", [
   HandshakeHelloSchema,
   HandshakeAcceptSchema,
@@ -512,6 +651,13 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   SourceApplySchema,
   SourceApplyResultSchema,
   RuntimeStatusMessageSchema,
+  TraceSchemaPublishSchema,
+  TraceSchemaDisposeSchema,
+  RecordingStartSchema,
+  RecordingStartedSchema,
+  RecordingChunkSchema,
+  RecordingStopSchema,
+  RecordingCompleteSchema,
   ErrorMessageSchema
 ]);
 
