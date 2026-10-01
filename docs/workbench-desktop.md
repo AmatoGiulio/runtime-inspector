@@ -258,7 +258,7 @@ Important properties:
 - `xcrun simctl` is no longer spawned per frame;
 - the main display IOSurface is discovered once and refreshed only when its surface identity changes;
 - unchanged frames are skipped using the IOSurface seed;
-- the native helper scales before JPEG encoding (currently 600 px wide, quality 0.65) to match the actual Workbench viewport instead of transporting the full 1320×2868 framebuffer;
+- the native helper scales before JPEG encoding using the shared runtime framebuffer profile instead of transporting the full 1320×2868 framebuffer;
 - the renderer coalesces incoming frames and decodes into a canvas instead of replacing a React `<img>` / Blob URL every frame;
 - HID remains independent and uses normalized framebuffer coordinates.
 
@@ -350,7 +350,22 @@ Wall-clock time itself is not deterministic across machines. The **workload is d
 pnpm benchmark:framebuffer:gate
 ~~~
 
-The initial gate requires the `balanced` profile to use no more than 90% of baseline p95 encode time and no more than 100% of baseline payload bytes. The gate can be tightened after the first benchmark result.
+After the first deterministic sweep, `balanced` was promoted to the runtime profile at 560 px / JPEG quality 0.60. The official gate now requires:
+
+- p95 encode time <= 90% of baseline;
+- average payload <= 85% of baseline;
+- PSNR loss <= 1.10 dB relative to baseline in the same run.
+
+The measured sweep on the M4 Pro test host was:
+
+| profile | p95 encode | capacity | payload | PSNR | PSNR loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline 600/0.65 | 16.04 ms | 62.3 fps | 513.5 KB | 19.41 dB | — |
+| balanced 560/0.60 | 13.90 ms | 71.9 fps | 400.7 KB | 18.41 dB | 0.99 dB |
+| fast 520/0.58 | 12.60 ms | 79.3 fps | 340.5 KB | 17.88 dB | 1.52 dB |
+| lean 480/0.55 | 11.56 ms | 86.5 fps | 277.1 KB | 17.31 dB | 2.10 dB |
+
+The runtime and benchmark import the same profile definition so the production transport cannot silently drift away from the benchmarked configuration.
 
 Normal `pnpm test` also runs a small deterministic encoder fixture and verifies exact source/output dimensions, fixed JPEG payload size across repeated runs, and the native benchmark result schema. It intentionally does **not** assert wall-clock milliseconds.
 
