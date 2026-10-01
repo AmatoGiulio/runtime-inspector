@@ -677,6 +677,30 @@ static int RIRunBenchmark(NSArray<NSString *> *arguments) {
     }
   }
 
+  uint32_t comparisonHeight = 0;
+  NSData *qualityReference = RICopyScaledRGBAFromSurface(
+    surface,
+    600,
+    &comparisonHeight
+  );
+
+  uint32_t qualityWidth = 0;
+  uint32_t qualityHeight = 0;
+  NSData *qualityJPEG = RIEncodeSurfaceJPEG(
+    surface,
+    (size_t)outputWidth,
+    quality,
+    &qualityWidth,
+    &qualityHeight
+  );
+
+  NSData *qualityCandidate = RICopyJPEGDecodedRGBA(
+    qualityJPEG,
+    600,
+    comparisonHeight
+  );
+  const double psnrDb = RIPSNRRGB(qualityReference, qualityCandidate);
+
   CFRelease(surface);
 
   NSArray<NSNumber *> *sorted = [durations sortedArrayUsingSelector:@selector(compare:)];
@@ -707,6 +731,7 @@ static int RIRunBenchmark(NSArray<NSString *> *arguments) {
     @"p99Ms": @(p99Ms),
     @"maxMs": @(maxMs),
     @"avgBytes": @(averageBytes),
+    @"psnrDb": @(psnrDb),
     @"capacityFpsP95": @(p95Ms > 0 ? 1000.0 / p95Ms : 0)
   };
 
