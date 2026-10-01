@@ -229,3 +229,21 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 - generic plugin system;
 - production/remote networking;
 - monetization features.
+
+### M3c.2 deterministic encoder tuning
+
+**Implemented on `feat/runtime-workbench-desktop`, pending first local benchmark run**
+
+- native benchmark mode reuses the production IOSurface JPEG encoder;
+- deterministic 1320×2868 synthetic source surface;
+- baseline/balanced/fast/lean profiles;
+- repeated rounds with p50/p95/payload metrics;
+- same-run relative performance gate;
+- CI-safe regression test verifies deterministic workload/output properties without asserting hardware-dependent milliseconds.
+
+Commands:
+
+~~~bash
+pnpm benchmark:framebuffer
+pnpm benchmark:framebuffer:gate
+~~~
