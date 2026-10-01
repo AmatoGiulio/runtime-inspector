@@ -263,3 +263,16 @@ Important properties:
 - HID remains independent and uses normalized framebuffer coordinates.
 
 This is the first product-shaped live transport. If its measured motion cadence still falls materially below 60 Hz, the next optimization is not another screenshot path: replace JPEG with a persistent VideoToolbox H.264 stream while retaining the same IOSurface source and HID mapping.
+
+### M3c.1 startup surface priming
+
+Manual validation exposed one Xcode 26.3 lifecycle detail: the private CoreSimulator display surface can remain unpublished until the Simulator has produced its first present. Touching the real Simulator window caused the IOSurface stream to become available, which proved the persistent path itself was correct but left a bad first-attach UX.
+
+The desktop adapter now handles this automatically:
+
+- after boot, it takes exactly one direct `simctl io screenshot` as a startup prime;
+- this is not used as the steady-state stream;
+- the one-shot capture forces/observes the initial display presentation before the persistent IOSurface helper resolves the render surface;
+- Simulator.app is opened with `open -g` so attaching should not steal focus from Runtime Inspector.
+
+The steady-state transport remains the persistent IOSurface helper.
