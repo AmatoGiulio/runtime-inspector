@@ -4,6 +4,9 @@
 #import <IOSurface/IOSurface.h>
 #import <dlfcn.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+#import <dispatch/dispatch.h>
+#import <stdatomic.h>
 #import <unistd.h>
 #import <math.h>
 
@@ -246,6 +249,139 @@ static IOSurfaceRef RICopyMainDisplaySurface(id device, NSString **diagnosticOut
     ];
   }
   return NULL;
+}
+
+static unsigned int RIDisplayClassForDescriptor(id descriptor) {
+  id state = RISafeGet(descriptor, @"state", @selector(state));
+  id displayClassValue = state ? RISafeValue(state, @"displayClass") : nil;
+
+  if ([displayClassValue respondsToSelector:@selector(unsignedIntValue)]) {
+    return [displayClassValue unsignedIntValue];
+  }
+
+  if (state && [state respondsToSelector:@selector(displayClass)]) {
+    NSMethodSignature *signature = [state methodSignatureForSelector:@selector(displayClass)];
+    if (signature && [signature methodReturnLength] <= sizeof(unsigned int)) {
+      @try {
+        NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+        [invocation setTarget:state];
+        [invocation setSelector:@selector(displayClass)];
+        [invocation invoke];
+        unsigned int raw = 0;
+        [invocation getReturnValue:&raw];
+        return raw;
+      } @catch (__unused NSException *exception) {
+        return UINT_MAX;
+      }
+    }
+  }
+
+  return UINT_MAX;
+}
+
+static id RICopyMainDisplayScreenDescriptor(id device, NSString **diagnosticOut) {
+  id io = RISafeGet(device, @"io", @selector(io));
+  if (!io) {
+    if (diagnosticOut) *diagnosticOut = @"device has no io client";
+    return nil;
+  }
+
+  NSArray *ports = RISafePerform(io, @selector(ioPorts));
+  if (![ports isKindOfClass:[NSArray class]]) {
+    if (diagnosticOut) *diagnosticOut = @"io client returned no ioPorts";
+    return nil;
+  }
+
+  SEL registerSelector = NSSelectorFromString(
+    @"registerScreenCallbacksWithUUID:callbackQueue:frameCallback:surfacesChangedCallback:propertiesChangedCallback:"
+  );
+  id fallback = nil;
+
+  for (id port in ports) {
+    id descriptor = RISafeGet(port, @"descriptor", @selector(descriptor));
+    if (!descriptor || ![descriptor respondsToSelector:registerSelector]) continue;
+
+    const unsigned int displayClass = RIDisplayClassForDescriptor(descriptor);
+    if (displayClass == 0) {
+      [fallback release];
+      if (diagnosticOut) *diagnosticOut = @"main SimScreen descriptor";
+      return [descriptor retain];
+    }
+
+    if (!fallback) {
+      fallback = [descriptor retain];
+    }
+  }
+
+  if (fallback && diagnosticOut) {
+    *diagnosticOut = @"fallback SimScreen descriptor";
+  }
+  return fallback;
+}
+
+typedef void (^RIFramePresentedCallback)(void);
+typedef void (^RISurfacesChangedCallback)(id, id);
+typedef void (^RIPropertiesChangedCallback)(id);
+
+static BOOL RIRegisterScreenCallbacks(
+  id descriptor,
+  NSUUID *token,
+  dispatch_queue_t callbackQueue,
+  RIFramePresentedCallback frameCallback,
+  RISurfacesChangedCallback surfacesChangedCallback,
+  RIPropertiesChangedCallback propertiesChangedCallback,
+  NSString **errorOut
+) {
+  SEL selector = NSSelectorFromString(
+    @"registerScreenCallbacksWithUUID:callbackQueue:frameCallback:surfacesChangedCallback:propertiesChangedCallback:"
+  );
+  if (!descriptor || ![descriptor respondsToSelector:selector]) {
+    if (errorOut) *errorOut = @"SimScreen registration selector unavailable.";
+    return NO;
+  }
+
+  @try {
+    typedef void (*RIRegisterFn)(
+      id,
+      SEL,
+      NSUUID *,
+      dispatch_queue_t,
+      RIFramePresentedCallback,
+      RISurfacesChangedCallback,
+      RIPropertiesChangedCallback
+    );
+    ((RIRegisterFn)objc_msgSend)(
+      descriptor,
+      selector,
+      token,
+      callbackQueue,
+      frameCallback,
+      surfacesChangedCallback,
+      propertiesChangedCallback
+    );
+    return YES;
+  } @catch (NSException *exception) {
+    if (errorOut) {
+      *errorOut = [NSString stringWithFormat:
+        @"SimScreen callback registration raised %@: %@",
+        [exception name],
+        [exception reason] ?: @"unknown reason"
+      ];
+    }
+    return NO;
+  }
+}
+
+static void RIUnregisterScreenCallbacks(id descriptor, NSUUID *token) {
+  SEL selector = NSSelectorFromString(@"unregisterScreenCallbacksWithUUID:");
+  if (!descriptor || !token || ![descriptor respondsToSelector:selector]) return;
+
+  @try {
+    typedef void (*RIUnregisterFn)(id, SEL, NSUUID *);
+    ((RIUnregisterFn)objc_msgSend)(descriptor, selector, token);
+  } @catch (__unused NSException *exception) {
+    // Best-effort during helper shutdown.
+  }
 }
 
 static NSData *RIEncodeSurfaceJPEG(
@@ -803,11 +939,81 @@ int main(int argc, const char *argv[]) {
     const CFAbsoluteTime streamStartedAt = CFAbsoluteTimeGetCurrent();
     NSString *lastSurfaceDiagnostic = nil;
 
+    NSString *screenDiagnostic = nil;
+    id screenDescriptor = RICopyMainDisplayScreenDescriptor(device, &screenDiagnostic);
+    dispatch_semaphore_t frameSignal = NULL;
+    dispatch_queue_t screenCallbackQueue = NULL;
+    NSUUID *screenCallbackToken = nil;
+    RIFramePresentedCallback frameCallback = nil;
+    RISurfacesChangedCallback surfacesChangedCallback = nil;
+    RIPropertiesChangedCallback propertiesChangedCallback = nil;
+    _Atomic(int) *surfaceRefreshRequested = calloc(1, sizeof(_Atomic(int)));
+    BOOL screenCallbacksEnabled = NO;
+
+    if (screenDescriptor && surfaceRefreshRequested) {
+      frameSignal = dispatch_semaphore_create(0);
+      screenCallbackQueue = dispatch_queue_create(
+        "com.runtime-inspector.framebuffer-callbacks",
+        DISPATCH_QUEUE_SERIAL
+      );
+      screenCallbackToken = [[NSUUID UUID] retain];
+
+      frameCallback = [^{
+        dispatch_semaphore_signal(frameSignal);
+      } copy];
+
+      surfacesChangedCallback = [^(id framebufferSurface, id maskedFramebufferSurface) {
+        (void)framebufferSurface;
+        (void)maskedFramebufferSurface;
+        atomic_store(surfaceRefreshRequested, 1);
+        dispatch_semaphore_signal(frameSignal);
+      } copy];
+
+      propertiesChangedCallback = [^(id properties) {
+        (void)properties;
+      } copy];
+
+      NSString *registrationError = nil;
+      screenCallbacksEnabled = RIRegisterScreenCallbacks(
+        screenDescriptor,
+        screenCallbackToken,
+        screenCallbackQueue,
+        frameCallback,
+        surfacesChangedCallback,
+        propertiesChangedCallback,
+        &registrationError
+      );
+
+      if (screenCallbacksEnabled) {
+        fprintf(stderr, "RI_STATUS:frame-source=simscreen-callbacks\n");
+        fflush(stderr);
+      } else {
+        fprintf(
+          stderr,
+          "RI_STATUS:frame-source=seed-polling fallback=%s\n",
+          [[registrationError ?: screenDiagnostic ?: @"unknown" description] UTF8String]
+        );
+        fflush(stderr);
+      }
+    } else {
+      fprintf(
+        stderr,
+        "RI_STATUS:frame-source=seed-polling fallback=%s\n",
+        [[screenDiagnostic ?: @"SimScreen descriptor unavailable" description] UTF8String]
+      );
+      fflush(stderr);
+    }
+
     while (true) {
       @autoreleasepool {
         const CFAbsoluteTime frameStart = CFAbsoluteTimeGetCurrent();
 
-        if (!surface || frameStart - lastSurfaceRefresh > 1.0) {
+        const BOOL callbackSurfaceRefresh =
+          screenCallbacksEnabled &&
+          surfaceRefreshRequested &&
+          atomic_exchange(surfaceRefreshRequested, 0) != 0;
+
+        if (!surface || callbackSurfaceRefresh || frameStart - lastSurfaceRefresh > 1.0) {
           NSString *surfaceDiagnostic = nil;
           IOSurfaceRef nextSurface = RICopyMainDisplaySurface(device, &surfaceDiagnostic);
           [lastSurfaceDiagnostic release];
@@ -822,6 +1028,9 @@ int main(int argc, const char *argv[]) {
               lastSeed = UINT32_MAX;
             } else {
               CFRelease(nextSurface);
+              if (callbackSurfaceRefresh) {
+                lastSeed = UINT32_MAX;
+              }
             }
           }
         }
@@ -841,13 +1050,42 @@ int main(int argc, const char *argv[]) {
           continue;
         }
 
-        const uint32_t seed = IOSurfaceGetSeed(surface);
-        const BOOL surfaceChanged = seed != lastSeed || sequence == 0;
-        const BOOL frameBudgetReady =
-          sequence == 0 ||
-          frameStart - lastEncodedAt >= frameIntervalSeconds;
+        BOOL shouldEncode = NO;
+        uint32_t seed = IOSurfaceGetSeed(surface);
 
-        if (surfaceChanged && frameBudgetReady) {
+        if (screenCallbacksEnabled) {
+          if (sequence == 0 || lastSeed == UINT32_MAX) {
+            shouldEncode = YES;
+          } else {
+            const long waitResult = dispatch_semaphore_wait(
+              frameSignal,
+              dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC)
+            );
+
+            if (waitResult != 0) {
+              continue;
+            }
+
+            while (dispatch_semaphore_wait(frameSignal, DISPATCH_TIME_NOW) == 0) {
+              // Coalesce any presents that arrived while the previous frame encoded.
+            }
+
+            if (atomic_load(surfaceRefreshRequested) != 0) {
+              continue;
+            }
+
+            shouldEncode = YES;
+            seed = IOSurfaceGetSeed(surface);
+          }
+        } else {
+          const BOOL surfaceChanged = seed != lastSeed || sequence == 0;
+          const BOOL frameBudgetReady =
+            sequence == 0 ||
+            frameStart - lastEncodedAt >= frameIntervalSeconds;
+          shouldEncode = surfaceChanged && frameBudgetReady;
+        }
+
+        if (shouldEncode) {
           const CFAbsoluteTime encodeStartedAt = CFAbsoluteTimeGetCurrent();
           const uint64_t capturedAtMs = (uint64_t)llround(
             [[NSDate date] timeIntervalSince1970] * 1000.0
@@ -887,14 +1125,23 @@ int main(int argc, const char *argv[]) {
           }
         }
 
-        const CFAbsoluteTime elapsed = CFAbsoluteTimeGetCurrent() - frameStart;
-        const double remaining = pollIntervalSeconds - elapsed;
-        if (remaining > 0) {
-          usleep((useconds_t)(remaining * 1000000.0));
+        if (!screenCallbacksEnabled) {
+          const CFAbsoluteTime elapsed = CFAbsoluteTimeGetCurrent() - frameStart;
+          const double remaining = pollIntervalSeconds - elapsed;
+          if (remaining > 0) {
+            usleep((useconds_t)(remaining * 1000000.0));
+          }
         }
       }
     }
 
+    RIUnregisterScreenCallbacks(screenDescriptor, screenCallbackToken);
+    [propertiesChangedCallback release];
+    [surfacesChangedCallback release];
+    [frameCallback release];
+    [screenCallbackToken release];
+    [screenDescriptor release];
+    [lastSurfaceDiagnostic release];
     if (surface) CFRelease(surface);
   }
 
