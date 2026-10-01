@@ -158,24 +158,25 @@ function registerDesktopIpc() {
 
     const sender = event.sender;
 
-    // CoreSimulator may publish the live IOSurface lazily until the display has
-    // produced its first present. Prime that path once and use the exact
-    // framebuffer snapshot as the immediate bootstrap frame so the Workbench
-    // never waits on an external click in Simulator.app.
+    // Capture one exact framebuffer before starting the persistent helper.
+    // Do NOT emit it over the streaming event yet: the renderer's framebuffer
+    // canvas is mounted only after this IPC request resolves, so an eager event
+    // can be received and discarded before there is a canvas to draw into.
+    let bootstrapFrame;
     try {
       const bootstrap = await captureIOSSimulatorFrame(selectedSimulator.udid, "jpeg");
       const bootstrapImage = nativeImage.createFromBuffer(bootstrap);
       const bootstrapSize = bootstrapImage.getSize();
 
       if (!bootstrapImage.isEmpty() && bootstrapSize.width > 0 && bootstrapSize.height > 0) {
-        sender.send("runtime-desktop:simulator-framebuffer-frame", {
+        bootstrapFrame = {
           sequence: 0,
           timestamp: Date.now(),
           width: bootstrapSize.width,
           height: bootstrapSize.height,
           mimeType: "image/jpeg",
           bytes: Uint8Array.from(bootstrap).buffer
-        });
+        };
       }
 
       // Give CoreSimulator a short turn to publish the display surface after
@@ -216,7 +217,8 @@ function registerDesktopIpc() {
       device: selectedSimulator,
       mode: "iosurface-mjpeg",
       targetFrameRate: 60,
-      input
+      input,
+      bootstrapFrame
     };
   });
 
