@@ -16,6 +16,7 @@ test(
       "clang",
       "-fsyntax-only",
       "-fno-objc-arc",
+        "-fblocks",
       source,
       "-framework",
       "Foundation",
