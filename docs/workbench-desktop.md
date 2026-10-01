@@ -190,3 +190,34 @@ Workbench pointer
 The existing full Simulator-window capture remains only as a safe visual fallback while M3c is implemented. It must not be treated as the final viewport or used for coordinate mapping.
 
 Meta FBSimulatorControl is the implementation reference for this direction: it exposes the booted Simulator framebuffer as an IOSurface and supports live frame delivery. Runtime Inspector should keep this behind `IOSSimulatorAdapter` so private-Xcode compatibility does not leak into RIP or the Workbench renderer.
+
+## M3c.0 — exact framebuffer proof
+
+Before implementing the final IOSurface stream, the desktop adapter now has an exact-framebuffer proof path using:
+
+~~~text
+simctl io <udid> screenshot --type jpeg --mask ignored -
+~~~
+
+The command is polled by the Electron main process and the resulting framebuffer frames are pushed to the renderer over IPC. This is intentionally a temporary validation transport:
+
+- pixels are the exact iOS framebuffer, not the Simulator window;
+- there is no crop, bezel, toolbar, or window-coordinate mapping;
+- normalized pointer coordinates map directly to the framebuffer and therefore to the already-validated Simulator HID path;
+- Screen Recording permission is not required for this direct path;
+- target cadence is currently 15 fps and actual cadence is measured in the Workbench.
+
+This is **not** the final performance architecture. Spawning `simctl` for every frame is expected to be slower and more CPU-heavy than the target product.
+
+### M3c.1 target
+
+Replace the screenshot poll with one persistent native adapter:
+
+~~~text
+CoreSimulator
+  -> main display IOSurface
+  -> persistent frame callback / surface
+  -> RuntimeSurface
+~~~
+
+The Workbench API and HID coordinate semantics should remain the same, so this upgrade is a transport/performance change rather than another UI rewrite.
