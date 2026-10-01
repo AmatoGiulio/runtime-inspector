@@ -678,10 +678,11 @@ static int RIRunBenchmark(NSArray<NSString *> *arguments) {
     }
   }
 
+  const size_t comparisonWidth = MIN((size_t)600, (size_t)sourceWidth);
   uint32_t comparisonHeight = 0;
   NSData *qualityReference = RICopyScaledRGBAFromSurface(
     surface,
-    600,
+    comparisonWidth,
     &comparisonHeight
   );
 
@@ -697,9 +698,16 @@ static int RIRunBenchmark(NSArray<NSString *> *arguments) {
 
   NSData *qualityCandidate = RICopyJPEGDecodedRGBA(
     qualityJPEG,
-    600,
+    comparisonWidth,
     comparisonHeight
   );
+
+  if (!qualityReference || !qualityJPEG || !qualityCandidate) {
+    CFRelease(surface);
+    fprintf(stderr, "Framebuffer benchmark quality comparison failed.\n");
+    return 9;
+  }
+
   const double psnrDb = RIPSNRRGB(qualityReference, qualityCandidate);
 
   CFRelease(surface);
