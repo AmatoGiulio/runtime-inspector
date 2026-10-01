@@ -199,7 +199,7 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 - native HID input validated from the embedded viewport;
 - observed cadence ~9 fps on the validation run, confirming the screenshot-per-frame transport is far too slow for product use.
 
-**M3c.1 implemented on `feat/runtime-workbench-desktop`; live IOSurface path manually observed, bootstrap-after-canvas fix pending validation**
+**M3c.1 cold-start validated manually on macOS, 2026-10-01; cadence/latency validation pending**
 
 - persistent native CoreSimulator helper;
 - direct main-display IOSurface access;
@@ -213,7 +213,7 @@ In development macOS attributed Screen Recording permission to the VS Code host.
 
 **Still outstanding**
 
-- validate achieved motion cadence and interaction latency on the M4 Pro test host;
+- measure achieved motion cadence and end-to-end interaction latency on the M4 Pro test host;
 - if needed, replace JPEG with persistent VideoToolbox H.264 without changing the adapter boundary;
 - Xcode-version compatibility strategy / fallback path;
 - multi-touch / keyboard forwarding;
