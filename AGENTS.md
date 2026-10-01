@@ -31,6 +31,8 @@ Read [docs/orchestration.md](docs/orchestration.md) before making broad multi-pa
 - Do not introduce Nitro, a generic plugin system, or unrelated product surfaces without a separate decision. Timeline/recording tooling is governed by RFC 0005. M0 recording and M3a browser capture were validated on macOS on 2026-10-01. The explicitly authorized `feat/runtime-workbench-desktop` branch may implement the M3b Electron desktop-shell spike, Simulator discovery/boot, and automatic window attachment. Do not expand that authorization into universal time travel, production packaging/signing, or generic native tooling.
 - Prefer narrow, testable changes. Every architectural change lands with the test that would have caught a regression.
 - Keep package APIs ergonomic for React Native developers. Current DX ladder: `useRuntimeValue` for a single tunable value, `useAction` for explicit actions, `useInspector` for grouped/advanced controls, explicit schema APIs when full control is needed, and `// @inspect` for Babel auto-binding.
+- Desktop Simulator pixels/input are transport-local device-adapter concerns; do not add them to RIP. M3b uses Electron capture plus a macOS Swift/Core Graphics helper for pointer forwarding.
+- Packaging/TCC is a tracked release requirement: development validation attributed Screen Recording permission to VS Code. A release must sign/package Runtime Inspector (and its native helper) so Screen Recording and Accessibility permissions use the correct app identity and have explicit first-run UX.
 - A client must not reimplement schema storage, value state, patch/commit semantics, stale protection, A/B comparison, or export if `panel-core` already owns that behavior.
 
 ## Package boundaries
