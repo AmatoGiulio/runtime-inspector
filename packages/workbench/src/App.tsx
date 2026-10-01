@@ -46,6 +46,7 @@ function App() {
   const runtimeStreamRef = useRef<MediaStream | undefined>(undefined);
   const runtimeVideoRef = useRef<HTMLVideoElement>(null);
   const framebufferCanvasRef = useRef<HTMLCanvasElement>(null);
+  const framebufferBootstrapRef = useRef<RuntimeDesktopFramebufferFrame>();
   const framebufferTimesRef = useRef<number[]>([]);
   const framebufferStatsUpdateRef = useRef(0);
 
@@ -178,6 +179,67 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (runtimeCapture?.source !== "framebuffer") return;
+
+    const frame = framebufferBootstrapRef.current;
+    if (!frame) return;
+
+    let cancelled = false;
+    const animationFrame = requestAnimationFrame(() => {
+      void (async () => {
+        try {
+          const bitmap = await createImageBitmap(
+            new Blob([new Uint8Array(frame.bytes)], { type: frame.mimeType })
+          );
+
+          if (cancelled) {
+            bitmap.close();
+            return;
+          }
+
+          const canvas = framebufferCanvasRef.current;
+          if (!canvas) {
+            bitmap.close();
+            return;
+          }
+
+          if (canvas.width !== frame.width) canvas.width = frame.width;
+          if (canvas.height !== frame.height) canvas.height = frame.height;
+          const context = canvas.getContext("2d", { alpha: false });
+          context?.drawImage(bitmap, 0, 0, frame.width, frame.height);
+          bitmap.close();
+
+          framebufferBootstrapRef.current = undefined;
+          framebufferTimesRef.current = [frame.timestamp];
+          setFramebufferHasFrame(true);
+          setRuntimeCapture((current) =>
+            current?.source === "framebuffer"
+              ? {
+                  ...current,
+                  width: frame.width,
+                  height: frame.height
+                }
+              : current
+          );
+        } catch (error) {
+          if (!cancelled) {
+            setRuntimeCaptureError(
+              error instanceof Error
+                ? error.message
+                : "Could not decode the initial Simulator framebuffer."
+            );
+          }
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(animationFrame);
+    };
+  }, [runtimeCapture?.source]);
+
   const probes = schemaId ? state.traceSchemas[schemaId] ?? [] : [];
 
   useEffect(() => {
@@ -267,6 +329,7 @@ function App() {
         setSelectedSimulatorUdid(prepared.device.udid);
         setSimulators(await desktop.listSimulators());
         setInputReady(prepared.input.ready);
+        framebufferBootstrapRef.current = prepared.bootstrapFrame;
         framebufferTimesRef.current = [];
         framebufferStatsUpdateRef.current = 0;
         setFramebufferHasFrame(false);
@@ -348,6 +411,7 @@ function App() {
     const canvas = framebufferCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     setFramebufferHasFrame(false);
+    framebufferBootstrapRef.current = undefined;
     framebufferTimesRef.current = [];
     framebufferStatsUpdateRef.current = 0;
     setRuntimeCapture(undefined);
