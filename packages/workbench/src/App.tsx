@@ -80,6 +80,7 @@ function App() {
     <main className="workbench">
       <header className="topbar">
         <div className="brand">Runtime Inspector</div>
+        {state.notice && <div className="notice">{state.notice}</div>}
         <div className="connection" data-status={state.status}>
           <span className="dot" />
           {state.status}
@@ -205,6 +206,7 @@ function ProbeInspector({
       <Field label="Min" value={formatValue(min)} />
       <Field label="Max" value={formatValue(max)} />
       <Field label="Samples" value={String(samples.length)} />
+      <Field label="Measured Hz" value={measuredHz(samples)} />
     </div>
   );
 }
@@ -258,6 +260,13 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
       </div>
     </div>
   );
+}
+
+function measuredHz(samples: Array<{ t: number; value: number }>) {
+  if (samples.length < 2) return "—";
+  const durationMs = samples.at(-1)!.t - samples[0].t;
+  if (durationMs <= 0) return "—";
+  return (((samples.length - 1) * 1000) / durationMs).toFixed(1);
 }
 
 function formatValue(value: number | undefined) {
