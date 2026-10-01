@@ -378,14 +378,16 @@ button {
 }
 
 .framebuffer-loading {
-  min-width: 240px;
-  min-height: 480px;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   padding: 24px;
   color: #66666c;
+  background: #050506;
   font-size: 10px;
   text-align: center;
+  pointer-events: none;
 }
 
 .runtime-video-shell.interactive {
