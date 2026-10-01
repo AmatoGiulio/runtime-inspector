@@ -93,13 +93,47 @@ Only the narrow Simulator operations required by the Workbench are exposed throu
 - no regression in RIP/timeline behavior;
 - browser M3a remains usable as a fallback.
 
-## Deferred to M3b.2
+## M3b.2 — interactive viewport
 
-- pointer/touch forwarding from Runtime surface to Simulator;
+The desktop adapter now includes the first pointer-forwarding implementation:
+
+- the Electron capture source id is resolved to the underlying macOS window id;
+- the Workbench maps pointer coordinates to normalized capture coordinates;
+- a small persistent Swift helper resolves the Simulator window bounds and owner PID through Core Graphics;
+- left-button down / drag / up are emitted with `CGEvent` and posted directly to the Simulator process;
+- the renderer exposes an explicit **Enable Input** action;
+- Accessibility permission is checked before forwarding;
+- pointer streaming stays outside RIP.
+
+The Swift helper is compiled once into the temporary Runtime Inspector development directory and reused for the session. Production packaging should ship/sign the helper rather than compile it at runtime.
+
+### M3b.2 acceptance gate
+
+- **Enable Input** causes the macOS Accessibility permission flow when required;
+- clicking inside the embedded Simulator performs the corresponding Simulator tap;
+- dragging in the embedded viewport produces a continuous drag in Simulator;
+- input still works when the actual Simulator window is behind the Workbench;
+- pointer coordinates remain aligned after moving the Simulator window;
+- Record → Replay and the motion timeline remain unaffected.
+
+## Packaging / TCC TODO — required before release
+
+This is explicitly tracked, not deferred implicitly.
+
+During the 2026-10-01 development validation, macOS attributed Screen Recording permission to the development host (VS Code) rather than a packaged Runtime Inspector identity. Before release:
+
+- package and sign the desktop app as **Runtime Inspector**;
+- ship and sign the native input helper with the app rather than compiling it in `/tmp`;
+- verify Screen Recording / Screen & System Audio permission is attributed to Runtime Inspector;
+- verify Accessibility permission used for input forwarding is attributed to Runtime Inspector (or its correctly signed helper, depending on final helper architecture);
+- provide first-run permission UX and deep links/instructions for both privacy categories;
+- test permission reset/relaunch/update behavior on a clean macOS account.
+
+## Still deferred
+
 - exact device-screen crop instead of the whole Simulator window;
-- coordinate transforms;
-- Accessibility permission UX;
-- multi-touch and hardware-key forwarding;
-- production packaging/signing.
+- multi-touch;
+- hardware-key forwarding;
+- production packaging/signing implementation.
 
-Those belong to the native input/capture adapter and must not leak into RIP.
+These remain device-adapter concerns and must not leak into RIP.
