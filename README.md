@@ -129,7 +129,7 @@ Full Workbench/device viewport work remains experimental and RFC-governed. Also 
 
 ## Docs
 
-[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [DialKit rendering](docs/dialkit.md) · [Rozenite client](docs/rozenite.md) · [Workbench M0](docs/workbench-m0.md) · [iOS viewport M3a](docs/workbench-ios-viewport.md) · [Implementation status](docs/implementation-status.md) · [Roadmap](docs/mvp-roadmap.md) · [Vision](docs/vision.md)
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Protocol](docs/protocol.md) · [DialKit rendering](docs/dialkit.md) · [Rozenite client](docs/rozenite.md) · [Workbench M0](docs/workbench-m0.md) · [iOS viewport M3a](docs/workbench-ios-viewport.md) · [Desktop Workbench M3b](docs/workbench-desktop.md) · [Implementation status](docs/implementation-status.md) · [Roadmap](docs/mvp-roadmap.md) · [Vision](docs/vision.md)
 
 ## License
 
