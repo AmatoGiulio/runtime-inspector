@@ -171,85 +171,29 @@ static IOSurfaceRef RICopyMainDisplaySurface(id device) {
   return fallback;
 }
 
-static CGImageRef RICreateImageFromSurface(IOSurfaceRef surface) {
-  if (!surface) return NULL;
+static NSData *RIEncodeSurfaceJPEG(
+  IOSurfaceRef surface,
+  size_t targetWidth,
+  CGFloat quality,
+  uint32_t *encodedWidthOut,
+  uint32_t *encodedHeightOut
+) {
+  if (!surface) return nil;
 
   uint32_t seed = 0;
   IOReturn lockResult = IOSurfaceLock(surface, kIOSurfaceLockReadOnly, &seed);
-  if (lockResult != kIOReturnSuccess) return NULL;
+  if (lockResult != kIOReturnSuccess) return nil;
 
-  const size_t width = IOSurfaceGetWidth(surface);
-  const size_t height = IOSurfaceGetHeight(surface);
-  const size_t bytesPerRow = IOSurfaceGetBytesPerRow(surface);
+  const size_t sourceWidth = IOSurfaceGetWidth(surface);
+  const size_t sourceHeight = IOSurfaceGetHeight(surface);
+  const size_t sourceBytesPerRow = IOSurfaceGetBytesPerRow(surface);
   const size_t bytesPerElement = IOSurfaceGetBytesPerElement(surface);
   void *baseAddress = IOSurfaceGetBaseAddress(surface);
 
-  if (!baseAddress || width == 0 || height == 0 || bytesPerElement != 4) {
+  if (!baseAddress || sourceWidth == 0 || sourceHeight == 0 || bytesPerElement != 4) {
     IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
-    return NULL;
+    return nil;
   }
-
-  CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-  CGDataProviderRef provider = CGDataProviderCreateWithData(
-    NULL,
-    baseAddress,
-    bytesPerRow * height,
-    NULL
-  );
-
-  CGBitmapInfo bitmapInfo =
-    kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst;
-
-  CGImageRef source = CGImageCreate(
-    width,
-    height,
-    8,
-    32,
-    bytesPerRow,
-    colorSpace,
-    bitmapInfo,
-    provider,
-    NULL,
-    false,
-    kCGRenderingIntentDefault
-  );
-
-  CGImageRef copied = NULL;
-  if (source) {
-    const size_t copiedBytesPerRow = width * 4;
-    void *buffer = calloc(height, copiedBytesPerRow);
-    if (buffer) {
-      CGContextRef context = CGBitmapContextCreate(
-        buffer,
-        width,
-        height,
-        8,
-        copiedBytesPerRow,
-        colorSpace,
-        bitmapInfo
-      );
-      if (context) {
-        CGContextDrawImage(context, CGRectMake(0, 0, width, height), source);
-        copied = CGBitmapContextCreateImage(context);
-        CGContextRelease(context);
-      }
-      free(buffer);
-    }
-  }
-
-  if (source) CGImageRelease(source);
-  if (provider) CGDataProviderRelease(provider);
-  CGColorSpaceRelease(colorSpace);
-  IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
-  return copied;
-}
-
-static NSData *RIEncodeJPEG(CGImageRef source, size_t targetWidth, CGFloat quality) {
-  if (!source) return nil;
-
-  const size_t sourceWidth = CGImageGetWidth(source);
-  const size_t sourceHeight = CGImageGetHeight(source);
-  if (sourceWidth == 0 || sourceHeight == 0) return nil;
 
   if (targetWidth == 0 || targetWidth > sourceWidth) {
     targetWidth = sourceWidth;
@@ -259,39 +203,62 @@ static NSData *RIEncodeJPEG(CGImageRef source, size_t targetWidth, CGFloat quali
   );
 
   CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-  const size_t bytesPerRow = targetWidth * 4;
-  void *buffer = calloc(targetHeight, bytesPerRow);
-  if (!buffer) {
-    CGColorSpaceRelease(colorSpace);
-    return nil;
-  }
+  CGDataProviderRef provider = CGDataProviderCreateWithData(
+    NULL,
+    baseAddress,
+    sourceBytesPerRow * sourceHeight,
+    NULL
+  );
 
-  CGContextRef context = CGBitmapContextCreate(
-    buffer,
-    targetWidth,
-    targetHeight,
+  CGBitmapInfo bitmapInfo =
+    kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst;
+
+  CGImageRef source = CGImageCreate(
+    sourceWidth,
+    sourceHeight,
     8,
-    bytesPerRow,
+    32,
+    sourceBytesPerRow,
     colorSpace,
-    kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst
+    bitmapInfo,
+    provider,
+    NULL,
+    false,
+    kCGRenderingIntentDefault
   );
-  CGColorSpaceRelease(colorSpace);
 
-  if (!context) {
-    free(buffer);
-    return nil;
+  const size_t targetBytesPerRow = targetWidth * 4;
+  void *targetBuffer = calloc(targetHeight, targetBytesPerRow);
+  CGContextRef targetContext = targetBuffer
+    ? CGBitmapContextCreate(
+        targetBuffer,
+        targetWidth,
+        targetHeight,
+        8,
+        targetBytesPerRow,
+        colorSpace,
+        bitmapInfo
+      )
+    : NULL;
+
+  CGImageRef scaled = NULL;
+  if (source && targetContext) {
+    CGContextSetInterpolationQuality(targetContext, kCGInterpolationMedium);
+    CGContextDrawImage(
+      targetContext,
+      CGRectMake(0, 0, targetWidth, targetHeight),
+      source
+    );
+    scaled = CGBitmapContextCreateImage(targetContext);
   }
 
-  CGContextSetInterpolationQuality(context, kCGInterpolationHigh);
-  CGContextDrawImage(
-    context,
-    CGRectMake(0, 0, targetWidth, targetHeight),
-    source
-  );
+  if (targetContext) CGContextRelease(targetContext);
+  if (targetBuffer) free(targetBuffer);
+  if (source) CGImageRelease(source);
+  if (provider) CGDataProviderRelease(provider);
+  CGColorSpaceRelease(colorSpace);
+  IOSurfaceUnlock(surface, kIOSurfaceLockReadOnly, NULL);
 
-  CGImageRef scaled = CGBitmapContextCreateImage(context);
-  CGContextRelease(context);
-  free(buffer);
   if (!scaled) return nil;
 
   NSMutableData *data = [NSMutableData data];
@@ -314,7 +281,11 @@ static NSData *RIEncodeJPEG(CGImageRef source, size_t targetWidth, CGFloat quali
 
   CFRelease(destination);
   CGImageRelease(scaled);
-  return finalized ? data : nil;
+
+  if (!finalized) return nil;
+  if (encodedWidthOut) *encodedWidthOut = (uint32_t)targetWidth;
+  if (encodedHeightOut) *encodedHeightOut = (uint32_t)targetHeight;
+  return data;
 }
 
 static BOOL RIWriteFrame(NSData *payload, uint32_t width, uint32_t height, uint32_t sequence) {
@@ -405,26 +376,23 @@ int main(int argc, const char *argv[]) {
 
         const uint32_t seed = IOSurfaceGetSeed(surface);
         if (seed != lastSeed || sequence == 0) {
-          CGImageRef image = RICreateImageFromSurface(surface);
-          if (image) {
-            NSData *jpeg = RIEncodeJPEG(image, (size_t)outputWidth, quality);
-            CGImageRelease(image);
+          uint32_t encodedWidth = 0;
+          uint32_t encodedHeight = 0;
+          NSData *jpeg = RIEncodeSurfaceJPEG(
+            surface,
+            (size_t)outputWidth,
+            quality,
+            &encodedWidth,
+            &encodedHeight
+          );
 
-            if (jpeg) {
-              const size_t sourceWidth = IOSurfaceGetWidth(surface);
-              const size_t sourceHeight = IOSurfaceGetHeight(surface);
-              const uint32_t encodedWidth = (uint32_t)MIN((size_t)outputWidth, sourceWidth);
-              const uint32_t encodedHeight = (uint32_t)llround(
-                ((double)sourceHeight / (double)sourceWidth) * encodedWidth
-              );
-
-              if (!RIWriteFrame(jpeg, encodedWidth, encodedHeight, sequence)) {
-                if (surface) CFRelease(surface);
-                return 0;
-              }
-              sequence += 1;
-              lastSeed = seed;
+          if (jpeg) {
+            if (!RIWriteFrame(jpeg, encodedWidth, encodedHeight, sequence)) {
+              if (surface) CFRelease(surface);
+              return 0;
             }
+            sequence += 1;
+            lastSeed = seed;
           }
         }
 
