@@ -55,7 +55,6 @@ interface ViewportBenchmarkResult {
 
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.getState);
-  const traceEntries = Object.entries(state.traceSchemas);
   const schemaIds = useMemo(
     () =>
       Array.from(
