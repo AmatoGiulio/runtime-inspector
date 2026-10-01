@@ -18,8 +18,17 @@ export function findNormalizedCrop({
   }
 
   const referenceAspect = referenceWidth / referenceHeight;
-  const minWidth = Math.max(8, Math.floor(captureWidth * 0.68));
-  const maxWidth = Math.min(captureWidth, Math.ceil(captureWidth * 0.99));
+  const minWidth = Math.max(8, Math.floor(captureWidth * 0.62));
+  const maxWidth = Math.min(captureWidth, Math.ceil(captureWidth * 0.98));
+
+  // Fixed grids were too easily fooled by the mostly-dark Simulator bezel:
+  // a slightly oversized crop could still look "close" at many samples.
+  // Instead, select high-gradient reference points (status icons, Dynamic
+  // Island, text/card/button edges) distributed over the whole framebuffer.
+  const features = buildFeatureSamples(reference, referenceWidth, referenceHeight, 8, 14);
+  if (features.length < 12) return undefined;
+
+  const coarseFeatures = features.filter((_, index) => index % 2 === 0);
 
   const coarse = search({
     capture,
@@ -33,8 +42,7 @@ export function findNormalizedCrop({
     maxWidth,
     widthStep: 2,
     positionStep: 2,
-    sampleXs: normalizedSamples(5, 0.1, 0.9),
-    sampleYs: normalizedSamples(9, 0.16, 0.9)
+    features: coarseFeatures
   });
 
   if (!coarse) return undefined;
@@ -47,18 +55,17 @@ export function findNormalizedCrop({
     referenceWidth,
     referenceHeight,
     referenceAspect,
-    minWidth: Math.max(minWidth, coarse.width - 3),
-    maxWidth: Math.min(maxWidth, coarse.width + 3),
+    minWidth: Math.max(minWidth, coarse.width - 4),
+    maxWidth: Math.min(maxWidth, coarse.width + 4),
     widthStep: 1,
     positionStep: 1,
-    sampleXs: normalizedSamples(9, 0.08, 0.92),
-    sampleYs: normalizedSamples(15, 0.16, 0.9),
-    xRange: [Math.max(0, coarse.x - 4), Math.min(captureWidth - 1, coarse.x + 4)],
-    yRange: [Math.max(0, coarse.y - 4), Math.min(captureHeight - 1, coarse.y + 4)]
+    features,
+    xRange: [Math.max(0, coarse.x - 5), Math.min(captureWidth - 1, coarse.x + 5)],
+    yRange: [Math.max(0, coarse.y - 5), Math.min(captureHeight - 1, coarse.y + 5)]
   });
 
   const best = refined ?? coarse;
-  if (best.score > 70) return undefined;
+  if (best.score > 72) return undefined;
 
   return {
     x: best.x / captureWidth,
@@ -81,8 +88,7 @@ function search({
   maxWidth,
   widthStep,
   positionStep,
-  sampleXs,
-  sampleYs,
+  features,
   xRange,
   yRange
 }) {
@@ -111,8 +117,7 @@ function search({
           y,
           width,
           height,
-          sampleXs,
-          sampleYs
+          features
         });
 
         if (!best || score < best.score) {
@@ -135,45 +140,82 @@ function candidateScore({
   y,
   width,
   height,
-  sampleXs,
-  sampleYs
+  features
 }) {
   let score = 0;
-  let count = 0;
+  let totalWeight = 0;
 
-  for (const ny of sampleYs) {
+  for (const feature of features) {
+    const referenceX = Math.min(
+      referenceWidth - 1,
+      Math.round(feature.nx * (referenceWidth - 1))
+    );
     const referenceY = Math.min(
       referenceHeight - 1,
-      Math.round(ny * (referenceHeight - 1))
+      Math.round(feature.ny * (referenceHeight - 1))
     );
-    const captureY = y + Math.round(ny * (height - 1));
+    const captureX = x + Math.round(feature.nx * (width - 1));
+    const captureY = y + Math.round(feature.ny * (height - 1));
+    const weight = feature.weight;
 
-    for (const nx of sampleXs) {
-      const referenceX = Math.min(
-        referenceWidth - 1,
-        Math.round(nx * (referenceWidth - 1))
-      );
-      const captureX = x + Math.round(nx * (width - 1));
-
-      score += pixelDistance(
+    score +=
+      pixelDistance(
         reference,
         (referenceY * referenceWidth + referenceX) * 4,
         capture,
         (captureY * captureWidth + captureX) * 4
-      );
-      count += 1;
+      ) * weight;
+    totalWeight += weight;
+  }
+
+  return score / Math.max(1, totalWeight);
+}
+
+function buildFeatureSamples(data, width, height, columns, rows) {
+  const result = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    const y0 = Math.max(1, Math.floor((row / rows) * height));
+    const y1 = Math.min(height - 2, Math.ceil(((row + 1) / rows) * height));
+
+    for (let column = 0; column < columns; column += 1) {
+      const x0 = Math.max(1, Math.floor((column / columns) * width));
+      const x1 = Math.min(width - 2, Math.ceil(((column + 1) / columns) * width));
+
+      let strongest;
+
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const center = (y * width + x) * 4;
+          const left = center - 4;
+          const right = center + 4;
+          const up = center - width * 4;
+          const down = center + width * 4;
+
+          const gradient =
+            pixelDistance(data, left, data, right) +
+            pixelDistance(data, up, data, down);
+
+          if (!strongest || gradient > strongest.gradient) {
+            strongest = { x, y, gradient };
+          }
+        }
+      }
+
+      if (strongest && strongest.gradient >= 8) {
+        result.push({
+          nx: strongest.x / (width - 1),
+          ny: strongest.y / (height - 1),
+          // Strong edges carry more information, but cap the weight so a
+          // single white-card edge cannot dominate the complete screen.
+          weight: Math.min(4, Math.max(1, strongest.gradient / 24)),
+          gradient: strongest.gradient
+        });
+      }
     }
   }
 
-  return score / Math.max(1, count);
-}
-
-function normalizedSamples(count, start, end) {
-  if (count <= 1) return [(start + end) / 2];
-  return Array.from(
-    { length: count },
-    (_, index) => start + ((end - start) * index) / (count - 1)
-  );
+  return result.sort((a, b) => b.gradient - a.gradient);
 }
 
 function pixelDistance(a, ai, b, bi) {
