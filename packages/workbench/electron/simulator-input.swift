@@ -42,7 +42,7 @@ func windowTarget(windowId: CGWindowID) -> (pid: pid_t, bounds: CGRect)? {
     let rows = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowId) as? [[String: Any]],
     let row = rows.first,
     let pidNumber = row[kCGWindowOwnerPID as String] as? NSNumber,
-    let boundsDictionary = row[kCGWindowBounds as String] as? CFDictionary,
+    let boundsDictionary = row[kCGWindowBounds as String] as? NSDictionary,
     let bounds = CGRect(dictionaryRepresentation: boundsDictionary)
   else {
     return nil
