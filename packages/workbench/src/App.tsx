@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { createPanelSession } from "@runtime-inspector/panel-core";
 import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
@@ -15,11 +15,23 @@ const session = createPanelSession({
 });
 session.connect();
 
+interface RuntimeCaptureInfo {
+  label: string;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  displaySurface?: string;
+}
+
 function App() {
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const traceEntries = Object.entries(state.traceSchemas);
   const [schemaId, setSchemaId] = useState<string>();
   const [probeId, setProbeId] = useState<string>();
+  const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
+  const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
+  const runtimeStreamRef = useRef<MediaStream>();
+  const runtimeVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!schemaId && traceEntries[0]) {
@@ -39,6 +51,24 @@ function App() {
 
   const selectedProbe = probes.find((probe) => probe.id === probeId);
   const recording = state.recording;
+
+  useEffect(() => {
+    const video = runtimeVideoRef.current;
+    if (!video) return;
+    video.srcObject = runtimeStreamRef.current ?? null;
+    if (runtimeStreamRef.current) {
+      void video.play().catch(() => {
+        // Autoplay is expected for muted local capture. A user gesture can recover if a browser blocks it.
+      });
+    }
+  }, [runtimeCapture]);
+
+  useEffect(() => {
+    return () => {
+      runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
+      runtimeStreamRef.current = undefined;
+    };
+  }, []);
   const isRecording = Boolean(recording && !recording.complete);
 
   const samples = useMemo(() => {
@@ -74,6 +104,72 @@ function App() {
     if (replayControl) {
       session.fireTrigger(schemaId, replayControl.id);
     }
+  }
+
+  async function attachRuntimeCapture() {
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setRuntimeCaptureError("This browser does not support window capture.");
+      return;
+    }
+
+    setRuntimeCaptureError(undefined);
+
+    try {
+      runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 60, max: 60 }
+        },
+        audio: false
+      });
+
+      const track = stream.getVideoTracks()[0];
+      if (!track) {
+        stream.getTracks().forEach((item) => item.stop());
+        setRuntimeCaptureError("The selected source did not provide a video track.");
+        return;
+      }
+
+      const settings = track.getSettings() as MediaTrackSettings & {
+        displaySurface?: string;
+      };
+
+      runtimeStreamRef.current = stream;
+      setRuntimeCapture({
+        label: track.label || "Captured window",
+        width: settings.width,
+        height: settings.height,
+        frameRate: settings.frameRate,
+        displaySurface: settings.displaySurface
+      });
+
+      track.onended = () => {
+        runtimeStreamRef.current = undefined;
+        if (runtimeVideoRef.current) {
+          runtimeVideoRef.current.srcObject = null;
+        }
+        setRuntimeCapture(undefined);
+      };
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setRuntimeCaptureError("Window capture was cancelled or Screen Recording permission was denied.");
+        return;
+      }
+      setRuntimeCaptureError(
+        error instanceof Error ? error.message : "Could not attach the runtime window."
+      );
+    }
+  }
+
+  function detachRuntimeCapture() {
+    runtimeStreamRef.current?.getTracks().forEach((track) => track.stop());
+    runtimeStreamRef.current = undefined;
+    if (runtimeVideoRef.current) {
+      runtimeVideoRef.current.srcObject = null;
+    }
+    setRuntimeCapture(undefined);
+    setRuntimeCaptureError(undefined);
   }
 
   return (
@@ -125,18 +221,61 @@ function App() {
 
         <section className="runtime-stage">
           <div className="stage-toolbar">
-            <span>Live Runtime</span>
-            <span className="stage-note">device viewport · M3/M4</span>
-          </div>
-          <div className="device-placeholder">
-            <div className="device-screen">
-              <div className="device-eyebrow">REAL RUNTIME</div>
-              <div className="device-title">iOS Simulator / Android Emulator</div>
-              <div className="device-copy">
-                M0 validates the semantic trace path first. The captured simulator viewport lands
-                after recording overhead is proven safe.
-              </div>
+            <div className="stage-toolbar-title">
+              <span>Live Runtime</span>
+              {runtimeCapture ? (
+                <span className="capture-status">
+                  <span className="capture-status-dot" />
+                  {captureSummary(runtimeCapture)}
+                </span>
+              ) : (
+                <span className="stage-note">iOS Simulator · M3 capture spike</span>
+              )}
             </div>
+            <button
+              className="stage-action"
+              type="button"
+              onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
+            >
+              {runtimeCapture ? "Detach" : "Attach Simulator"}
+            </button>
+          </div>
+
+          <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
+            {runtimeCapture ? (
+              <div className="runtime-video-shell">
+                <video
+                  ref={runtimeVideoRef}
+                  className="runtime-video"
+                  autoPlay
+                  muted
+                  playsInline
+                />
+                <div className="runtime-video-caption">
+                  <span>{runtimeCapture.label}</span>
+                  <span>Interact in the Simulator window · capture is view-only in M3a</span>
+                </div>
+              </div>
+            ) : (
+              <div className="device-placeholder">
+                <div className="device-screen">
+                  <div className="device-eyebrow">REAL RUNTIME</div>
+                  <div className="device-title">Attach the iOS Simulator</div>
+                  <div className="device-copy">
+                    Choose the Simulator window in the macOS/Chrome sharing picker. Runtime
+                    Inspector will render that live window here while trace recording stays on RIP.
+                  </div>
+                  <button className="device-attach" type="button" onClick={attachRuntimeCapture}>
+                    Attach Simulator
+                  </button>
+                </div>
+              </div>
+            )}
+            {runtimeCaptureError ? (
+              <div className="capture-error" role="status">
+                {runtimeCaptureError}
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -260,6 +399,13 @@ function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> 
       </div>
     </div>
   );
+}
+
+function captureSummary(capture: RuntimeCaptureInfo) {
+  const size =
+    capture.width && capture.height ? `${capture.width}×${capture.height}` : undefined;
+  const fps = capture.frameRate ? `${capture.frameRate.toFixed(0)} fps` : undefined;
+  return [size, fps].filter(Boolean).join(" · ") || "attached";
 }
 
 function measuredHz(samples: Array<{ t: number; value: number }>) {
