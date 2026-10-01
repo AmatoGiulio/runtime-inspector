@@ -340,6 +340,25 @@ button {
   background: #050506;
 }
 
+.runtime-video.interactive {
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.input-status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #28513a;
+  border-radius: 6px;
+  background: #182a20;
+  color: #76d49e;
+  font-size: 10px;
+  font-weight: 560;
+}
+
 .runtime-video-caption {
   position: absolute;
   left: 10px;
