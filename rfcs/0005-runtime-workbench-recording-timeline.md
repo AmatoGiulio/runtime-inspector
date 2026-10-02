@@ -107,6 +107,36 @@ markRelease();
 
 Controls remain editable. Probes are observational by default.
 
+### 3a. Experimental automatic Reanimated primitive discovery
+
+The original V1 decision above remains the safe baseline: explicit probes are the guaranteed instrumentation path. The Workbench now carries an **experimental spike** to test whether a useful subset of Reanimated motion can appear automatically.
+
+In development builds, the existing Babel plugin recognizes direct assignments of these forms:
+
+```ts
+shared.value = withTiming(target, config);
+shared.value = withSpring(target, config);
+```
+
+and wraps them with Runtime Inspector development helpers. The emitted lifecycle carries:
+
+- animation kind (`timing` / `spring`);
+- target expression;
+- runtime start/end timestamps;
+- serializable primitive target/current values;
+- selected timing/spring parameters;
+- source file, line, column, enclosure, and original animation expression;
+- schema id when the assignment target can be associated with a local `useInspector("schema-id", ...)` handle or an auto-inspected shared value.
+
+The first spike deliberately does **not** instrument:
+
+- animation calls with an explicit completion callback, until callback composition is proven not to interfere with Reanimated workletization;
+- nested modifier trees such as `withDelay`, `withSequence`, or `withRepeat`;
+- gesture-following direct shared-value writes;
+- arbitrary custom animation functions.
+
+This is a product-feasibility experiment, not yet a replacement for explicit probes. If the runtime test succeeds without changing animation behavior, V1 can promote the narrower promise **automatic discovery of supported Reanimated animation primitives** while keeping explicit probes as the escape hatch.
+
 ### 4. V1 timeline is observational
 
 The playhead inspects a recorded trace.
