@@ -50,3 +50,15 @@ Still intentionally unsupported by this proof:
 Validated example result: the four direct timing animations and four return springs in `replayTransition()` are discovered automatically, without using the manual probe declaration for those lifecycle rows.
 
 The Workbench presentation now collapses lifecycle instances by runtime property: `card.moveX`, `card.rotate`, `card.scale`, and `card.opacity` each render as one property track containing their timing and spring spans on the same temporal axis. This is the first transition from an event-log presentation toward the timeline-first product model.
+
+### M5c timeline-first interaction surface
+
+**Implemented on `feat/runtime-workbench-desktop`, pending manual UX validation**
+
+The Workbench timeline now has a temporal ruler and draggable observational playhead. Auto-detected animation spans render on property rows against that shared time axis, remain selectable, and drive a contextual animation Inspector.
+
+Selecting a timing span exposes its start, declared duration, target metadata, parameters, source location, and original source expression. Selecting a spring span exposes the same temporal/source context plus live spring tuning when its dynamic config resolves back to an Inspector spring control. Spring settle duration remains explicitly marked as estimated.
+
+The playhead is observational only: dragging it answers what is active at that time in the Inspector but does not rewind the running application.
+
+The old single-probe graph is no longer rendered as the primary timeline body. Probe recording remains available in the protocol and contextual Inspector while the main Workbench surface moves to the property/span time model.
