@@ -217,6 +217,7 @@ export function AnimationTimeline({
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
+                        onPlayheadChange(startMs);
                         onSelectAnimation(animation.instanceId);
                       }}
                     >
