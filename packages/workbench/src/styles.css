@@ -1030,17 +1030,37 @@ button {
 
 .detected-animation-span {
   position: absolute;
-  top: 9px;
-  bottom: 9px;
+  top: 7px;
+  bottom: 7px;
   min-width: 8px;
+  overflow: hidden;
   border-radius: 4px;
   border: 1px solid rgba(157, 140, 255, 0.72);
   background: rgba(118, 98, 224, 0.24);
 }
 
+.detected-animation-span-label {
+  position: absolute;
+  inset: 0 7px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: rgba(230, 227, 255, 0.88);
+  font-size: 8px;
+  font-weight: 560;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .detected-animation-span.spring {
   border-color: rgba(92, 196, 146, 0.72);
   background: rgba(56, 151, 108, 0.22);
+}
+
+.detected-animation-span.spring .detected-animation-span-label {
+  color: rgba(208, 244, 226, 0.88);
 }
 
 .detected-animation-span.estimated {
