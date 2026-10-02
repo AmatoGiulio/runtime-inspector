@@ -406,6 +406,22 @@ A design review found every element carrying the same visual weight. Within the 
 
 - **No pop on attach.** The stage shows one persistent phone-shaped device frame (`.device-frame` bezel around `.device-frame-screen`) in every desktop state. Attaching used to swap the placeholder for a different element that had no aspect ratio until the first frame was decoded, which produced a shape jump and a black flash. Now the frame keeps its geometry, the capture dimensions come from the bootstrap frame at attach time, and the live canvas fades in over 180 ms. Simulator pointer handlers sit on the screen element, not the bezel, so input mapping is unchanged. Geometry was checked in a browser; the attach itself can only be validated in the desktop app.
 
+- **Real device bezel.** In the desktop app the frame is the selected iPhone's own bezel, read at runtime from the local Xcode installation (`/Library/Developer/CoreSimulator/Profiles/DeviceTypes/*.simdevicetype` → `chromeIdentifier` → `/Library/Developer/DeviceKit/Chrome/*.devicechrome`), rasterized with `sips` into the app's user-data cache and drawn as a 9-slice `border-image`; the screen is clipped with the device's `framebufferMask`. Nothing from Xcode is copied into the repository. Any failure (unknown model, moved folders, `sips`/`plutil` error) falls back to the generic frame with one warning and never blocks attach. This is private Xcode layout and must be re-checked per Xcode release, like the IndigoHID input path. No Dynamic Island overlay or hardware buttons yet. Verified through a standalone preview of the iPhone 17 Pro Max bezel; not yet seen inside the Electron window by the author of this note.
+
+### M6f a timeline that holds still
+
+**Implemented on `feat/runtime-workbench-desktop`; measured in a browser against the demo runtime on 2026-10-02.**
+
+Owner feedback: moving a block re-sorted and redrew the whole timeline, so the sense of what was being touched was lost.
+
+- **Order is source order.** Groups and rows follow `(file, line, column)` of their call sites (input order when a source is missing). Start time no longer affects order.
+- **Rows keep their identity across replays.** Rows are keyed by call site, not by animation instance. Because `animation.started` messages arrive one at a time, the newest burst is merged into the displayed one (`mergeBurst`, stale rows rebased to the new time origin) and rows that did not come back are removed only after a 150 ms settle.
+- **The released value is an optimistic preview** kept until the new instance arrives (or 2 s pass), so a bar no longer slides back and then forward.
+- **The time scale is sticky.** While the same set of call sites is on screen the ruler only grows; double-clicking the ruler refits it.
+- Bars, lead-ins and handles transition between replays (not during a live gesture); the group chevron rotates when a group opens or closes.
+
+Measured with a `MutationObserver` over a drag-commit-replay cycle: 8 rows before, the same 8 DOM nodes after, 0 rows added or removed, row count never below 8, selection kept on the edited row, tick labels unchanged, row order unchanged after moving a block from 140 ms to 873 ms.
+
 Not done yet:
 
 1. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
