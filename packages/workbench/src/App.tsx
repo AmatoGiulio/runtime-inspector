@@ -480,7 +480,7 @@ function App() {
     session.startRecording(schemaId, [probeId], 60);
   }
 
-  function replay() {
+  function replay(preserveAnimationInspector = false) {
     if (!schemaId) return;
     const schema = state.schemas.find((item) => item.id === schemaId);
     const replayControl = schema?.groups
@@ -495,7 +495,7 @@ function App() {
       replayAnimationBaselineRef.current[schemaId] = schemaAnimations.length;
       setSelectedAnimationId(undefined);
       setPlayheadMs(0);
-      if (inspectorMode === "animation") {
+      if (!preserveAnimationInspector && inspectorMode === "animation") {
         setInspectorMode(probes[0] ? "probe" : "control");
       }
       session.fireTrigger(schemaId, replayControl.id);
@@ -1052,14 +1052,11 @@ function App() {
                           animationKind: selectedAnimation.animationKind
                         };
                       }
-                      replayAnimationBaselineRef.current[schemaId] =
-                        schemaAnimations.length;
-                      setSelectedAnimationId(undefined);
-                      setPlayheadMs(0);
                       session.commitValue(
                         schemaId,
                         selectedAnimationSpringControl.id
                       );
+                      replay(true);
                     }
                   : undefined
               }
@@ -1091,7 +1088,11 @@ function App() {
             <span className="record-dot" />
             {isRecording ? "Stop" : "Record"}
           </button>
-          <button className="tool-button" onClick={replay} disabled={!schemaId}>
+          <button
+            className="tool-button"
+            onClick={() => replay()}
+            disabled={!schemaId}
+          >
             ▶ Replay
           </button>
           <button
@@ -1133,19 +1134,8 @@ function App() {
               playheadMs={playheadMs}
               onPlayheadChange={setPlayheadMs}
               onSelectAnimation={(animationId) => {
-                const animation = detectedAnimations.find(
-                  (candidate) => candidate.instanceId === animationId
-                );
                 setSelectedAnimationId(animationId);
                 setInspectorMode("animation");
-                if (animation) {
-                  setPlayheadMs(
-                    Math.max(
-                      0,
-                      animation.startedAtRuntimeMs - detectedAnimationOriginMs
-                    )
-                  );
-                }
               }}
             />
           ) : (
