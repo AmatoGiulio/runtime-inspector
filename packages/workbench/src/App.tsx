@@ -100,6 +100,7 @@ function App() {
     latencyMs: []
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const replayAnimationBaselineRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (schemaId || !schemaIds[0]) return;
@@ -354,7 +355,12 @@ function App() {
   const schemaAnimations = state.runtimeAnimations.filter(
     (animation) => !schemaId || animation.schemaId === schemaId
   );
-  const detectedAnimations = latestAnimationBurst(schemaAnimations);
+  const replayBaseline =
+    schemaId !== undefined ? replayAnimationBaselineRef.current[schemaId] : undefined;
+  const detectedAnimations =
+    replayBaseline !== undefined
+      ? schemaAnimations.slice(replayBaseline)
+      : latestAnimationBurst(schemaAnimations);
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -419,6 +425,7 @@ function App() {
             control.binding?.toLowerCase().includes("replay"))
       );
     if (replayControl) {
+      replayAnimationBaselineRef.current[schemaId] = schemaAnimations.length;
       session.fireTrigger(schemaId, replayControl.id);
     }
   }
@@ -1047,7 +1054,7 @@ function DetectedAnimationTracks({
         <div className="detected-animation-row" key={track.target}>
           <div className="detected-animation-label">
             <strong>{track.label}</strong>
-            <span>{track.animations.map((animation) => animation.animationKind).join(" → ")}</span>
+            <span>{track.animations.length} spans</span>
           </div>
           <div className="detected-animation-lane">
             {track.animations.map((animation) => {
@@ -1084,7 +1091,14 @@ function DetectedAnimationTracks({
                     displayDuration,
                     estimated
                   )}
-                />
+                >
+                  <span className="detected-animation-span-label">
+                    {animation.animationKind}
+                    {displayDuration !== undefined
+                      ? ` · ${estimated ? "~" : ""}${formatTime(displayDuration)}`
+                      : ""}
+                  </span>
+                </div>
               );
             })}
           </div>
