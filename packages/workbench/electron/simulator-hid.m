@@ -304,8 +304,10 @@ static BOOL RISendPointer(
     eventType = 1;
     direction = 1;
   } else if ([type isEqualToString:@"drag"]) {
-    eventType = 6;
-    direction = 0;
+    // SimulatorKit's Indigo builder returns NULL for NSEventTypeLeftMouseDragged.
+    // A continued touch is represented by another mouse-down at the new point.
+    eventType = 1;
+    direction = 1;
   } else if ([type isEqualToString:@"up"]) {
     eventType = 2;
     direction = 2;
