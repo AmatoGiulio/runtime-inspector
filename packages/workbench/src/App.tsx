@@ -4,6 +4,8 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -15,7 +17,8 @@ import {
 import type {
   InspectorControl,
   PanelSchema,
-  RuntimeProbeDescriptor
+  RuntimeProbeDescriptor,
+  SpringValue
 } from "@runtime-inspector/protocol";
 import {
   AnimationInspector,
@@ -30,6 +33,7 @@ import {
   timelineOriginMs
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
+import { TIMELINE_HEIGHT_STORAGE_KEY, clampTimelineHeight } from "./layout";
 import { themeChoiceLabel, useWorkbenchTheme } from "./theme";
 import "@runtime-inspector/panel-dialkit/styles.css";
 import "./styles.css";
@@ -126,6 +130,15 @@ function App() {
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [outlineVisible, setOutlineVisible] = useState(false);
+  // User-chosen timeline height in px; undefined = the CSS default (`--wb-timeline-h`).
+  const [timelineHeight, setTimelineHeight] = useState<number | undefined>(
+    readStoredTimelineHeight
+  );
+  const [splitDragging, setSplitDragging] = useState(false);
+  const timelineHeightRef = useRef(timelineHeight);
+  timelineHeightRef.current = timelineHeight;
+  const timelineRef = useRef<HTMLElement>(null);
+  const splitDragRef = useRef(false);
   const pendingAnimationSelectionRef = useRef<
     | {
         callsiteId: string;
@@ -476,6 +489,38 @@ function App() {
       value: state.values[entry.schemaId]?.[entry.control.id],
       disabled: Boolean(state.staleSchemaIds[entry.schemaId])
     }));
+  const springPreviewDamping = animationSpringParameter(
+    selectedAnimation,
+    animationInspectorControls,
+    "damping"
+  );
+  const springPreviewStiffness = animationSpringParameter(
+    selectedAnimation,
+    animationInspectorControls,
+    "stiffness"
+  );
+  const springPreviewMass = animationSpringParameter(
+    selectedAnimation,
+    animationInspectorControls,
+    "mass"
+  );
+  // A spring driven by a `spring` control is drawn by that control's own DialKit folder.
+  const wantsSpringPreview =
+    selectedAnimation?.animationKind === "spring" && !selectedAnimation.configControlId;
+  const springPreview = useMemo<SpringValue | undefined>(() => {
+    if (
+      !wantsSpringPreview ||
+      springPreviewDamping === undefined ||
+      springPreviewStiffness === undefined
+    ) {
+      return undefined;
+    }
+    return {
+      damping: springPreviewDamping,
+      stiffness: springPreviewStiffness,
+      ...(springPreviewMass !== undefined ? { mass: springPreviewMass } : {})
+    };
+  }, [wantsSpringPreview, springPreviewDamping, springPreviewStiffness, springPreviewMass]);
   const animationActionsRef = useRef({
     animation: selectedAnimation,
     queueRestore: queueAnimationSelectionRestore,
@@ -554,6 +599,72 @@ function App() {
     };
   }, []);
   const isRecording = Boolean(recording && !recording.complete);
+
+  useEffect(() => {
+    const onResize = () =>
+      setTimelineHeight((current) =>
+        current === undefined ? current : clampTimelineHeight(current, window.innerHeight)
+      );
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  function persistTimelineHeight(height: number | undefined) {
+    try {
+      if (height === undefined) {
+        window.localStorage.removeItem(TIMELINE_HEIGHT_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(TIMELINE_HEIGHT_STORAGE_KEY, String(height));
+      }
+    } catch {
+      // Storage can be unavailable; the height then only lasts for this session.
+    }
+  }
+
+  function handleSplitPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    splitDragRef.current = true;
+    setSplitDragging(true);
+  }
+
+  function handleSplitPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragRef.current) return;
+    setTimelineHeight(
+      clampTimelineHeight(window.innerHeight - event.clientY, window.innerHeight)
+    );
+  }
+
+  function endSplitDrag(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!splitDragRef.current) return;
+    splitDragRef.current = false;
+    setSplitDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    persistTimelineHeight(timelineHeightRef.current);
+  }
+
+  function handleSplitKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    event.preventDefault();
+    const current =
+      timelineHeightRef.current ?? timelineRef.current?.getBoundingClientRect().height;
+    if (current === undefined) return;
+    // The handle sits above the timeline: moving it up makes the timeline taller.
+    const next = clampTimelineHeight(
+      current + (event.key === "ArrowUp" ? 16 : -16),
+      window.innerHeight
+    );
+    setTimelineHeight(next);
+    persistTimelineHeight(next);
+  }
+
+  function resetTimelineHeight() {
+    setTimelineHeight(undefined);
+    persistTimelineHeight(undefined);
+  }
 
   const samples = useMemo(() => {
     if (!recording || !probeId) return [];
@@ -871,7 +982,14 @@ function App() {
   }
 
   return (
-    <main className={window.runtimeDesktop ? "workbench desktop" : "workbench"}>
+    <main
+      className={window.runtimeDesktop ? "workbench desktop" : "workbench"}
+      style={
+        timelineHeight !== undefined
+          ? ({ "--wb-timeline-h": `${timelineHeight}px` } as CSSProperties)
+          : undefined
+      }
+    >
       <header className="topbar">
         <div className="brand">Runtime Inspector</div>
         <button
@@ -884,16 +1002,6 @@ function App() {
         </button>
         {state.notice && <div className="notice">{state.notice}</div>}
         <div className="topbar-spacer" />
-
-        {runtimeCapture ? (
-          <span className="wb-pill capture-status" data-dot="success">
-            {captureSummary(runtimeCapture, framebufferFrameSource)}
-          </span>
-        ) : window.runtimeDesktop ? (
-          <span className="stage-note">Desktop adapter · iOS Simulator</span>
-        ) : (
-          <span className="stage-note">Browser capture · iOS Simulator</span>
-        )}
 
         <div className="stage-controls">
           {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
@@ -913,33 +1021,33 @@ function App() {
             </select>
           ) : null}
 
-          {runtimeCapture && window.runtimeDesktop ? (
-            runtimeCapture.source === "framebuffer" ? (
-              inputReady ? (
-                <span
-                  className="wb-pill"
-                  data-dot="success"
-                  title="Native Simulator HID input enabled"
-                >
-                  Input on
-                </span>
-              ) : (
-                <button
-                  className="wb-button secondary"
-                  type="button"
-                  onClick={retrySimulatorInput}
-                >
-                  Retry Input
-                </button>
-              )
-            ) : (
+          {runtimeCapture ? (
+            <span
+              className="wb-pill"
+              data-dot={runtimeCapture.source === "framebuffer" ? "success" : "muted"}
+              title={captureSummary(runtimeCapture, framebufferFrameSource)}
+            >
+              {runtimeCapture.source === "framebuffer" ? "Live" : "View only"}
+            </span>
+          ) : null}
+
+          {runtimeCapture?.source === "framebuffer" && window.runtimeDesktop ? (
+            inputReady ? (
               <span
-                className="wb-pill"
-                data-dot="muted"
-                title="Window fallback is view-only"
+                className="wb-pill emphasis"
+                data-dot="success"
+                title="Native Simulator HID input enabled"
               >
-                View only
+                Input on
               </span>
+            ) : (
+              <button
+                className="wb-button secondary"
+                type="button"
+                onClick={retrySimulatorInput}
+              >
+                Retry Input
+              </button>
             )
           ) : null}
 
@@ -961,7 +1069,7 @@ function App() {
 
         <button
           type="button"
-          className="wb-button toggle"
+          className="wb-button toggle theme-toggle"
           onClick={cycleTheme}
           title={`Theme: ${themeLabel}`}
           aria-label={`Theme: ${themeLabel}`}
@@ -970,7 +1078,7 @@ function App() {
         </button>
 
         <div
-          className="wb-pill connection"
+          className="wb-pill emphasis connection"
           data-status={state.status}
           data-dot={state.status === "connected" ? "success" : "muted"}
         >
@@ -1170,8 +1278,8 @@ function App() {
             <AnimationInspector
               animation={selectedAnimation}
               originMs={detectedAnimationOriginMs}
-              playheadMs={playheadMs}
               controls={animationInspectorControls}
+              springPreview={springPreview}
               session={animationSession}
               theme={resolvedTheme}
             />
@@ -1196,7 +1304,26 @@ function App() {
         </aside>
       </section>
 
-      <section className="timeline dialkit-root" data-theme={resolvedTheme}>
+      <div
+        className="split-handle"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize timeline"
+        tabIndex={0}
+        data-dragging={splitDragging ? "" : undefined}
+        onPointerDown={handleSplitPointerDown}
+        onPointerMove={handleSplitPointerMove}
+        onPointerUp={endSplitDrag}
+        onPointerCancel={endSplitDrag}
+        onKeyDown={handleSplitKeyDown}
+        onDoubleClick={resetTimelineHeight}
+      />
+
+      <section
+        ref={timelineRef}
+        className="timeline dialkit-root"
+        data-theme={resolvedTheme}
+      >
         <div className="timeline-toolbar">
           <button
             className="wb-button primary timeline-play"
@@ -1240,6 +1367,12 @@ function App() {
           <details className="timeline-dev">
             <summary className="wb-button secondary">Developer</summary>
             <div className="timeline-dev-menu">
+              {runtimeCapture ? (
+                <div className="timeline-dev-info">
+                  <span>Viewport</span>{" "}
+                  <span>{captureSummary(runtimeCapture, framebufferFrameSource)}</span>
+                </div>
+              ) : null}
               <button
                 className={
                   isRecording
@@ -1444,6 +1577,31 @@ function findSchemaControl(
     if (control) return control;
   }
   return undefined;
+}
+
+/** Current numeric value of a spring parameter: its control's live value, else the resolved config. */
+function animationSpringParameter(
+  animation: RuntimeAnimationTrace | undefined,
+  controls: readonly AnimationInspectorControl[],
+  key: "damping" | "stiffness" | "mass"
+): number | undefined {
+  if (!animation) return undefined;
+  const live = controls.find((entry) => entry.key === key)?.value;
+  if (typeof live === "number" && Number.isFinite(live)) return live;
+  const resolved = animation.resolvedConfig[key];
+  return typeof resolved === "number" && Number.isFinite(resolved) ? resolved : undefined;
+}
+
+/** The stored timeline height, re-clamped to the current viewport; undefined when absent or invalid. */
+function readStoredTimelineHeight(): number | undefined {
+  try {
+    const raw = window.localStorage.getItem(TIMELINE_HEIGHT_STORAGE_KEY);
+    if (raw === null || raw.trim() === "") return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? clampTimelineHeight(value, window.innerHeight) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function controlGlyph(kind: string) {

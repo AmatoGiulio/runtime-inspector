@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { PanelSession } from "@runtime-inspector/panel-core";
 import type { InspectorControl } from "@runtime-inspector/protocol";
 import { InspectorControlRow } from "@runtime-inspector/panel-dialkit";
@@ -23,6 +24,19 @@ export function ControlInspector({
   onApplySource
 }: ControlInspectorProps) {
   const sourceBacked = "source" in control && Boolean(control.source);
+  /**
+   * The header already names the control, so its DialKit row is labelled generically. The copy is
+   * rebuilt only when the control object changes: `InspectorControlRow` remounts its editor on a new
+   * identity. A trigger renders its label as the button text, so it reads as the action.
+   */
+  const rowControl = useMemo(
+    () =>
+      ({
+        ...control,
+        label: control.kind === "trigger" ? "Run" : "Value"
+      }) as InspectorControl,
+    [control]
+  );
 
   return (
     <div className="control-inspector">
@@ -47,7 +61,7 @@ export function ControlInspector({
           <InspectorControlRow
             session={session}
             schemaId={schemaId}
-            control={control}
+            control={rowControl}
             value={value}
             disabled={stale}
             onApplyToCode={

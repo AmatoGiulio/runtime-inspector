@@ -233,6 +233,26 @@ describe("buildTimelineModel", () => {
     expect(rows.unknown).toMatchObject({ estimated: false, durationMs: undefined });
   });
 
+  it("exposes the start delay of each row, 0 when the trace has none", () => {
+    const model = buildTimelineModel([
+      trace({ instanceId: "plain", target: "card.moveX" }),
+      trace({
+        instanceId: "delayed",
+        target: "card.opacity",
+        startedAtRuntimeMs: 1300,
+        startDelayMs: 300
+      })
+    ]);
+    const rows = Object.fromEntries(
+      model.groups[0]!.rows.map((row) => [row.animation.instanceId, row])
+    );
+    expect(rows.plain).toMatchObject({ delayMs: 0, startMs: 0 });
+    expect(rows.delayed).toMatchObject({ delayMs: 300, startMs: 300 });
+    expect(model.originMs).toBe(1000);
+    // The call time (start - delay) of the delayed row is the timeline origin.
+    expect(rows.delayed!.startMs - rows.delayed!.delayMs).toBe(0);
+  });
+
   it("places minor ticks at the midpoints between ticks", () => {
     const model = buildTimelineModel([trace()]);
     expect(model.durationMs).toBe(300);

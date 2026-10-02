@@ -9,6 +9,8 @@ export interface AnimationRow {
   kindLabel: string;
   /** Relative to the model's originMs. */
   startMs: number;
+  /** Delay already included in `startMs` (`animation.startDelayMs ?? 0`); the call happened at `startMs - delayMs`. */
+  delayMs: number;
   /** Observed (ended - started) when the animation has ended, else the expected duration. */
   durationMs: number | undefined;
   /** No observed end, and the expected duration is a spring estimate. */
@@ -116,6 +118,7 @@ function groupAnimationRows(
       label,
       kindLabel: animation.animationKind === "spring" ? "Spring" : "Timing",
       startMs: animation.startedAtRuntimeMs - originMs,
+      delayMs: animation.startDelayMs ?? 0,
       durationMs: observedDurationMs ?? animation.expectedDurationMs,
       estimated:
         observedDurationMs === undefined &&

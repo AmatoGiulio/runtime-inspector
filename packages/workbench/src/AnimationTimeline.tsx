@@ -635,10 +635,22 @@ export function AnimationTimeline({
                           {...scrubHandlers}
                         >
                           {gridLines}
+                          {row.delayMs > 0 ? (
+                            // The call time is fixed; the lead-in follows the previewed bar start.
+                            <span
+                              className="motion-lead-in"
+                              aria-hidden="true"
+                              style={{
+                                left: percentOf(startMs - row.delayMs),
+                                width: `${(Math.max(0, barStartMs - (startMs - row.delayMs)) / model.durationMs) * 100}%`
+                              }}
+                            />
+                          ) : null}
                           <button
                             className={classNames(
                               "motion-bar",
                               "dialkit-timeline-clip",
+                              animation.animationKind === "spring" && "spring",
                               row.estimated && !dragging && "estimated",
                               selected && "selected",
                               movable && "movable",

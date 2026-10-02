@@ -2,7 +2,11 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { InspectorControlRow, type InspectorControlProps } from "./index";
+import {
+  InspectorControlRow,
+  SpringPreview,
+  type InspectorControlProps,
+} from "./index";
 
 // jsdom has no ResizeObserver; DialKit folders and the easing editor observe their size.
 globalThis.ResizeObserver ??= class {
@@ -237,4 +241,11 @@ it("closes transient color editing when a schema republishes the same control id
   expect(
     (screen.getByLabelText("Tint color value") as HTMLInputElement).value,
   ).toBe("#abcdef");
+});
+
+it("renders the standalone spring curve for a normal value, with and without mass", () => {
+  const view = render(<SpringPreview value={{ damping: 12, stiffness: 180, mass: 2 }} />);
+  expect(view.container.firstChild).not.toBeNull();
+  view.rerender(<SpringPreview value={{ damping: 12, stiffness: 180 }} />);
+  expect(view.container.firstChild).not.toBeNull();
 });

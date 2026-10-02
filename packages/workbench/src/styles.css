@@ -40,11 +40,11 @@
   --wb-text-muted: rgba(0, 0, 0, 0.35);
 
   /* Accent */
-  --wb-accent: #6d4aff;
-  --wb-accent-hover: #5b38ee;
+  --wb-accent: #015abe;
+  --wb-accent-hover: #014a9d;
   --wb-accent-contrast: #ffffff;
-  --wb-accent-soft: rgba(109, 74, 255, 0.12);
-  --wb-accent-text: #5a3de0;
+  --wb-accent-soft: rgba(1, 90, 190, 0.10);
+  --wb-accent-text: #015abe;
 
   /* Status dots */
   --wb-success: #1f9d57;
@@ -64,7 +64,7 @@
   --wb-device-border: #2b2b2d;
   --wb-device-outline: #505055;
   --wb-device-bg: #080809;
-  --wb-device-glow: rgba(118, 111, 255, 0.12);
+  --wb-device-glow: rgba(1, 90, 190, 0.12);
   --wb-device-shadow: rgba(0, 0, 0, 0.52);
   --wb-device-text: #f2f2f3;
   --wb-device-eyebrow: #73737a;
@@ -91,11 +91,11 @@
   --wb-text-muted: rgba(255, 255, 255, 0.4);
 
   /* Accent */
-  --wb-accent: #7c5cff;
-  --wb-accent-hover: #8b6eff;
+  --wb-accent: #015abe;
+  --wb-accent-hover: #0a6bd8;
   --wb-accent-contrast: #ffffff;
-  --wb-accent-soft: rgba(124, 92, 255, 0.14);
-  --wb-accent-text: #9b8cff;
+  --wb-accent-soft: rgba(1, 90, 190, 0.24);
+  --wb-accent-text: #6fb0ff;
 
   /* Status dots */
   --wb-success: #38c878;
@@ -210,6 +210,10 @@ button {
   white-space: nowrap;
 }
 
+.wb-pill.emphasis {
+  color: var(--wb-text);
+}
+
 .wb-pill[data-dot]::before {
   content: "";
   width: 6px;
@@ -228,12 +232,53 @@ button {
 }
 
 .workbench {
+  /* Timeline height; `App.tsx` overrides it inline once the user drags the split handle. */
+  --wb-timeline-h: clamp(240px, 36vh, 520px);
+  position: relative;
   height: 100vh;
   min-height: 620px;
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr) minmax(300px, 44vh);
+  grid-template-rows: 44px minmax(0, 1fr) var(--wb-timeline-h);
   overflow: hidden;
   background: var(--wb-bg);
+}
+
+/* Resize handle: a 9px hit area centred on the seam, out of the grid flow (no row of its own). */
+.split-handle {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  bottom: var(--wb-timeline-h);
+  height: 9px;
+  transform: translateY(50%);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.split-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--wb-text-muted);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: opacity 100ms ease;
+}
+
+.split-handle:hover::after,
+.split-handle:focus-visible::after,
+.split-handle[data-dragging]::after {
+  opacity: 1;
+}
+
+.split-handle:focus-visible {
+  outline: none;
 }
 
 /* One bar: in the desktop shell it is the window title bar (hiddenInset traffic lights). */
@@ -292,6 +337,15 @@ button {
 
 .connection {
   text-transform: capitalize;
+}
+
+/* The theme toggle is the quietest control in the header. */
+.wb-button.theme-toggle {
+  color: var(--wb-text-muted);
+}
+
+.wb-button.theme-toggle:where(:hover:not(:disabled)) {
+  color: var(--wb-text-secondary);
 }
 
 .workspace {
@@ -367,16 +421,6 @@ button {
   background-size: 24px 24px;
 }
 
-.stage-note {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font: var(--wb-type-small);
-  color: var(--wb-text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .stage-controls {
   flex: 0 1 auto;
   min-width: 0;
@@ -412,14 +456,6 @@ button {
   cursor: default;
 }
 
-.capture-status {
-  flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font: var(--wb-type-mono);
-  font-variant-numeric: tabular-nums;
-}
-
 .runtime-surface {
   position: relative;
   min-height: 0;
@@ -429,7 +465,7 @@ button {
 .runtime-surface.attached {
   display: grid;
   place-items: center;
-  padding: 18px;
+  padding: 16px 18px;
 }
 
 .device-placeholder {
@@ -438,14 +474,15 @@ button {
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: 28px;
+  padding: 16px 28px;
   overflow: hidden;
 }
 
 .device-screen {
-  width: min(290px, 42%);
+  /* The full stage height (minus the surface's 16px padding); the width follows the aspect ratio. */
+  height: calc(100vh - var(--wb-timeline-h) - 44px - 32px);
+  max-width: 100%;
   min-width: 230px;
-  max-height: 100%;
   overflow: hidden;
   aspect-ratio: 9 / 19.5;
   border-radius: 38px;
@@ -501,7 +538,7 @@ button {
 .runtime-video {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - max(300px, 44vh) - 80px);
+  max-height: calc(100vh - var(--wb-timeline-h) - 44px - 32px);
   object-fit: contain;
   background: var(--wb-video-bg);
 }
@@ -509,7 +546,7 @@ button {
 .runtime-framebuffer-shell {
   position: relative;
   height: 100%;
-  max-height: calc(100vh - max(300px, 44vh) - 80px);
+  max-height: calc(100vh - var(--wb-timeline-h) - 44px - 32px);
   max-width: 100%;
   display: grid;
   place-items: center;
@@ -659,7 +696,7 @@ button {
   min-height: 0;
   display: grid;
   grid-template-rows: var(--dial-timeline-header-h) minmax(0, 1fr);
-  border-top: 1px solid var(--wb-border);
+  border-top: 1px solid var(--wb-border-subtle);
   background: var(--wb-surface);
   color: var(--wb-text-secondary);
 }
@@ -745,6 +782,15 @@ button {
   padding: 8px;
   background: var(--wb-surface);
   box-shadow: var(--dial-shadow);
+}
+
+/* Non-interactive first line of the menu: the capture's resolution, rates and source. */
+.timeline-dev-info {
+  padding: 2px 4px 4px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .timeline-dev-menu > button {
@@ -846,7 +892,7 @@ button {
 
 .control-inspector-kind {
   margin-top: 3px;
-  color: var(--wb-text-muted);
+  color: var(--wb-text-secondary);
   font: var(--wb-type-small);
 }
 
@@ -1118,6 +1164,36 @@ button {
   background: var(--motion-clip-fill-hover);
 }
 
+/* Springs read as the same neutral bar with a hint of accent; timing bars stay plain. */
+.motion-bar.spring:not([data-selected]) {
+  background: color-mix(in srgb, var(--motion-clip-fill) 86%, var(--wb-accent) 14%);
+}
+
+.motion-bar.spring:not([data-selected]):hover {
+  background: color-mix(in srgb, var(--motion-clip-fill-hover) 86%, var(--wb-accent) 14%);
+}
+
+/* Delay lead-in: call time (dot) to bar start, under the bar. */
+.motion-lead-in {
+  position: absolute;
+  top: 50%;
+  height: 0;
+  border-top: 1px dashed var(--wb-text-muted);
+  pointer-events: none;
+}
+
+.motion-lead-in::before {
+  content: "";
+  position: absolute;
+  top: -0.5px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--wb-text-muted);
+  transform: translate(-50%, -50%);
+}
+
 /* The selected bar is the one accent-filled element in the timeline body. */
 .motion-bar[data-selected] {
   background: var(--wb-accent);
@@ -1250,9 +1326,9 @@ button {
 
 .animation-inspector-head {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 0;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--wb-border-subtle);
 }
@@ -1262,10 +1338,19 @@ button {
   font: var(--wb-type-title);
 }
 
-.animation-inspector-kind {
+.animation-inspector-summary {
   margin-top: 3px;
-  color: var(--wb-text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  color: var(--wb-text-secondary);
   font: var(--wb-type-small);
+}
+
+.animation-inspector-numbers {
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .animation-inspector-section {
@@ -1297,10 +1382,43 @@ button {
   white-space: nowrap;
 }
 
+.animation-inspector-source {
+  border-bottom: 0;
+}
+
+.animation-inspector-location {
+  overflow: hidden;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.animation-source-details > summary {
+  list-style: none;
+  user-select: none;
+}
+
+.animation-source-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.animation-source-details[open] > summary {
+  background: var(--wb-surface-raised);
+}
+
+.wb-button.animation-source-toggle {
+  height: 22px;
+  margin: 6px 0 0 -8px;
+  padding: 0 8px;
+  font: var(--wb-type-small);
+}
+
 .animation-source-expression {
   display: block;
   max-height: 82px;
-  margin-top: 7px;
+  margin-top: 6px;
   overflow: auto;
   padding: 7px;
   border: 1px solid var(--wb-border);

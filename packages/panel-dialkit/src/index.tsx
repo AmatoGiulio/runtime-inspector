@@ -1,4 +1,8 @@
-export { InspectorControlRow, type InspectorControlProps } from "./controls";
+export {
+  InspectorControlRow,
+  SpringPreview,
+  type InspectorControlProps,
+} from "./controls";
 export {
   ConnectionBadge,
   InspectorPanel,

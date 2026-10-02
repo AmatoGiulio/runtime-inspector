@@ -337,6 +337,21 @@ function SpringEditor({
   );
 }
 
+/** DialKit's spring curve on its own, for hosts that draw it outside a spring control. */
+export function SpringPreview({ value }: { value: SpringValue }) {
+  return (
+    <SpringVisualization
+      spring={{
+        type: "spring",
+        stiffness: value.stiffness,
+        damping: value.damping,
+        mass: value.mass ?? 1,
+      }}
+      isSimpleMode={false}
+    />
+  );
+}
+
 const BEZIER_FIELDS = [
   { label: "x1", range: [0, 1] },
   { label: "y1", range: [-1, 2] },
