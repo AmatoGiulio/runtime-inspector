@@ -252,7 +252,8 @@ describe("runtime-inspector babel plugin", () => {
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "spring"');
-    expect(normalized).toContain('configControlId: "spring"');
+    expect(normalized).toContain("config: { damping: 14, stiffness: 180 }");
+    expect(normalized).not.toContain('configControlId: "spring"');
   });
 
   it("associates annotated shared values with the auto schema", () => {
@@ -294,7 +295,9 @@ describe("runtime-inspector babel plugin", () => {
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain("__riObserveAnimation(withSpring(card.$targets.moveX, spring)");
     expect(normalized).toContain('configControlId: "spring"');
-    expect(normalized.match(/withSpring\(card\.\$targets\.moveX, spring\)/g)).toHaveLength(1);
+    expect(
+      normalized.match(/__riObserveAnimation\(withSpring\(card\.\$targets\.moveX, spring\)/g)
+    ).toHaveLength(1);
   });
 
   it("does not instrument assignments inside known UI-runtime callbacks", () => {
