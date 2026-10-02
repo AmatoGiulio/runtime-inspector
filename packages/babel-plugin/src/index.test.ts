@@ -205,6 +205,100 @@ describe("runtime-inspector babel plugin", () => {
       '__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, label: "moveX" })'
     );
   });
+
+  it("auto-wraps a direct withTiming assignment and associates its useInspector schema", () => {
+    const code = transformWithOpts(
+      `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { withTiming } from "react-native-reanimated";
+      function Card() {
+        const card = useInspector("card-transition", { moveX: { value: 0, min: -120, max: 120 } });
+        function replay() {
+          card.moveX.value = withTiming(-110, { duration: 260 });
+        }
+        return replay;
+      }
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain("__riWithTiming");
+    expect(normalized).toContain('schemaId: "card-transition"');
+    expect(normalized).toContain('target: "card.moveX"');
+    expect(normalized).toContain('animationKind: "timing"');
+    expect(normalized).toContain('file: "src/Card.tsx"');
+    expect(normalized).toContain('expression: "withTiming(-110, { duration: 260 })"');
+  });
+
+  it("auto-wraps a direct withSpring assignment", () => {
+    const code = transformWithOpts(
+      `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { withSpring } from "react-native-reanimated";
+      function Card() {
+        const card = useInspector("card-transition", { moveX: { value: 0, min: -120, max: 120 } });
+        card.moveX.value = withSpring(0, { damping: 14, stiffness: 180 });
+        return card;
+      }
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain("__riWithSpring");
+    expect(normalized).toContain('schemaId: "card-transition"');
+    expect(normalized).toContain('target: "card.moveX"');
+    expect(normalized).toContain('animationKind: "spring"');
+  });
+
+  it("associates annotated shared values with the auto schema", () => {
+    const code = transformWithOpts(
+      `
+      import { useSharedValue, withTiming } from "react-native-reanimated";
+      // @inspect min=0 max=1
+      const opacity = useSharedValue(0);
+      opacity.value = withTiming(1, { duration: 180 });
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain("__riInspect");
+    expect(normalized).toContain("__riWithTiming");
+    expect(normalized).toContain('schemaId: "auto"');
+    expect(normalized).toContain('target: "opacity"');
+  });
+
+  it("leaves animation calls with an explicit callback untouched in the first spike", () => {
+    const code = transformWithOpts(
+      `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { withTiming } from "react-native-reanimated";
+      const card = useInspector("card-transition", { moveX: { value: 0, min: -120, max: 120 } });
+      card.moveX.value = withTiming(-110, { duration: 260 }, () => console.log("done"));
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    expect(code).not.toContain("__riWithTiming");
+    expect(code).toContain("withTiming(-110");
+  });
+
+  it("does not instrument animation primitives in the runtime SDK itself", () => {
+    const code = transformWithOpts(
+      `
+      import { withTiming } from "react-native-reanimated";
+      value.value = withTiming(1, { duration: 200 });
+    `,
+      {
+        filename: "/repo/packages/runtime-react-native/src/internal.ts",
+        root: "/repo"
+      }
+    );
+
+    expect(code).not.toContain("__riWithTiming");
+  });
 });
 
 const SOURCE_IMPORT = "@runtime-inspector/react-native";
