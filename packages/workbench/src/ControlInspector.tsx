@@ -9,6 +9,7 @@ interface ControlInspectorProps {
   value: unknown;
   stale: boolean;
   session: Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger">;
+  theme: "light" | "dark";
   onApplySource(): void;
 }
 
@@ -18,6 +19,7 @@ export function ControlInspector({
   value,
   stale,
   session,
+  theme,
   onApplySource
 }: ControlInspectorProps) {
   const sourceBacked = "source" in control && Boolean(control.source);
@@ -37,7 +39,7 @@ export function ControlInspector({
       ) : null}
 
       <div className="control-editor">
-        <DialKitScope>
+        <DialKitScope theme={theme}>
           <InspectorControlRow
             session={session}
             schemaId={schemaId}

@@ -1,8 +1,4 @@
 import type { ReactNode } from "react";
-import type { InspectorPanelTheme } from "@runtime-inspector/panel-dialkit";
-
-/** Single switch for the DialKit theme used by every shared control row in the Workbench. */
-export const DIALKIT_THEME: InspectorPanelTheme = "dark";
 
 /**
  * The minimum DialKit markup that `InspectorControlRow` needs around it: the
@@ -11,10 +7,11 @@ export const DIALKIT_THEME: InspectorPanelTheme = "dark";
  * mirrors `InspectorPanel` in `panel-dialkit` without its root folder chrome.
  */
 export function DialKitScope({
-  theme = DIALKIT_THEME,
+  theme,
   children
 }: {
-  theme?: InspectorPanelTheme;
+  /** The Workbench's resolved theme; DialKit's own `system` mode is never used here. */
+  theme: "light" | "dark";
   children: ReactNode;
 }) {
   return (

@@ -30,6 +30,7 @@ import {
   timelineOriginMs
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
+import { themeChoiceLabel, useWorkbenchTheme } from "./theme";
 import "@runtime-inspector/panel-dialkit/styles.css";
 import "./styles.css";
 
@@ -75,6 +76,8 @@ interface ViewportBenchmarkResult {
 }
 
 function App() {
+  const { choice: themeChoice, resolved: resolvedTheme, cycle: cycleTheme } = useWorkbenchTheme();
+  const themeLabel = themeChoiceLabel(themeChoice);
   const state = useSyncExternalStore(session.subscribe, session.getState);
   const schemaIds = useMemo(
     () =>
@@ -945,6 +948,16 @@ function App() {
           </button>
         </div>
 
+        <button
+          type="button"
+          className="topbar-toggle theme-toggle"
+          onClick={cycleTheme}
+          title={`Theme: ${themeLabel}`}
+          aria-label={`Theme: ${themeLabel}`}
+        >
+          {themeLabel}
+        </button>
+
         <div className="connection" data-status={state.status}>
           <span className="dot" />
           {state.status}
@@ -1142,6 +1155,7 @@ function App() {
               playheadMs={playheadMs}
               controls={animationInspectorControls}
               session={animationSession}
+              theme={resolvedTheme}
             />
             ) : (
               <Empty text="Waiting for the next matching animation…" />
@@ -1153,6 +1167,7 @@ function App() {
               value={selectedControlValue}
               stale={selectedSchemaStale}
               session={session}
+              theme={resolvedTheme}
               onApplySource={() => session.applySource(schemaId, [selectedControl.id])}
             />
           ) : selectedProbe ? (

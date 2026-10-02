@@ -21,6 +21,7 @@ interface AnimationInspectorProps {
   /** Editable parameters (delay, duration, spring literals, config control), in display order. */
   controls: AnimationInspectorControl[];
   session: Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger">;
+  theme: "light" | "dark";
 }
 
 export function AnimationInspector({
@@ -28,7 +29,8 @@ export function AnimationInspector({
   originMs,
   playheadMs,
   controls,
-  session
+  session,
+  theme
 }: AnimationInspectorProps) {
   const startMs = animation.startedAtRuntimeMs - originMs;
   const durationMs =
@@ -99,7 +101,7 @@ export function AnimationInspector({
       {controls.length > 0 ? (
         <div className="animation-inspector-section">
           <div className="animation-inspector-section-title">Parameters</div>
-          <DialKitScope>
+          <DialKitScope theme={theme}>
             {controls.map((entry) => (
               <InspectorControlRow
                 key={`${animation.callsiteId}:${entry.key}`}
