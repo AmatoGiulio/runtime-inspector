@@ -458,7 +458,7 @@ function isInsideKnownWorkletContext(path: NodePath): boolean {
     ) {
       if (
         current.node.body.type === "BlockStatement" &&
-        current.node.body.directives.some(
+        (current.node.body.directives ?? []).some(
           (directive) => directive.value.value === "worklet"
         )
       ) {
