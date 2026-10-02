@@ -193,6 +193,12 @@ describe("Runtime Inspector protocol 0.3 broker rules", () => {
         clientId: "runtime-trigger"
       })
     );
+    runtime.send(
+      JSON.stringify({
+        type: "schema.publish",
+        schema: { id: "test-schema", title: "Test", groups: [] }
+      })
+    );
     await wait(30);
 
     const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
@@ -243,6 +249,85 @@ describe("Runtime Inspector protocol 0.3 broker rules", () => {
     expect(lateMessages.some((message) => message.type === "control.trigger")).toBe(false);
   });
 
+  it("routes a schema-scoped trigger to exactly one owning runtime session", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    const schemas = [
+      ["runtime-auto", "auto"],
+      ["runtime-backdrop", "backdrop"],
+      ["runtime-card", "card-transition"]
+    ] as const;
+
+    const runtimes: Array<{
+      socket: WebSocket;
+      messages: Array<{ type?: string; schemaId?: string }>;
+    }> = [];
+
+    for (const [clientId, schemaId] of schemas) {
+      const socket = await openSocket(`ws://127.0.0.1:${broker.port}`);
+      const messages: Array<{ type?: string; schemaId?: string }> = [];
+      socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+      socket.send(
+        JSON.stringify({
+          type: "handshake.hello",
+          protocolVersion: "0.3",
+          role: "runtime",
+          clientId
+        })
+      );
+      socket.send(
+        JSON.stringify({
+          type: "schema.publish",
+          schema: { id: schemaId, title: schemaId, groups: [] }
+        })
+      );
+      runtimes.push({ socket, messages });
+    }
+
+    await wait(40);
+
+    const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
+    panel.send(
+      JSON.stringify({
+        type: "handshake.hello",
+        protocolVersion: "0.3",
+        role: "panel",
+        clientId: "panel-route-target"
+      })
+    );
+    await wait(30);
+
+    panel.send(
+      JSON.stringify({
+        type: "control.trigger",
+        schemaId: "card-transition",
+        controlId: "replay",
+        source: "panel"
+      })
+    );
+    await wait(50);
+
+    expect(
+      runtimes[0].messages.filter((message) => message.type === "control.trigger")
+    ).toHaveLength(0);
+    expect(
+      runtimes[1].messages.filter((message) => message.type === "control.trigger")
+    ).toHaveLength(0);
+    expect(
+      runtimes[2].messages.filter(
+        (message) =>
+          message.type === "control.trigger" &&
+          message.schemaId === "card-transition"
+      )
+    ).toHaveLength(1);
+
+    panel.close();
+    for (const runtime of runtimes) {
+      runtime.socket.close();
+    }
+  });
+
   it("forwards control.commit to the runtime like a patch, without caching", async () => {
     broker = startBroker({ port: 0 });
     await waitForBrokerPort(broker);
@@ -256,6 +341,12 @@ describe("Runtime Inspector protocol 0.3 broker rules", () => {
         protocolVersion: "0.3",
         role: "runtime",
         clientId: "runtime-commit"
+      })
+    );
+    runtime.send(
+      JSON.stringify({
+        type: "schema.publish",
+        schema: { id: "test-schema", title: "Test", groups: [] }
       })
     );
     await wait(30);
@@ -789,6 +880,13 @@ describe("Runtime Inspector recording transport (RFC 0005 M0)", () => {
         clientId: "runtime-record"
       })
     );
+    runtime.send(
+      JSON.stringify({
+        type: "schema.publish",
+        schema: { id: "card-transition", title: "Card", groups: [] }
+      })
+    );
+    await wait(20);
 
     const panel = await openSocket(`ws://127.0.0.1:${broker.port}`);
     const panelMessages: Array<{ type?: string }> = [];
