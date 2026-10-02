@@ -27,18 +27,40 @@ button {
   height: 100vh;
   min-height: 620px;
   display: grid;
-  grid-template-rows: 46px minmax(0, 1fr) minmax(300px, 44vh);
+  grid-template-rows: 44px minmax(0, 1fr) minmax(300px, 44vh);
   overflow: hidden;
   background: #111113;
 }
 
+/* One bar: in the desktop shell it is the window title bar (hiddenInset traffic lights). */
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  height: 44px;
   padding: 0 14px;
   border-bottom: 1px solid #2a2a2d;
   background: #18181a;
+}
+
+.workbench.desktop .topbar {
+  padding-left: 84px;
+  -webkit-app-region: drag;
+}
+
+.workbench.desktop .topbar :is(button, select, input, a, label) {
+  -webkit-app-region: no-drag;
+}
+
+.topbar-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.brand {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .brand {
@@ -48,7 +70,8 @@ button {
 }
 
 .topbar-toggle {
-  margin: 0 auto 0 14px;
+  flex: 0 0 auto;
+  margin: 0;
   border: 0;
   border-radius: 5px;
   padding: 4px 9px;
@@ -75,15 +98,17 @@ button {
 }
 
 .notice {
-  max-width: 52vw;
+  min-width: 0;
+  max-width: 28vw;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #c98d8d;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .connection {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -129,8 +154,7 @@ button {
   border-left: 1px solid #2a2a2d;
 }
 
-.panel-title,
-.stage-toolbar {
+.panel-title {
   height: 34px;
   display: flex;
   align-items: center;
@@ -187,7 +211,7 @@ button {
 .runtime-stage {
   position: relative;
   display: grid;
-  grid-template-rows: 34px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -198,30 +222,27 @@ button {
   background-size: 24px 24px;
 }
 
-.stage-toolbar {
-  justify-content: space-between;
-  background: rgba(24, 24, 26, 0.94);
-}
-
-.stage-toolbar-title {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .stage-note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
   font-weight: 450;
   color: #65656a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-controls {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 7px;
 }
 
 .simulator-select {
+  min-width: 0;
   max-width: 290px;
   height: 24px;
   border: 1px solid #36363a;
@@ -230,7 +251,7 @@ button {
   color: #c7c7cc;
   background: #202023;
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   outline: none;
 }
 
@@ -248,9 +269,11 @@ button {
 }
 
 .stage-action {
+  flex: 0 0 auto;
   height: 24px;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .stage-action:hover:not(:disabled),
@@ -266,12 +289,13 @@ button {
 }
 
 .capture-status {
+  flex: 0 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: #77777d;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 450;
   white-space: nowrap;
   overflow: hidden;
@@ -373,7 +397,7 @@ button {
 
 .runtime-video-shell.device-crop {
   height: 100%;
-  max-height: calc(100vh - max(300px, 44vh) - 110px);
+  max-height: calc(100vh - max(300px, 44vh) - 80px);
   width: auto;
   border-radius: 32px;
   background: #000;
@@ -382,7 +406,7 @@ button {
 .runtime-video {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - max(300px, 44vh) - 110px);
+  max-height: calc(100vh - max(300px, 44vh) - 80px);
   object-fit: contain;
   background: #050506;
 }
@@ -390,7 +414,7 @@ button {
 .runtime-framebuffer-shell {
   position: relative;
   height: 100%;
-  max-height: calc(100vh - max(300px, 44vh) - 110px);
+  max-height: calc(100vh - max(300px, 44vh) - 80px);
   max-width: 100%;
   display: grid;
   place-items: center;
@@ -440,6 +464,7 @@ button {
 }
 
 .input-status {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   height: 24px;
@@ -448,8 +473,9 @@ button {
   border-radius: 6px;
   background: #182a20;
   color: #76d49e;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 560;
+  white-space: nowrap;
 }
 
 .input-status.pending {
@@ -905,173 +931,24 @@ button {
   border-bottom: 1px solid #252528;
 }
 
-.control-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.control-subfield {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.control-value-row,
-.control-color-row,
-.control-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.control-value-row > span {
-  color: #85858b;
-  font-size: 10px;
-}
-
-.control-number,
-.control-text {
+/* Shared DialKit rows (panel-dialkit) inside the Inspector column. */
+.ri-workbench-dialkit,
+.ri-workbench-dialkit .dialkit-panel,
+.ri-workbench-dialkit .dialkit-panel-wrapper {
+  width: 100%;
   min-width: 0;
-  height: 26px;
-  border: 1px solid #343438;
-  border-radius: 6px;
-  outline: none;
-  color: #d7d7db;
-  background: #202023;
-  font: inherit;
-  font-size: 10px;
+  max-width: 100%;
 }
 
-.control-number {
-  width: 82px;
-  padding: 0 7px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.control-text {
-  width: 100%;
-  padding: 0 8px;
-}
-
-.control-number:focus,
-.control-text:focus {
-  border-color: #5b5b63;
-}
-
-.control-range {
-  width: 100%;
-  accent-color: #8f80ff;
-}
-
-.control-range-ends {
+.ri-workbench-dialkit-rows {
   display: flex;
-  justify-content: space-between;
-  color: #55555b;
-  font-size: 8px;
-  font-variant-numeric: tabular-nums;
+  flex-direction: column;
+  gap: var(--dial-row-gap);
+  min-width: 0;
 }
 
-.control-toggle {
-  width: 100%;
-  height: 34px;
-  border: 0;
-  padding: 0;
-  color: #85858b;
-  background: transparent;
-  cursor: pointer;
-  font-size: 10px;
-}
-
-.control-toggle-track {
-  width: 32px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  padding: 2px;
-  border-radius: 999px;
-  background: #35353a;
-  transition: background 120ms ease;
-}
-
-.control-toggle-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: #b7b7bc;
-  transition: transform 120ms ease, background 120ms ease;
-}
-
-.control-toggle.active .control-toggle-track {
-  background: #6053cf;
-}
-
-.control-toggle.active .control-toggle-thumb {
-  transform: translateX(14px);
-  background: #fff;
-}
-
-.control-color-row {
-  justify-content: flex-start;
-}
-
-.control-color {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  border: 1px solid #343438;
-  border-radius: 6px;
-  padding: 2px;
-  background: #202023;
-}
-
-.bezier-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.bezier-grid label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  color: #77777d;
-  font-size: 9px;
-}
-
-.bezier-grid .control-number {
-  width: 66px;
-}
-
-.control-trigger,
-.control-apply {
-  width: 100%;
-  height: 30px;
-  border: 1px solid #37373c;
-  border-radius: 7px;
-  color: #d8d8dc;
-  background: #242427;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.control-trigger:hover:not(:disabled),
-.control-apply:hover:not(:disabled) {
-  background: #2b2b30;
-}
-
-.control-trigger:disabled,
-.control-apply:disabled,
-.control-number:disabled,
-.control-text:disabled,
-.control-range:disabled,
-.control-toggle:disabled,
-.control-color:disabled {
-  opacity: 0.45;
-  cursor: default;
+.inspector {
+  overflow-x: hidden;
 }
 
 .control-meta {
@@ -1095,13 +972,6 @@ button {
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.control-apply {
-  margin-top: 4px;
-  border-color: #3f3a67;
-  color: #c9c3ff;
-  background: #242038;
 }
 
 .timeline-body {
@@ -1227,6 +1097,8 @@ button {
 
 .motion-timeline {
   --motion-label-width: 240px;
+  /* Empty trailing column so the playhead pill can overhang the ruler's right edge unclipped. */
+  --motion-edge-gutter: 28px;
   min-height: 100%;
   display: flex;
   flex-direction: column;
@@ -1256,7 +1128,8 @@ button {
 .motion-group-row,
 .motion-row {
   display: grid;
-  grid-template-columns: var(--motion-label-width) minmax(0, 1fr);
+  grid-template-columns:
+    var(--motion-label-width) minmax(0, 1fr) var(--motion-edge-gutter);
 }
 
 /* Ruler */
@@ -1268,6 +1141,7 @@ button {
   height: 32px;
   border-bottom: 1px solid #29292c;
   background: #151517;
+  overflow: visible;
 }
 
 .motion-ruler-label {
@@ -1283,6 +1157,7 @@ button {
 
 .motion-ruler {
   position: relative;
+  z-index: 1;
   min-width: 0;
   cursor: ew-resize;
   touch-action: none;
@@ -1548,7 +1423,7 @@ button {
   position: absolute;
   z-index: 8;
   top: 0;
-  right: 0;
+  right: var(--motion-edge-gutter);
   bottom: 0;
   left: var(--motion-label-width);
   pointer-events: none;
@@ -1581,10 +1456,13 @@ button {
   background: #ff4d6a;
 }
 
+/* Centered on the line at every position; overhangs the ruler at 0% / 100%. */
 .motion-playhead-pill {
   position: absolute;
+  z-index: 2;
   top: calc(50% - 9px);
   left: 0;
+  transform: translateX(-50%);
   height: 18px;
   border-radius: 9px;
   padding: 0 7px;
@@ -1704,53 +1582,6 @@ button {
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.animation-spring-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.animation-spring-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.animation-spring-field > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.animation-spring-field span {
-  color: #85858b;
-  font-size: 9px;
-}
-
-.animation-spring-field input[type="number"] {
-  width: 76px;
-  height: 24px;
-  border: 1px solid #343438;
-  border-radius: 5px;
-  padding: 0 6px;
-  outline: none;
-  color: #d7d7db;
-  background: #202023;
-  font: inherit;
-  font-size: 9px;
-  text-align: right;
-}
-
-.animation-spring-field input[type="range"] {
-  width: 100%;
-  accent-color: #65b98d;
-}
-
-.animation-spring-field input:disabled {
-  opacity: 0.45;
 }
 
 .animation-inspector-note {

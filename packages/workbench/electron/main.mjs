@@ -99,6 +99,8 @@ async function createWindow(rendererUrl) {
     minHeight: 700,
     title: "Runtime Inspector Workbench",
     backgroundColor: "#111113",
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 15 },
     show: false,
     webPreferences: {
       preload: path.join(here, "preload.cjs"),

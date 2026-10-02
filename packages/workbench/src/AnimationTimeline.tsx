@@ -495,11 +495,8 @@ export function AnimationTimeline({
               aria-hidden="true"
               style={{ left: `${playheadPercent}%` }}
             >
-              {/* Slides from left-aligned (0%) to right-aligned (100%) so the pill never leaves the ruler. */}
-              <span
-                className="motion-playhead-pill"
-                style={{ transform: `translateX(-${playheadPercent}%)` }}
-              >
+              {/* Always centered on the playhead line; it overflows the ruler edges at 0% / 100%. */}
+              <span className="motion-playhead-pill">
                 {formatSeconds(displayPlayheadMs)}
               </span>
             </span>

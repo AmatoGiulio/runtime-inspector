@@ -9,13 +9,18 @@ import {
 import { createRoot } from "react-dom/client";
 import {
   createPanelSession,
+  type PanelSession,
   type RuntimeAnimationTrace
 } from "@runtime-inspector/panel-core";
 import type {
-  RuntimeProbeDescriptor,
-  SpringValue
+  InspectorControl,
+  PanelSchema,
+  RuntimeProbeDescriptor
 } from "@runtime-inspector/protocol";
-import { AnimationInspector, type AnimationField } from "./AnimationInspector";
+import {
+  AnimationInspector,
+  type AnimationInspectorControl
+} from "./AnimationInspector";
 import { AnimationTimeline } from "./AnimationTimeline";
 import {
   buildTimelineModel,
@@ -25,6 +30,7 @@ import {
   timelineOriginMs
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
+import "@runtime-inspector/panel-dialkit/styles.css";
 import "./styles.css";
 
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
@@ -409,80 +415,92 @@ function App() {
         (animation) => animation.instanceId === selectedAnimationId
       )
     : undefined;
-  const selectedAnimationConfigControlId =
-    selectedAnimation?.configControlId;
-  const selectedAnimationConfigControl =
-    selectedAnimationConfigControlId && selectedControlSchema
-      ? selectedControlSchema.groups
-          .flatMap((group) => group.controls)
-          .find((control) => control.id === selectedAnimationConfigControlId)
-      : undefined;
-  const selectedAnimationSpringControl =
-    selectedAnimationConfigControl?.kind === "spring"
-      ? selectedAnimationConfigControl
-      : undefined;
-  const selectedAnimationSpringValue =
-    schemaId && selectedAnimationSpringControl
-      ? asSpringValue(
-          state.values[schemaId]?.[selectedAnimationSpringControl.id] ??
-            selectedAnimationSpringControl.value ??
-            selectedAnimationSpringControl.defaultValue
-        )
-      : undefined;
+  // Own schema first; the Outline-selected schema only stands in when the animation names none.
+  const animationFallbackSchemaId = selectedAnimation?.schemaId ? undefined : schemaId;
+  const selectedAnimationCallsiteId = selectedAnimation?.callsiteId;
+  /**
+   * Real schema controls (relabeled where needed) behind the selected animation's parameters.
+   * `InspectorControlRow` remounts its editor when the `control` identity changes, so these
+   * copies are rebuilt only when the schemas or the selected call site change, never per
+   * render and never per run of the same call site.
+   */
+  const animationControlEntries = useMemo(() => {
+    const animation = selectedAnimation;
+    if (!animation) return [];
 
-  const selectedAnimationFields: AnimationField[] = [];
-  let selectedAnimationFieldsStale = false;
-  if (selectedAnimation) {
-    const candidates = [
-      {
-        key: "delay",
-        label: "Delay",
-        unit: "ms" as string | undefined,
-        control: startControl(selectedAnimation, state.schemas, state.values)
-      },
-      ...(
-        [
-          ["duration", "Duration", "ms"],
-          ["damping", "Damping", undefined],
-          ["stiffness", "Stiffness", undefined],
-          ["mass", "Mass", undefined]
-        ] as const
-      ).map(([key, label, unit]) => ({
-        key: key as string,
-        label,
-        unit: unit as string | undefined,
-        control: parameterControl(
-          selectedAnimation,
-          key,
-          state.schemas,
-          state.values
-        )
-      }))
-    ];
-
-    for (const { key, label, unit, control } of candidates) {
-      if (!control) continue;
-      if (state.staleSchemaIds[control.schemaId]) {
-        selectedAnimationFieldsStale = true;
-      }
-      selectedAnimationFields.push({
-        key,
-        label,
-        unit,
-        min: control.min,
-        max: control.max,
-        step: control.step,
-        value: control.value,
-        onSet: (value) =>
-          session.setValue(control.schemaId, control.controlId, value),
-        onCommit: () => {
-          queueAnimationSelectionRestore(selectedAnimation);
-          session.commitValue(control.schemaId, control.controlId);
-          replay(true);
-        }
+    const refs: Array<{
+      key: string;
+      label?: string;
+      schemaId: string;
+      controlId: string;
+    }> = [];
+    if (animation.startControl) {
+      refs.push({ key: "delay", label: "Delay", ...animation.startControl });
+    }
+    for (const [key, label] of ANIMATION_PARAMETER_LABELS) {
+      const ref = animation.parameterControls?.[key];
+      if (ref) refs.push({ key, label, ...ref });
+    }
+    const configSchemaId = animation.schemaId ?? animationFallbackSchemaId;
+    if (animation.configControlId && configSchemaId) {
+      refs.push({
+        key: `config:${animation.configControlId}`,
+        schemaId: configSchemaId,
+        controlId: animation.configControlId
       });
     }
-  }
+
+    const entries: Array<{ key: string; schemaId: string; control: InspectorControl }> = [];
+    for (const ref of refs) {
+      const control = findSchemaControl(state.schemas, ref.schemaId, ref.controlId);
+      if (!control) continue;
+      entries.push({
+        key: ref.key,
+        schemaId: ref.schemaId,
+        control:
+          ref.label === undefined
+            ? control
+            : ({ ...control, label: ref.label } as InspectorControl)
+      });
+    }
+    return entries;
+    // The refs are per call site; later runs of the same call site must keep these identities.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.schemas, selectedAnimationCallsiteId, animationFallbackSchemaId]);
+  const animationInspectorControls: AnimationInspectorControl[] =
+    animationControlEntries.map((entry) => ({
+      ...entry,
+      value: state.values[entry.schemaId]?.[entry.control.id],
+      disabled: Boolean(state.staleSchemaIds[entry.schemaId])
+    }));
+  const animationActionsRef = useRef({
+    animation: selectedAnimation,
+    queueRestore: queueAnimationSelectionRestore,
+    replay
+  });
+  animationActionsRef.current = {
+    animation: selectedAnimation,
+    queueRestore: queueAnimationSelectionRestore,
+    replay
+  };
+  /** Forwards to the real session; a commit also restores the selection and replays once. */
+  const animationSession = useMemo<
+    Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger">
+  >(
+    () => ({
+      setValue: (schemaId, controlId, value) =>
+        session.setValue(schemaId, controlId, value),
+      fireTrigger: (schemaId, controlId) =>
+        session.fireTrigger(schemaId, controlId),
+      commitValue: (schemaId, controlId) => {
+        const { animation, queueRestore, replay } = animationActionsRef.current;
+        if (animation) queueRestore(animation);
+        session.commitValue(schemaId, controlId);
+        replay(true);
+      }
+    }),
+    []
+  );
 
   useEffect(() => {
     const pending = pendingAnimationSelectionRef.current;
@@ -850,7 +868,7 @@ function App() {
   }
 
   return (
-    <main className="workbench">
+    <main className={window.runtimeDesktop ? "workbench desktop" : "workbench"}>
       <header className="topbar">
         <div className="brand">Runtime Inspector</div>
         <button
@@ -862,6 +880,71 @@ function App() {
           Controls
         </button>
         {state.notice && <div className="notice">{state.notice}</div>}
+        <div className="topbar-spacer" />
+
+        {runtimeCapture ? (
+          <span className="capture-status">
+            <span className="capture-status-dot" />
+            {captureSummary(runtimeCapture, framebufferFrameSource)}
+          </span>
+        ) : window.runtimeDesktop ? (
+          <span className="stage-note">Desktop adapter · iOS Simulator</span>
+        ) : (
+          <span className="stage-note">Browser capture · iOS Simulator</span>
+        )}
+
+        <div className="stage-controls">
+          {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
+            <select
+              className="simulator-select"
+              aria-label="iOS Simulator target"
+              value={selectedSimulatorUdid ?? ""}
+              onChange={(event) => setSelectedSimulatorUdid(event.target.value)}
+              disabled={desktopBusy}
+            >
+              {simulators.map((simulator) => (
+                <option key={simulator.udid} value={simulator.udid}>
+                  {simulator.name} · {simulator.runtime}
+                  {simulator.state === "Booted" ? " · Booted" : ""}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
+          {runtimeCapture && window.runtimeDesktop ? (
+            runtimeCapture.source === "framebuffer" ? (
+              inputReady ? (
+                <span className="input-status" title="Native Simulator HID input enabled">
+                  Input on
+                </span>
+              ) : (
+                <button className="stage-action" type="button" onClick={retrySimulatorInput}>
+                  Retry Input
+                </button>
+              )
+            ) : (
+              <span className="input-status pending" title="Window fallback is view-only">
+                View only
+              </span>
+            )
+          ) : null}
+
+          <button
+            className="stage-action"
+            type="button"
+            onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
+            disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
+          >
+            {runtimeCapture
+              ? "Detach"
+              : desktopBusy
+                ? "Launching…"
+                : window.runtimeDesktop
+                  ? "Launch & Attach"
+                  : "Attach Simulator"}
+          </button>
+        </div>
+
         <div className="connection" data-status={state.status}>
           <span className="dot" />
           {state.status}
@@ -972,74 +1055,6 @@ function App() {
         ) : null}
 
         <section className="runtime-stage">
-          <div className="stage-toolbar">
-            <div className="stage-toolbar-title">
-              <span>Live Runtime</span>
-              {runtimeCapture ? (
-                <span className="capture-status">
-                  <span className="capture-status-dot" />
-                  {captureSummary(runtimeCapture, framebufferFrameSource)}
-                </span>
-              ) : window.runtimeDesktop ? (
-                <span className="stage-note">Desktop adapter · iOS Simulator</span>
-              ) : (
-                <span className="stage-note">Browser capture · iOS Simulator</span>
-              )}
-            </div>
-
-            <div className="stage-controls">
-              {!runtimeCapture && window.runtimeDesktop && simulators.length > 0 ? (
-                <select
-                  className="simulator-select"
-                  aria-label="iOS Simulator target"
-                  value={selectedSimulatorUdid ?? ""}
-                  onChange={(event) => setSelectedSimulatorUdid(event.target.value)}
-                  disabled={desktopBusy}
-                >
-                  {simulators.map((simulator) => (
-                    <option key={simulator.udid} value={simulator.udid}>
-                      {simulator.name} · {simulator.runtime}
-                      {simulator.state === "Booted" ? " · Booted" : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-
-              {runtimeCapture && window.runtimeDesktop ? (
-                runtimeCapture.source === "framebuffer" ? (
-                  inputReady ? (
-                    <span className="input-status" title="Native Simulator HID input enabled">
-                      Input on
-                    </span>
-                  ) : (
-                    <button className="stage-action" type="button" onClick={retrySimulatorInput}>
-                      Retry Input
-                    </button>
-                  )
-                ) : (
-                  <span className="input-status pending" title="Window fallback is view-only">
-                    View only
-                  </span>
-                )
-              ) : null}
-
-              <button
-                className="stage-action"
-                type="button"
-                onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
-                disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
-              >
-                {runtimeCapture
-                  ? "Detach"
-                  : desktopBusy
-                    ? "Launching…"
-                    : window.runtimeDesktop
-                      ? "Launch & Attach"
-                      : "Attach Simulator"}
-              </button>
-            </div>
-          </div>
-
           <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
             {runtimeCapture ? (
               runtimeCapture.source === "framebuffer" ? (
@@ -1125,50 +1140,19 @@ function App() {
               animation={selectedAnimation}
               originMs={detectedAnimationOriginMs}
               playheadMs={playheadMs}
-              springControl={selectedAnimationSpringControl}
-              springValue={selectedAnimationSpringValue}
-              stale={
-                selectedAnimationFieldsStale ||
-                (selectedAnimationSpringControl !== undefined &&
-                  selectedSchemaStale)
-              }
-              fields={selectedAnimationFields}
-              onSetSpring={
-                schemaId && selectedAnimationSpringControl
-                  ? (value) =>
-                      session.setValue(
-                        schemaId,
-                        selectedAnimationSpringControl.id,
-                        value
-                      )
-                  : undefined
-              }
-              onCommitSpring={
-                schemaId && selectedAnimationSpringControl
-                  ? () => {
-                      if (selectedAnimation) {
-                        queueAnimationSelectionRestore(selectedAnimation);
-                      }
-                      session.commitValue(
-                        schemaId,
-                        selectedAnimationSpringControl.id
-                      );
-                      replay(true);
-                    }
-                  : undefined
-              }
+              controls={animationInspectorControls}
+              session={animationSession}
             />
             ) : (
               <Empty text="Waiting for the next matching animation…" />
             )
           ) : inspectorMode === "control" && selectedControl && schemaId ? (
             <ControlInspector
+              schemaId={schemaId}
               control={selectedControl}
               value={selectedControlValue}
               stale={selectedSchemaStale}
-              onSet={(value) => session.setValue(schemaId, selectedControl.id, value)}
-              onCommit={() => session.commitValue(schemaId, selectedControl.id)}
-              onTrigger={() => session.fireTrigger(schemaId, selectedControl.id)}
+              session={session}
               onApplySource={() => session.applySource(schemaId, [selectedControl.id])}
             />
           ) : selectedProbe ? (
@@ -1393,22 +1377,25 @@ function Empty({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
 }
 
-function asSpringValue(value: unknown): SpringValue | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const candidate = value as Partial<SpringValue>;
-  if (
-    typeof candidate.damping !== "number" ||
-    typeof candidate.stiffness !== "number" ||
-    (candidate.mass !== undefined && typeof candidate.mass !== "number")
-  ) {
-    return undefined;
-  }
+const ANIMATION_PARAMETER_LABELS = [
+  ["duration", "Duration"],
+  ["damping", "Damping"],
+  ["stiffness", "Stiffness"],
+  ["mass", "Mass"]
+] as const;
 
-  return {
-    damping: candidate.damping,
-    stiffness: candidate.stiffness,
-    ...(candidate.mass !== undefined ? { mass: candidate.mass } : {})
-  };
+function findSchemaControl(
+  schemas: readonly PanelSchema[],
+  schemaId: string,
+  controlId: string
+): InspectorControl | undefined {
+  const schema = schemas.find((candidate) => candidate.id === schemaId);
+  if (!schema) return undefined;
+  for (const group of schema.groups) {
+    const control = group.controls.find((candidate) => candidate.id === controlId);
+    if (control) return control;
+  }
+  return undefined;
 }
 
 function controlGlyph(kind: string) {
