@@ -354,14 +354,7 @@ function App() {
   const schemaAnimations = state.runtimeAnimations.filter(
     (animation) => !schemaId || animation.schemaId === schemaId
   );
-  const latestAnimationStart = schemaAnimations.at(-1)?.startedAtRuntimeMs;
-  const detectedAnimations = schemaAnimations
-    .filter(
-      (animation) =>
-        latestAnimationStart === undefined ||
-        latestAnimationStart - animation.startedAtRuntimeMs <= 1500
-    )
-    .slice(-12);
+  const detectedAnimations = latestAnimationBurst(schemaAnimations);
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -1030,9 +1023,7 @@ function DetectedAnimationTracks({
   animations: RuntimeAnimationTrace[];
 }) {
   const starts = animations.map((animation) => animation.startedAtRuntimeMs);
-  const ends = animations.map(
-    (animation) => animation.endedAtRuntimeMs ?? animation.startedAtRuntimeMs + 16
-  );
+  const ends = animations.map((animation) => animationDisplayEnd(animation));
   const minTime = Math.min(...starts);
   const maxTime = Math.max(...ends, minTime + 300);
   const span = Math.max(1, maxTime - minTime);
@@ -1045,12 +1036,15 @@ function DetectedAnimationTracks({
       </div>
       {animations.map((animation) => {
         const start = ((animation.startedAtRuntimeMs - minTime) / span) * 100;
-        const endTime = animation.endedAtRuntimeMs ?? animation.startedAtRuntimeMs + 16;
+        const endTime = animationDisplayEnd(animation);
         const width = Math.max(1.5, ((endTime - animation.startedAtRuntimeMs) / span) * 100);
-        const duration =
+        const actualDuration =
           animation.endedAtRuntimeMs !== undefined
             ? Math.max(0, animation.endedAtRuntimeMs - animation.startedAtRuntimeMs)
             : undefined;
+        const displayDuration = actualDuration ?? animation.expectedDurationMs;
+        const estimated =
+          actualDuration === undefined && animation.durationBasis === "spring-estimate";
 
         return (
           <div className="detected-animation-row" key={animation.instanceId}>
@@ -1058,18 +1052,30 @@ function DetectedAnimationTracks({
               <strong>{animation.target}</strong>
               <span>
                 {animation.animationKind}
-                {duration !== undefined ? ` · ${formatTime(duration)}` : " · running"}
+                {displayDuration !== undefined
+                  ? ` · ${estimated ? "~" : ""}${formatTime(displayDuration)}`
+                  : ""}
               </span>
             </div>
             <div className="detected-animation-lane">
               <div
-                className={`detected-animation-span ${animation.animationKind}`}
+                className={`detected-animation-span ${animation.animationKind}${estimated ? " estimated" : ""}`}
                 style={{ left: `${start}%`, width: `${width}%` }}
-                title={
+                title={[
                   animation.source
                     ? `${animation.source.file}:${animation.source.line}`
-                    : animation.callsiteId
-                }
+                    : animation.callsiteId,
+                  animation.configControlId
+                    ? `config: ${animation.configControlId}`
+                    : undefined,
+                  Object.keys(animation.resolvedConfig).length
+                    ? Object.entries(animation.resolvedConfig)
+                        .map(([key, value]) => `${key}=${String(value)}`)
+                        .join(" · ")
+                    : undefined
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
               />
             </div>
           </div>
@@ -1077,6 +1083,40 @@ function DetectedAnimationTracks({
       })}
     </div>
   );
+}
+
+const ANIMATION_BURST_IDLE_GAP_MS = 450;
+
+function latestAnimationBurst(
+  animations: RuntimeAnimationTrace[]
+): RuntimeAnimationTrace[] {
+  if (animations.length === 0) return [];
+
+  const ordered = [...animations].sort(
+    (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
+  );
+  let burstStart = 0;
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    const gap =
+      ordered[index].startedAtRuntimeMs -
+      ordered[index - 1].startedAtRuntimeMs;
+    if (gap > ANIMATION_BURST_IDLE_GAP_MS) {
+      burstStart = index;
+    }
+  }
+
+  return ordered.slice(burstStart);
+}
+
+function animationDisplayEnd(animation: RuntimeAnimationTrace): number {
+  if (animation.endedAtRuntimeMs !== undefined) {
+    return animation.endedAtRuntimeMs;
+  }
+  if (animation.expectedDurationMs !== undefined) {
+    return animation.startedAtRuntimeMs + animation.expectedDurationMs;
+  }
+  return animation.startedAtRuntimeMs + 16;
 }
 
 function ProbeInspector({
