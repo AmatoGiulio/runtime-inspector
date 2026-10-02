@@ -654,7 +654,10 @@ describe("automatic animation observation state", () => {
       instanceId: "anim-1",
       target: "card.moveX",
       animationKind: "timing",
-      startedAtRuntimeMs: 1000
+      startedAtRuntimeMs: 1000,
+      resolvedConfig: { duration: 260 },
+      expectedDurationMs: 260,
+      durationBasis: "declared"
     });
 
     socket.receive({
@@ -729,6 +732,34 @@ describe("recording timeline state (RFC 0005 M0)", () => {
     expect(recording?.samples).toHaveLength(2);
     expect(recording?.complete).toBe(true);
     expect(recording?.incomplete).toBe(false);
+  });
+
+  it("resolves a spring config from the current inspector control and estimates its span", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    socket.receive({
+      type: "animation.started",
+      instanceId: "spring-1",
+      callsiteId: "src/Card.tsx:30:4:spring:card.moveX",
+      schemaId: "demo",
+      target: "card.moveX",
+      animationKind: "spring",
+      startedAtRuntimeMs: 2000,
+      config: {},
+      configControlId: "spring"
+    });
+
+    const animation = session.getState().runtimeAnimations.at(-1);
+    expect(animation?.resolvedConfig).toEqual({
+      damping: 10,
+      stiffness: 100,
+      mass: 1
+    });
+    expect(animation?.durationBasis).toBe("spring-estimate");
+    expect(animation?.expectedDurationMs).toBeGreaterThan(250);
   });
 
   it("marks a recording incomplete when chunk sequence has a gap", () => {
