@@ -31,20 +31,12 @@ export function __riWithTiming<T>(
   const instanceId = runtimeAnimationInstanceId(meta.callsiteId, startedAtRuntimeMs);
   emitStarted(meta, instanceId, startedAtRuntimeMs, toValue, timingConfig(config));
 
-  return withTiming(
-    toValue as never,
-    config as never,
-    (finished?: boolean, current?: unknown) => {
-      "worklet";
-      emitCompleted(
-        meta,
-        instanceId,
-        Date.now(),
-        finished !== false,
-        serializableValue(current)
-      );
-    }
-  ) as T;
+  // Do not inject a completion callback here. This package is built by tsup,
+  // not the Reanimated Babel plugin, so a callback authored here would not be
+  // workletized and can prevent the animation from running on the UI runtime.
+  // The feasibility spike intentionally observes start + static parameters
+  // without changing the original animation execution semantics.
+  return withTiming(toValue as never, config as never) as T;
 }
 
 export function __riWithSpring<T>(
@@ -58,20 +50,8 @@ export function __riWithSpring<T>(
   const instanceId = runtimeAnimationInstanceId(meta.callsiteId, startedAtRuntimeMs);
   emitStarted(meta, instanceId, startedAtRuntimeMs, toValue, springConfig(config));
 
-  return withSpring(
-    toValue as never,
-    config as never,
-    (finished?: boolean, current?: unknown) => {
-      "worklet";
-      emitCompleted(
-        meta,
-        instanceId,
-        Date.now(),
-        finished !== false,
-        serializableValue(current)
-      );
-    }
-  ) as T;
+  // Same rule as timing above: preserve Reanimated's original execution path.
+  return withSpring(toValue as never, config as never) as T;
 }
 
 function emitStarted(
