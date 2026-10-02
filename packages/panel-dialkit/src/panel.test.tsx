@@ -69,6 +69,7 @@ function makeState(overrides: Partial<PanelState> = {}): PanelState {
     staleSchemaIds: {},
     values: { card: { blur: 20 } },
     traceSchemas: {},
+    runtimeAnimations: [],
     compareSlots: {},
     ...overrides,
   };
