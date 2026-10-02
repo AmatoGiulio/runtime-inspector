@@ -1,0 +1,38 @@
+{
+  "type": "animation.started",
+  "instanceId": "App.tsx:32:4:spring:imageScale:1234.5:4",
+  "callsiteId": "App.tsx:32:4:spring:imageScale",
+  "target": "imageScale",
+  "animationKind": "spring",
+  "startedAtRuntimeMs": 1234.5,
+  "toValue": 1,
+  "config": {
+    "damping": 14,
+    "stiffness": 160
+  },
+  "parameterControls": {
+    "damping": {
+      "schemaId": "auto",
+      "controlId": "App.tsx:32:4:spring:imageScale:damping"
+    },
+    "stiffness": {
+      "schemaId": "auto",
+      "controlId": "App.tsx:32:4:spring:imageScale:stiffness"
+    }
+  },
+  "startControl": {
+    "schemaId": "auto",
+    "controlId": "App.tsx:32:4:spring:imageScale:delay"
+  },
+  "startDelayMs": 0,
+  "source": {
+    "file": "App.tsx",
+    "line": 32,
+    "column": 4,
+    "enclosure": [
+      "App",
+      "replay"
+    ],
+    "expression": "withSpring(1, { damping: 14, stiffness: 160 })"
+  }
+}

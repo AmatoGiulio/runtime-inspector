@@ -243,6 +243,8 @@ In development builds the Babel plugin observes direct `shared.value = withTimin
 - `configControlId` (optional) names a control in `schemaId` that supplies the whole config object dynamically (for example a `spring` control).
 - `parameterControls` (optional) maps a config key to the control holding its live value. It is a reference, never a value: a client resolves it against schema state it already owns and tunes it with ordinary `control.patch` / `control.commit`. No animation-specific command exists. A tuned value applies to the **next** run of that call site.
 - A client resolves the effective config as: `config` literals, overridden by the `configControlId` control value, overridden per key by `parameterControls`.
+- `startedAtRuntimeMs` is when the motion is expected to begin: the call time plus any delay applied through `withDelay`. `startDelayMs` (optional, `>= 0`) is that applied delay, so `startedAtRuntimeMs - startDelayMs` is the call time. A client anchoring a replay's time origin should use the earliest call time, not the earliest start, or moving the first animation later would appear to move every other one earlier.
+- `startControl` (optional) references the control holding that delay. Like `parameterControls` it is a reference, tuned with ordinary `control.patch` / `control.commit`: adding Δ to the control moves the start by Δ on the next run. A start can never be moved before the call itself.
 
 `animation.completed` (**Lifecycle event**) is defined with `endedAtRuntimeMs`, `finished` and `current`, but the current runtime does not emit it: observation is behavior-transparent and no transparent completion signal exists yet. Clients must treat any span end derived without it as declared or estimated, not observed.
 

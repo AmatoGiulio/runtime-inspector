@@ -1,0 +1,33 @@
+{
+  "type": "animation.started",
+  "instanceId": "App.tsx:31:4:timing:titleY:1354.5:3",
+  "callsiteId": "App.tsx:31:4:timing:titleY",
+  "target": "titleY",
+  "animationKind": "timing",
+  "startedAtRuntimeMs": 1354.5,
+  "toValue": 0,
+  "config": {
+    "duration": 380
+  },
+  "parameterControls": {
+    "duration": {
+      "schemaId": "auto",
+      "controlId": "App.tsx:31:4:timing:titleY:duration"
+    }
+  },
+  "startControl": {
+    "schemaId": "auto",
+    "controlId": "App.tsx:31:4:timing:titleY:delay"
+  },
+  "startDelayMs": 120,
+  "source": {
+    "file": "App.tsx",
+    "line": 31,
+    "column": 4,
+    "enclosure": [
+      "App",
+      "replay"
+    ],
+    "expression": "withDelay(120, withTiming(0, { duration: 380 }))"
+  }
+}

@@ -333,6 +333,11 @@ export interface RuntimeAnimationMeta {
   toValue?: string | number | boolean | null;
   /** Maps a config key (e.g. "duration") to the Inspector control holding its live value. */
   parameterControls?: Record<string, RuntimeAnimationParameterControl>;
+  /**
+   * The control whose value is the delay applied before this animation starts; adding
+   * Δ to it moves the start by Δ on the next run.
+   */
+  startControl?: RuntimeAnimationParameterControl;
   source?: RuntimeAnimationSource;
 }
 
@@ -349,6 +354,16 @@ export interface RuntimeAnimationStarted {
   configControlId?: string;
   /** Maps a config key (e.g. "duration") to the Inspector control holding its live value. */
   parameterControls?: Record<string, RuntimeAnimationParameterControl>;
+  /**
+   * The control whose value is the delay applied before this animation starts; adding
+   * Δ to it moves the start by Δ on the next run.
+   */
+  startControl?: RuntimeAnimationParameterControl;
+  /**
+   * Delay already included in `startedAtRuntimeMs`; `startedAtRuntimeMs - startDelayMs`
+   * is the call time.
+   */
+  startDelayMs?: number;
   source?: RuntimeAnimationSource;
 }
 
@@ -741,6 +756,8 @@ export const RuntimeAnimationStartedSchema = z.object({
   config: RuntimeAnimationConfigSchema,
   configControlId: z.string().min(1).optional(),
   parameterControls: z.record(RuntimeAnimationParameterControlSchema).optional(),
+  startControl: RuntimeAnimationParameterControlSchema.optional(),
+  startDelayMs: finiteNumberSchema.nonnegative().optional(),
   source: RuntimeAnimationSourceSchema.optional()
 });
 

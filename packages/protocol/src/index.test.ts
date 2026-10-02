@@ -482,6 +482,47 @@ describe("runtime animation observation protocol", () => {
     expect(parsed.type).toBe("animation.started");
     expect("parameterControls" in parsed).toBe(false);
   });
+
+  const startControl = {
+    schemaId: "auto",
+    controlId: "App.tsx:74:4:timing:card.moveX:delay"
+  };
+
+  it("parses and round-trips startControl and startDelayMs on animation.started", () => {
+    const parsed = parseRIPMessage({ ...timingStarted, startControl, startDelayMs: 120 });
+
+    expect(parsed.type).toBe("animation.started");
+    if (parsed.type !== "animation.started") throw new Error("unexpected message type");
+    expect(parsed.startControl).toEqual(startControl);
+    expect(parsed.startDelayMs).toBe(120);
+
+    const roundTripped = safeParseRIPMessage(JSON.stringify(parsed));
+    expect(roundTripped).toEqual(parsed);
+  });
+
+  it("accepts a zero startDelayMs and omits both start fields when absent", () => {
+    const zero = parseRIPMessage({ ...timingStarted, startDelayMs: 0 });
+    if (zero.type !== "animation.started") throw new Error("unexpected message type");
+    expect(zero.startDelayMs).toBe(0);
+
+    const plain = parseRIPMessage(timingStarted);
+    expect("startControl" in plain).toBe(false);
+    expect("startDelayMs" in plain).toBe(false);
+  });
+
+  it("rejects a negative startDelayMs", () => {
+    expect(() => parseRIPMessage({ ...timingStarted, startDelayMs: -1 })).toThrow();
+    expect(safeParseRIPMessage(JSON.stringify({ ...timingStarted, startDelayMs: -1 }))).toBeUndefined();
+  });
+
+  it("rejects a startControl with an empty controlId", () => {
+    expect(() =>
+      parseRIPMessage({
+        ...timingStarted,
+        startControl: { schemaId: "auto", controlId: "" }
+      })
+    ).toThrow();
+  });
 });
 
 describe("recording protocol (RFC 0005 M0)", () => {
