@@ -392,6 +392,18 @@ Header, Outline, Inspector chrome, stage chrome and timeline now share one langu
 - Three button variants (`.wb-button.primary | .secondary | .toggle`) and one status pill (`.wb-pill`).
 - One accent hue, used only for primary buttons (Play, attach), pressed toggles, the selected timeline bar and its row tint, the playhead, and focus rings. Green remains only as a status dot.
 
+### M6e hierarchy pass
+
+**Implemented on `feat/runtime-workbench-desktop`; both themes checked in a browser against the demo runtime on 2026-10-02. Not yet seen with a real Simulator frame in the stage.**
+
+A design review found every element carrying the same visual weight. Within the M6d system:
+
+- **Accent** is now blue `#015ABE` (one hue, same five uses).
+- **The device is the subject.** The timeline height is a `--wb-timeline-h` variable (default `clamp(240px, 36vh, 520px)`), resizable by dragging the seam (`role="separator"`, keyboard arrows, double-click to reset, persisted in `localStorage`). The simulator surface uses the full stage height minus 16 px padding. The seam is a single subtle line with a grip that appears on hover.
+- **Header.** Capture diagnostics (resolution, fps, encode/decode, frame source) moved to the Developer menu and to the `title` of a small `Live` / `View only` pill. Connection and input state are the emphasized pills.
+- **Inspector.** The name appears once: `Cover · Scale`, then one summary line (`Spring · starts 0ms · ~986ms → 1`). The playhead-state badge and the Starts / Duration / At playhead / Target rows are gone. Springs written with literal parameters show DialKit's spring curve (`SpringPreview`, exported by `panel-dialkit`) above their sliders. Source is one `file:line` with the expression behind a `Code` disclosure. A control selected from the Outline shows its label once and a `Value` row.
+- **Timeline bars are told apart by shape.** A delayed animation shows a dashed lead-in from its call time to the bar; springs carry a slight accent tint and the fade-out tail; timings are solid neutral; only the selected bar is accent-filled.
+
 Not done yet:
 
 1. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
