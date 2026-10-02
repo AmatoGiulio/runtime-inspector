@@ -59,6 +59,9 @@ export function reportAnimationStarted(
     toValue: meta.toValue,
     config: meta.config ?? {},
     configControlId: meta.configControlId,
+    ...(meta.parameterControls !== undefined
+      ? { parameterControls: meta.parameterControls }
+      : {}),
     source: meta.source
   });
 }

@@ -557,18 +557,28 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   ): RuntimeAnimationConfig {
     const resolved: RuntimeAnimationConfig = { ...message.config };
 
-    if (!message.schemaId || !message.configControlId) {
-      return resolved;
+    const controlValue =
+      message.schemaId && message.configControlId
+        ? state.values[message.schemaId]?.[message.configControlId]
+        : undefined;
+    if (controlValue && typeof controlValue === "object" && !Array.isArray(controlValue)) {
+      for (const [key, value] of Object.entries(controlValue)) {
+        if (
+          typeof value === "number" ||
+          typeof value === "string" ||
+          typeof value === "boolean"
+        ) {
+          resolved[key] = value;
+        }
+      }
     }
 
-    const controlValue = state.values[message.schemaId]?.[message.configControlId];
-    if (!controlValue || typeof controlValue !== "object" || Array.isArray(controlValue)) {
-      return resolved;
-    }
-
-    for (const [key, value] of Object.entries(controlValue)) {
+    // RFC 0005 §3b: a config key backed by an ordinary control resolves to that
+    // control's live value; if nothing resolves, the source literal stays.
+    for (const [key, ref] of Object.entries(message.parameterControls ?? {})) {
+      const value = currentControlValue(ref.schemaId, ref.controlId);
       if (
-        typeof value === "number" ||
+        (typeof value === "number" && Number.isFinite(value)) ||
         typeof value === "string" ||
         typeof value === "boolean"
       ) {
@@ -577,6 +587,15 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     }
 
     return resolved;
+  }
+
+  function currentControlValue(schemaId: string, controlId: string): unknown {
+    const value = state.values[schemaId]?.[controlId];
+    if (value !== undefined) return value;
+
+    const control = findControl(schemaId, controlId);
+    if (!control || !isValueControl(control)) return undefined;
+    return control.value ?? control.defaultValue;
   }
 
   function expectedAnimationDuration(

@@ -364,6 +364,8 @@ export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
 export { __riObserveAnimation } from "./animation-observer";
+export { __riAnimationConfig } from "./animation-config";
+export type { RuntimeAnimationConfigBinding } from "./animation-config";
 
 export { useRuntimeValue, useAction } from "./use-runtime-value";
 export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";

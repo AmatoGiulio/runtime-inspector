@@ -13,6 +13,10 @@ import { parseDirectiveComment, type ParsedDirective } from "./directive";
 
 const HELPER_NAME = "__riInspect";
 const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
+const ANIMATION_CONFIG_HELPER_NAME = "__riAnimationConfig";
+const AUTO_SCHEMA_ID = "auto";
+const TIMING_DURATION_MIN_MS = 0;
+const TIMING_DURATION_MAX_MS = 10000;
 const SOURCE_MODULE = "@runtime-inspector/react-native";
 
 /**
@@ -151,13 +155,36 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
 
         if (isInsideKnownWorkletContext(path)) return;
 
-        const meta = buildAnimationMeta(path, state, target, animationKind, right, api);
-        if (!meta) return;
+        const built = buildAnimationMeta(path, state, target, animationKind, right, api);
+        if (!built) return;
+        const { meta, callsiteId } = built;
 
         // Preserve the application's original Reanimated call exactly. Runtime
         // Inspector observes the animation object *after* Reanimated constructs it
         // and returns that same object unchanged.
         const originalAnimationCall = api.types.cloneNode(right, true);
+
+        // RFC 0005 §3b: a timing call with a literal `duration` gets that duration
+        // backed by an ordinary slider control. Only the config argument is wrapped;
+        // the application still makes its own `withTiming` call.
+        const declaredDuration =
+          animationKind === "timing"
+            ? eligibleTimingDuration(originalAnimationCall.arguments[1])
+            : undefined;
+        if (declaredDuration !== undefined) {
+          const controlId = `${callsiteId}:duration`;
+          originalAnimationCall.arguments[1] = api.types.callExpression(
+            api.types.identifier(ANIMATION_CONFIG_HELPER_NAME),
+            [
+              originalAnimationCall.arguments[1],
+              api.types.arrayExpression([
+                durationBindingExpression(api.types, controlId, target.target, declaredDuration)
+              ])
+            ]
+          );
+          meta.properties.push(durationParameterControlsProperty(api.types, controlId));
+        }
+
         path.get("right").replaceWith(
           api.types.callExpression(api.types.identifier(ANIMATION_OBSERVER_HELPER_NAME), [
             originalAnimationCall,
@@ -165,6 +192,9 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           ])
         );
         ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
+        if (declaredDuration !== undefined) {
+          ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
+        }
       }
     }
   };
@@ -311,7 +341,7 @@ function buildAnimationMeta(
     );
   }
 
-  return t.objectExpression(properties);
+  return { meta: t.objectExpression(properties), callsiteId };
 }
 
 type PrimitiveMetaValue = string | number | boolean | null;
@@ -366,6 +396,72 @@ function staticConfigObject(
   }
 
   return Object.keys(config).length > 0 ? config : undefined;
+}
+
+/**
+ * RFC 0005 §3b eligibility: returns the declared duration when `node` is an
+ * object literal with no spread and exactly one `duration` member, written as
+ * a plain property whose value is a finite numeric literal within the slider
+ * range. Anything else returns `undefined` and the call is left as in §3a.
+ */
+function eligibleTimingDuration(node: Node | null | undefined): number | undefined {
+  if (!node || node.type !== "ObjectExpression") return undefined;
+  if (node.properties.some((property) => property.type === "SpreadElement")) return undefined;
+
+  const durationMembers = node.properties.filter(isDurationKeyedMember);
+  if (durationMembers.length !== 1) return undefined;
+
+  const [member] = durationMembers;
+  if (member.type !== "ObjectProperty" || member.computed) return undefined;
+  if (member.value.type !== "NumericLiteral") return undefined;
+
+  const declared = member.value.value;
+  if (!Number.isFinite(declared)) return undefined;
+  if (declared < TIMING_DURATION_MIN_MS || declared > TIMING_DURATION_MAX_MS) return undefined;
+  return declared;
+}
+
+function isDurationKeyedMember(
+  member: BabelTypesNamespace.ObjectExpression["properties"][number]
+): member is BabelTypesNamespace.ObjectProperty | BabelTypesNamespace.ObjectMethod {
+  if (member.type === "SpreadElement") return false;
+  if (member.key.type === "StringLiteral") return member.key.value === "duration";
+  return !member.computed && member.key.type === "Identifier" && member.key.name === "duration";
+}
+
+/** The `__riAnimationConfig` binding descriptor for a literal timing duration. */
+function durationBindingExpression(
+  t: BabelAPI["types"],
+  controlId: string,
+  target: string,
+  declared: number
+) {
+  return t.objectExpression([
+    t.objectProperty(t.identifier("key"), t.stringLiteral("duration")),
+    t.objectProperty(t.identifier("controlId"), t.stringLiteral(controlId)),
+    t.objectProperty(t.identifier("label"), t.stringLiteral(`${target} duration`)),
+    t.objectProperty(t.identifier("declared"), t.numericLiteral(declared)),
+    t.objectProperty(t.identifier("min"), t.numericLiteral(TIMING_DURATION_MIN_MS)),
+    t.objectProperty(t.identifier("max"), t.numericLiteral(TIMING_DURATION_MAX_MS)),
+    t.objectProperty(t.identifier("step"), t.numericLiteral(1)),
+    t.objectProperty(t.identifier("unit"), t.stringLiteral("ms"))
+  ]);
+}
+
+/** The `parameterControls` meta entry pointing at the duration's `auto` control. */
+function durationParameterControlsProperty(t: BabelAPI["types"], controlId: string) {
+  return t.objectProperty(
+    t.identifier("parameterControls"),
+    t.objectExpression([
+      t.objectProperty(
+        t.identifier("duration"),
+        t.objectExpression([
+          t.objectProperty(t.identifier("schemaId"), t.stringLiteral(AUTO_SCHEMA_ID)),
+          t.objectProperty(t.identifier("controlId"), t.stringLiteral(controlId))
+        ])
+      )
+    ])
+  );
 }
 
 function resolveConfigControlId(

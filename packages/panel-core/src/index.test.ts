@@ -678,6 +678,112 @@ describe("automatic animation observation state", () => {
       current: -110
     });
   });
+
+  const durationControlId = "App.tsx:74:4:timing:card.moveX:duration";
+  const parameterControls = {
+    duration: { schemaId: "auto", controlId: durationControlId }
+  };
+  const autoSchema: PanelSchema = {
+    id: "auto",
+    title: "Inspected values",
+    groups: [
+      {
+        id: "auto",
+        label: "Auto-inspected",
+        controls: [
+          {
+            id: durationControlId,
+            kind: "slider",
+            label: "card.moveX duration",
+            defaultValue: 260,
+            min: 0,
+            max: 10000,
+            step: 1,
+            unit: "ms",
+            binding: `auto.${durationControlId}`
+          }
+        ]
+      }
+    ]
+  };
+
+  function startTimingWithParameterControls(socket: FakeSocket, duration: number) {
+    socket.receive({
+      type: "animation.started",
+      instanceId: "anim-duration",
+      callsiteId: "App.tsx:74:4:timing:card.moveX",
+      schemaId: "demo",
+      target: "card.moveX",
+      animationKind: "timing",
+      startedAtRuntimeMs: 1000,
+      toValue: -110,
+      config: { duration },
+      parameterControls
+    });
+  }
+
+  it("resolves a timing duration from the committed parameter control", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({ type: "schema.publish", schema: autoSchema });
+
+    session.setValue("auto", durationControlId, 400);
+    session.commitValue("auto", durationControlId);
+
+    startTimingWithParameterControls(socket, 260);
+
+    const animation = session.getState().runtimeAnimations.at(-1);
+    expect(animation?.config).toEqual({ duration: 260 });
+    expect(animation?.resolvedConfig.duration).toBe(400);
+    expect(animation?.expectedDurationMs).toBe(400);
+    expect(animation?.durationBasis).toBe("declared");
+  });
+
+  it("falls back to the parameter control's default value when no value is set", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({ type: "schema.publish", schema: autoSchema });
+
+    // The literal carried by the message deliberately differs from the control's
+    // default, so this only passes if the control is what gets resolved.
+    startTimingWithParameterControls(socket, 120);
+
+    const animation = session.getState().runtimeAnimations.at(-1);
+    expect(animation?.resolvedConfig.duration).toBe(260);
+    expect(animation?.expectedDurationMs).toBe(260);
+    expect(animation?.durationBasis).toBe("declared");
+  });
+
+  it("keeps the literal duration when the referenced schema is unknown", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    startTimingWithParameterControls(socket, 260);
+
+    const animation = session.getState().runtimeAnimations.at(-1);
+    expect(animation?.resolvedConfig).toEqual({ duration: 260 });
+    expect(animation?.expectedDurationMs).toBe(260);
+    expect(animation?.durationBasis).toBe("declared");
+  });
+
+  it("exposes parameterControls on the animation trace", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    startTimingWithParameterControls(socket, 260);
+
+    expect(session.getState().runtimeAnimations.at(-1)?.parameterControls).toEqual(
+      parameterControls
+    );
+  });
 });
 
 describe("recording timeline state (RFC 0005 M0)", () => {

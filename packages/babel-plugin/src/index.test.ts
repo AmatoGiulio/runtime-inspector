@@ -223,7 +223,9 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     const normalized = code.replace(/\s+/g, " ");
-    expect(normalized).toContain("__riObserveAnimation(withTiming(-110, { duration: 260 })");
+    expect(normalized).toContain(
+      "__riObserveAnimation(withTiming(-110, __riAnimationConfig({ duration: 260 }, ["
+    );
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "timing"');
@@ -347,6 +349,124 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     expect(code).not.toContain("__riObserveAnimation");
+  });
+
+  describe("editable timing duration (RFC 0005 3b)", () => {
+    const CARD_OPTS = { filename: "/repo/src/Card.tsx", root: "/repo" };
+
+    function transformAssignment(assignment: string, envName: string = "development"): string {
+      return transformWithOpts(
+        `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { Easing, withSpring, withTiming } from "react-native-reanimated";
+      const easing = Easing.out(Easing.cubic);
+      const base = { easing };
+      const d = 260;
+      const timing = { duration: 260 };
+      const card = useInspector("card-transition", { moveX: { value: 0, min: -120, max: 120 } });
+      ${assignment}
+    `,
+        { ...CARD_OPTS, envName }
+      ).replace(/\s+/g, " ");
+    }
+
+    it("wraps the config argument of an eligible timing call and references its control", () => {
+      const normalized = transformAssignment(
+        "card.moveX.value = withTiming(-110, { duration: 260, easing });"
+      );
+      const controlId = "src/Card.tsx:9:6:timing:card.moveX:duration";
+
+      expect(normalized).toContain(
+        "card.moveX.value = __riObserveAnimation(withTiming(-110, __riAnimationConfig({ duration: 260, easing }, [{ " +
+          `key: "duration", controlId: "${controlId}", label: "card.moveX duration", ` +
+          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms" }])), {'
+      );
+      expect(normalized).toContain(
+        `parameterControls: { duration: { schemaId: "auto", controlId: "${controlId}" } }`
+      );
+      // The rest of the meta is unchanged: literal config and original expression text.
+      expect(normalized).toContain("config: { duration: 260 }");
+      expect(normalized).toContain('expression: "withTiming(-110, { duration: 260, easing })"');
+
+      const importStatements = normalized.match(/import \{[^}]*\} from "@runtime-inspector\/react-native"/g);
+      expect(importStatements).toHaveLength(1);
+      expect(importStatements![0].match(/__riObserveAnimation/g)).toHaveLength(1);
+      expect(importStatements![0].match(/__riAnimationConfig/g)).toHaveLength(1);
+    });
+
+    it("accepts a string-literal duration key", () => {
+      const normalized = transformAssignment(
+        'card.moveX.value = withTiming(-110, { "duration": 260 });'
+      );
+      expect(normalized).toContain("__riAnimationConfig(");
+      expect(normalized).toContain("declared: 260");
+    });
+
+    it("imports each helper once across several eligible call sites", () => {
+      const normalized = transformAssignment(
+        "card.moveX.value = withTiming(-110, { duration: 260 }); card.moveX.value = withTiming(0, { duration: 180 });"
+      );
+      expect(normalized.match(/__riAnimationConfig\(/g)).toHaveLength(2);
+      expect(normalized.match(/__riAnimationConfig\b/g)).toHaveLength(3);
+      expect(normalized.match(/__riObserveAnimation\b/g)).toHaveLength(3);
+    });
+
+    it("does not wrap a withSpring config", () => {
+      const normalized = transformAssignment(
+        "card.moveX.value = withSpring(0, { duration: 260, dampingRatio: 0.6 });"
+      );
+      expect(normalized).toContain(
+        "__riObserveAnimation(withSpring(0, { duration: 260, dampingRatio: 0.6 })"
+      );
+      expect(normalized).not.toContain("__riAnimationConfig");
+      expect(normalized).not.toContain("parameterControls");
+    });
+
+    it.each([
+      ["an identifier config", "withTiming(-110, timing)"],
+      ["a non-literal duration", "withTiming(-110, { duration: d })"],
+      ["a spread in the config object", "withTiming(-110, { ...base, duration: 260 })"],
+      ["an out-of-range duration literal", "withTiming(-110, { duration: 20000 })"],
+      ["no config argument", "withTiming(-110)"]
+    ])("observes but does not wrap %s", (_label, call) => {
+      const normalized = transformAssignment(`card.moveX.value = ${call};`);
+
+      expect(normalized).toContain(`card.moveX.value = __riObserveAnimation(${call}, {`);
+      expect(normalized).not.toContain("__riAnimationConfig");
+      expect(normalized).not.toContain("parameterControls");
+    });
+
+    it("leaves an eligible timing call untouched in production env", () => {
+      const normalized = transformAssignment(
+        "card.moveX.value = withTiming(-110, { duration: 260, easing });",
+        "production"
+      );
+
+      expect(normalized).toContain("card.moveX.value = withTiming(-110, { duration: 260, easing });");
+      expect(normalized).not.toContain("__riAnimationConfig");
+      expect(normalized).not.toContain("__riObserveAnimation");
+    });
+
+    it("leaves an eligible timing call inside a known worklet context untouched", () => {
+      const normalized = transformWithOpts(
+        `
+      import { useAnimatedStyle, withTiming } from "react-native-reanimated";
+      function Card() {
+        const opacity = { value: 0 };
+        useAnimatedStyle(() => {
+          opacity.value = withTiming(1, { duration: 180 });
+          return { opacity: opacity.value };
+        });
+      }
+    `,
+        CARD_OPTS
+      ).replace(/\s+/g, " ");
+
+      expect(normalized).toContain("opacity.value = withTiming(1, { duration: 180 });");
+      expect(normalized).not.toContain("__riAnimationConfig");
+      expect(normalized).not.toContain("__riObserveAnimation");
+      expect(normalized).not.toContain(SOURCE_IMPORT);
+    });
   });
 });
 
