@@ -150,6 +150,52 @@ The first spike deliberately does **not** instrument:
 
 This is a product-feasibility experiment, not yet a replacement for explicit probes. If the runtime test succeeds without changing animation behavior, V1 can promote the narrower promise **automatic discovery of supported Reanimated animation primitives** while keeping explicit probes as the escape hatch.
 
+### 3b. Editable timing duration through ordinary controls
+
+Section 3a makes a spring span tunable only because its config already comes from an Inspector control (`configControlId`). A timing span whose duration is a source literal (`{ duration: 260 }`) has nothing behind it, so it can be read but not changed.
+
+**Decision: a discovered literal parameter becomes an ordinary RIP control. No override message is added.**
+
+For a discovered `withTiming` call whose config is an object literal containing a numeric-literal `duration`, the dev-only Babel plugin wraps the **config argument only**:
+
+```ts
+shared.value = __riObserveAnimation(
+  withTiming(target, __riAnimationConfig({ duration: 260, easing }, bindings)),
+  metadata
+);
+```
+
+`__riAnimationConfig`:
+
+- registers, once per call site, a slider control in the existing `auto` Runtime Value schema (RFC 0003), holding the declared literal as its default (`min 0`, `max 10000`, `step 1`, unit `ms`);
+- returns the **same config object, by identity,** while the control still equals the declared literal;
+- returns a shallow copy with the tuned value only after the control was changed;
+- re-registers with the new default when the literal changes in source (Fast Refresh), discarding the stale tuned value;
+- is a no-op in production and never throws into application code — any internal failure returns the original config and warns once in development.
+
+The application still constructs its own Reanimated animation with its own `withTiming` call. Behavior is unchanged until a developer deliberately tunes the control, which is the same contract as every other Runtime Inspector control.
+
+`animation.started` gains one additive optional field so a client can find those controls:
+
+```json
+"parameterControls": {
+  "duration": { "schemaId": "auto", "controlId": "App.tsx:74:4:timing:card.moveX:duration" }
+}
+```
+
+`parameterControls` maps a config key to the control that holds its live value. It is a reference, not a value: clients resolve it against schema state they already own, and tune it with the existing `control.patch` / `control.commit` path. Validation, reject-don't-clamp, stale protection, A/B and MCP access therefore apply unchanged. Clients that do not know the field ignore it.
+
+The change takes effect on the **next** run of that call site. In the Workbench, committing a duration replays the interaction, exactly as committing a spring does.
+
+Classification (see `docs/protocol.md`): `animation.started` and `animation.completed` are **Lifecycle events**, runtime → panels, never cached and never replayed.
+
+Out of scope for 3b:
+
+- timing calls without an object-literal config or without a numeric-literal `duration` (left exactly as in 3a);
+- start offset / delay editing — the example's stagger is a `setTimeout`, which this model cannot see;
+- easing editing from the timeline;
+- source write-back of the tuned duration. RFC 0004 anchors identify a `useSharedValue` declaration by name; a literal inside a call argument needs its own anchor shape and a follow-up RFC 0004 amendment.
+
 ### 4. V1 timeline is observational
 
 The playhead inspects a recorded trace.
