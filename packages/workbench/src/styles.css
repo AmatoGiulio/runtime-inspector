@@ -1083,6 +1083,21 @@ button {
   background: #151517;
 }
 
+.motion-timeline-grid {
+  position: relative;
+}
+
+.motion-playhead-overlay {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 150px;
+  overflow: visible;
+  pointer-events: none;
+}
+
 .motion-timeline-head {
   height: 28px;
   display: flex;
@@ -1192,6 +1207,7 @@ button {
 
 .motion-span {
   position: absolute;
+  z-index: 2;
   top: 8px;
   bottom: 8px;
   min-width: 10px;
@@ -1260,9 +1276,6 @@ button {
   transform: translateX(-50%);
 }
 
-.motion-ruler .motion-playhead {
-  bottom: -1px;
-}
 
 .animation-inspector {
   padding: 12px;
