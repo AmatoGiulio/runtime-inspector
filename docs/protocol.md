@@ -35,6 +35,8 @@ Classification of every current message type:
 | `recording.chunk` | Lifecycle event |
 | `recording.stop` | Command |
 | `recording.complete` | Lifecycle event |
+| `animation.started` | Lifecycle event |
+| `animation.completed` | Lifecycle event |
 
 **Taxonomy violation resolved in 0.3.** Prior to 0.3, `trigger` controls ("do this callback now", e.g. "replay transition") were fired via `control.patch` — the same message type used for value updates (slider, toggle, color, bezier, spring), and drag-preview patches were indistinguishable from a human's decided value. Protocol 0.3 introduces two dedicated messages to resolve this:
 
@@ -161,7 +163,7 @@ On receipt, the broker drops the cached schema for that id and forwards the mess
 
 ### Runtime trace / recording (RFC 0005, M0)
 
-Recording is explicit instrumentation. Runtime Inspector does not discover arbitrary animations automatically.
+Recording is explicit instrumentation: probes are declared by the application. Automatic discovery of supported Reanimated primitives is a separate, narrower mechanism — see *Discovered animation lifecycle* below.
 
 A runtime publishes the probes available for a schema:
 
@@ -207,6 +209,44 @@ M0 accepts 1–60 Hz and at most 16 probes. The runtime replies with `recording.
 `recording.stop` is a **Command**. The runtime flushes its final chunk and emits `recording.complete` with duration and sample count. M0 recordings are capped at 10 seconds.
 
 The initial sampler is intentionally a vertical-spike implementation using JavaScript `requestAnimationFrame` and batched transport. Its overhead must be validated on the simulator/device before the recording path is considered production-ready. A later implementation may move collection fully onto the Reanimated/UI execution path without changing these protocol semantics.
+
+### Discovered animation lifecycle (RFC 0005, 3a/3b — experimental)
+
+In development builds the Babel plugin observes direct `shared.value = withTiming(...)` / `withSpring(...)` assignments. Each run of such a call site emits `animation.started` (**Lifecycle event**, runtime → panels):
+
+```json
+{
+  "type": "animation.started",
+  "instanceId": "App.tsx:74:4:timing:card.moveX:1042.5:7",
+  "callsiteId": "App.tsx:74:4:timing:card.moveX",
+  "schemaId": "card-transition",
+  "target": "card.moveX",
+  "animationKind": "timing",
+  "startedAtRuntimeMs": 1042.5,
+  "toValue": -110,
+  "config": { "duration": 260 },
+  "parameterControls": {
+    "duration": { "schemaId": "auto", "controlId": "App.tsx:74:4:timing:card.moveX:duration" }
+  },
+  "source": {
+    "file": "App.tsx",
+    "line": 74,
+    "column": 4,
+    "enclosure": ["App", "replayTransition"],
+    "expression": "withTiming(-110, { duration: 260, easing })"
+  }
+}
+```
+
+- `callsiteId` identifies the source call site and is stable across runs; `instanceId` identifies one run.
+- `config` carries only parameters that are primitive literals in source. It is what the source declares, **not** necessarily what ran.
+- `configControlId` (optional) names a control in `schemaId` that supplies the whole config object dynamically (for example a `spring` control).
+- `parameterControls` (optional) maps a config key to the control holding its live value. It is a reference, never a value: a client resolves it against schema state it already owns and tunes it with ordinary `control.patch` / `control.commit`. No animation-specific command exists. A tuned value applies to the **next** run of that call site.
+- A client resolves the effective config as: `config` literals, overridden by the `configControlId` control value, overridden per key by `parameterControls`.
+
+`animation.completed` (**Lifecycle event**) is defined with `endedAtRuntimeMs`, `finished` and `current`, but the current runtime does not emit it: observation is behavior-transparent and no transparent completion signal exists yet. Clients must treat any span end derived without it as declared or estimated, not observed.
+
+Both messages are observations of something that already happened. They are never cached and never replayed; a panel that joins late sees only animations that start afterwards.
 
 ### `control.patch`
 
@@ -408,6 +448,8 @@ Derived from `packages/transport-ws/src/index.ts`.
 | `recording.chunk` | opposite role (panel) | never | never |
 | `recording.stop` | opposite role (runtime) | no | no |
 | `recording.complete` | opposite role (panel) | no | no |
+| `animation.started` | opposite role (panel) | never | never |
+| `animation.completed` | opposite role (panel) | never | never |
 | `error` | sender only, from broker/runtime | no | no |
 | `source.apply` | `workspace` clients only (from a `panel`) | no | no |
 | `source.applyResult` | `panel` clients only (from a `workspace`) | no | no |
@@ -418,7 +460,7 @@ Additional broker behavior:
 
 - The control-schema cache entry for a runtime is deleted **only** by an explicit `schema.dispose` from that runtime, or when a different schema is republished for that runtime. A silent disconnect (socket close without a preceding `schema.dispose`) keeps the cache entry — see the `runtime.status` section above.
 - Trace schemas follow the same late-join principle: the latest `trace.schema.publish` is cached per runtime. `trace.schema.dispose` removes only the trace cache; a normal `schema.dispose` also removes the trace cache owned by that runtime so a disposed runtime cannot leave orphan probe metadata behind.
-- `control.trigger`, `recording.start`, `recording.stop`, and `recording.chunk` are never cached or replayed. In particular, a late panel may recover probe metadata but never inherits samples from an earlier recording.
+- `control.trigger`, `recording.start`, `recording.stop`, `recording.chunk`, `animation.started`, and `animation.completed` are never cached or replayed. In particular, a late panel may recover probe metadata but never inherits samples from an earlier recording.
 - Ordinary `runtime`/`panel` messages (everything except `source.apply`/`source.applyResult`) are relayed strictly between the **opposite** runtime/panel roles (`forwardToOppositeRole`): panel → runtime and runtime → panel. They never fan out to a sender's own role or to `workspace` clients.
 - `source.apply` and `source.applyResult` are routed explicitly by target role rather than by "opposite role": `source.apply` from a `panel` is forwarded only to `workspace` clients (never to `runtime`), and `source.applyResult` from a `workspace` is forwarded only to `panel` clients. Neither is ever cached or replayed to a late joiner, like `control.trigger`.
 - Unparseable JSON is answered with an `error` (`INVALID_MESSAGE`) and otherwise dropped — it is never forwarded.

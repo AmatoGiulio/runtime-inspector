@@ -439,6 +439,49 @@ describe("runtime animation observation protocol", () => {
       })
     ).toThrow();
   });
+
+  const timingStarted = {
+    type: "animation.started",
+    instanceId: "anim-2",
+    callsiteId: "App.tsx:74:4:timing:card.moveX",
+    schemaId: "card-transition",
+    target: "card.moveX",
+    animationKind: "timing",
+    startedAtRuntimeMs: 1000,
+    config: { duration: 260 }
+  };
+
+  it("parses and round-trips parameterControls on animation.started", () => {
+    const parameterControls = {
+      duration: {
+        schemaId: "auto",
+        controlId: "App.tsx:74:4:timing:card.moveX:duration"
+      }
+    };
+    const parsed = parseRIPMessage({ ...timingStarted, parameterControls });
+
+    expect(parsed.type).toBe("animation.started");
+    if (parsed.type !== "animation.started") throw new Error("unexpected message type");
+    expect(parsed.parameterControls).toEqual(parameterControls);
+
+    const roundTripped = safeParseRIPMessage(JSON.stringify(parsed));
+    expect(roundTripped).toEqual(parsed);
+  });
+
+  it("rejects a parameterControls entry with an empty controlId", () => {
+    expect(() =>
+      parseRIPMessage({
+        ...timingStarted,
+        parameterControls: { duration: { schemaId: "auto", controlId: "" } }
+      })
+    ).toThrow();
+  });
+
+  it("still parses animation.started without parameterControls", () => {
+    const parsed = parseRIPMessage(timingStarted);
+    expect(parsed.type).toBe("animation.started");
+    expect("parameterControls" in parsed).toBe(false);
+  });
 });
 
 describe("recording protocol (RFC 0005 M0)", () => {

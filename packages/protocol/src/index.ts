@@ -315,6 +315,11 @@ export interface RuntimeAnimationSource {
 
 export type RuntimeAnimationConfig = Record<string, string | number | boolean>;
 
+export interface RuntimeAnimationParameterControl {
+  schemaId: string;
+  controlId: string;
+}
+
 export interface RuntimeAnimationMeta {
   callsiteId: string;
   schemaId?: string;
@@ -326,6 +331,8 @@ export interface RuntimeAnimationMeta {
   configControlId?: string;
   /** Build-time-safe primitive target when it is a literal. */
   toValue?: string | number | boolean | null;
+  /** Maps a config key (e.g. "duration") to the Inspector control holding its live value. */
+  parameterControls?: Record<string, RuntimeAnimationParameterControl>;
   source?: RuntimeAnimationSource;
 }
 
@@ -340,6 +347,8 @@ export interface RuntimeAnimationStarted {
   toValue?: string | number | boolean | null;
   config: RuntimeAnimationConfig;
   configControlId?: string;
+  /** Maps a config key (e.g. "duration") to the Inspector control holding its live value. */
+  parameterControls?: Record<string, RuntimeAnimationParameterControl>;
   source?: RuntimeAnimationSource;
 }
 
@@ -715,6 +724,11 @@ const RuntimeAnimationConfigValueSchema = z.union([
 
 const RuntimeAnimationConfigSchema = z.record(RuntimeAnimationConfigValueSchema);
 
+const RuntimeAnimationParameterControlSchema = z.object({
+  schemaId: z.string().min(1),
+  controlId: z.string().min(1)
+});
+
 export const RuntimeAnimationStartedSchema = z.object({
   type: z.literal("animation.started"),
   instanceId: z.string().min(1),
@@ -726,6 +740,7 @@ export const RuntimeAnimationStartedSchema = z.object({
   toValue: z.union([z.string(), finiteNumberSchema, z.boolean(), z.null()]).optional(),
   config: RuntimeAnimationConfigSchema,
   configControlId: z.string().min(1).optional(),
+  parameterControls: z.record(RuntimeAnimationParameterControlSchema).optional(),
   source: RuntimeAnimationSourceSchema.optional()
 });
 

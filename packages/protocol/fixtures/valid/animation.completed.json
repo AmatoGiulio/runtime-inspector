@@ -1,0 +1,11 @@
+{
+  "type": "animation.completed",
+  "instanceId": "App.tsx:74:4:timing:card.moveX:1234.5:1",
+  "callsiteId": "App.tsx:74:4:timing:card.moveX",
+  "schemaId": "card-transition",
+  "target": "card.moveX",
+  "animationKind": "timing",
+  "endedAtRuntimeMs": 1494.5,
+  "finished": true,
+  "current": -110
+}

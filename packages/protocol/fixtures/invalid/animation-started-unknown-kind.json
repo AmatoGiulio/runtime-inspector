@@ -1,0 +1,10 @@
+{
+  "type": "animation.started",
+  "instanceId": "anim-decay-1",
+  "callsiteId": "App.tsx:90:4:decay:card.moveX",
+  "schemaId": "card-transition",
+  "target": "card.moveX",
+  "animationKind": "decay",
+  "startedAtRuntimeMs": 1234.5,
+  "config": {}
+}

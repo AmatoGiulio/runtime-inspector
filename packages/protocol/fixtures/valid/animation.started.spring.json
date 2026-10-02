@@ -1,0 +1,21 @@
+{
+  "type": "animation.started",
+  "instanceId": "App.tsx:80:4:spring:card.moveX:2000:2",
+  "callsiteId": "App.tsx:80:4:spring:card.moveX",
+  "schemaId": "card-transition",
+  "target": "card.moveX",
+  "animationKind": "spring",
+  "startedAtRuntimeMs": 2000,
+  "config": {},
+  "configControlId": "spring",
+  "source": {
+    "file": "App.tsx",
+    "line": 80,
+    "column": 4,
+    "enclosure": [
+      "App",
+      "replay"
+    ],
+    "expression": "withSpring(card.$targets.moveX, spring)"
+  }
+}

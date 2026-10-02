@@ -1,0 +1,29 @@
+{
+  "type": "animation.started",
+  "instanceId": "App.tsx:74:4:timing:card.moveX:1234.5:1",
+  "callsiteId": "App.tsx:74:4:timing:card.moveX",
+  "schemaId": "card-transition",
+  "target": "card.moveX",
+  "animationKind": "timing",
+  "startedAtRuntimeMs": 1234.5,
+  "toValue": -110,
+  "config": {
+    "duration": 260
+  },
+  "parameterControls": {
+    "duration": {
+      "schemaId": "auto",
+      "controlId": "App.tsx:74:4:timing:card.moveX:duration"
+    }
+  },
+  "source": {
+    "file": "App.tsx",
+    "line": 74,
+    "column": 4,
+    "enclosure": [
+      "App",
+      "replay"
+    ],
+    "expression": "withTiming(-110, { duration: 260, easing })"
+  }
+}
