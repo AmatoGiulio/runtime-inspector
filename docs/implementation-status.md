@@ -370,6 +370,15 @@ Known limits:
 - spring span ends are still estimates;
 - the `spring`-control path (`configControlId`) still resolves its control in the Outline-selected schema.
 
+### M6c Workbench chrome: one header, DialKit controls, themes
+
+**Implemented on `feat/runtime-workbench-desktop`; checked in a browser against the demo runtime on 2026-10-02 (both themes, DialKit slider commit → replay). The unified title bar is Electron-only and was not visible in that check.**
+
+- The window uses `titleBarStyle: "hiddenInset"`. The former top bar and the stage toolbar are one 44 px header that is also the drag region: brand, Controls toggle, notice, live capture status, simulator select, input status, attach/detach, theme toggle, connection. In a browser the same header renders without the traffic-light inset.
+- The Workbench no longer hand-rolls editors. Both inspectors render `InspectorControlRow` from `packages/panel-dialkit` inside a minimal `dialkit-root` scope (`DialKitScope`), so sliders, springs, Béziers, colors, toggles, exact entry and reject-don't-clamp behave exactly as in the web panel. For a selected animation the session passed to the rows is an adapter whose `commitValue` also replays the interaction.
+- Light and dark themes with an Auto / Light / Dark toggle (persisted in `localStorage`, Auto follows `prefers-color-scheme`). Every color in `styles.css` is a `--wb-*` token; the resolved theme is also passed to DialKit. The simulated-device placeholder stays dark in both themes.
+- The playhead time pill is always centered on its line.
+
 Not done yet:
 
 1. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
