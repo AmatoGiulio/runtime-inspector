@@ -530,7 +530,7 @@ export function AnimationTimeline({
                 <div className="motion-group-label dialkit-timeline-label">
                   {/* The row's click handler toggles; a keyboard activation of this button bubbles to it. */}
                   <button
-                    className="motion-group-toggle dialkit-timeline-group-toggle"
+                    className="wb-button toggle motion-group-toggle"
                     type="button"
                     data-open={!collapsed}
                     aria-expanded={!collapsed}

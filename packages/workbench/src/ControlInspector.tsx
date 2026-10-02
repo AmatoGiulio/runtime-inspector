@@ -29,9 +29,13 @@ export function ControlInspector({
       <div className="control-inspector-head">
         <div>
           <div className="control-inspector-name">{control.label}</div>
-          <div className="control-inspector-kind">{control.kind}</div>
+          <div className="control-inspector-kind">{sentenceCase(control.kind)}</div>
         </div>
-        {stale ? <span className="control-stale">stale</span> : null}
+        {stale ? (
+          <span className="wb-pill" data-dot="danger">
+            Stale
+          </span>
+        ) : null}
       </div>
 
       {control.description ? (
@@ -69,4 +73,8 @@ function Meta({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function sentenceCase(input: string): string {
+  return input.charAt(0).toUpperCase() + input.slice(1);
 }

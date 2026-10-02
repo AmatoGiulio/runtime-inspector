@@ -64,12 +64,10 @@ export function AnimationInspector({
             {animationTargetLabel(animation.target)}
           </div>
           <div className="animation-inspector-kind">
-            {animation.animationKind}
+            {humanize(animation.animationKind)}
           </div>
         </div>
-        <span className={`animation-playhead-state ${playheadState}`}>
-          {playheadState}
-        </span>
+        <span className="wb-pill">{humanize(playheadState)}</span>
       </div>
 
       <div className="animation-inspector-section">

@@ -1,70 +1,56 @@
-/* Theme tokens. `index.html` starts on dark; `useWorkbenchTheme` sets `data-theme` on <html>. */
+/*
+ * Workbench design system. One typeface, one type scale, one neutral palette (DialKit's), one
+ * accent, one radius, one control height. Every colour lives in the token blocks below; every text
+ * rule below takes its typography from a --wb-type-* token and nothing else.
+ * `index.html` starts on dark; `useWorkbenchTheme` sets `data-theme` on <html>.
+ */
 :root {
   color-scheme: light;
 
-  /* Surfaces */
-  --wb-bg: #f3f3f6;
-  --wb-surface: #ffffff;
-  --wb-surface-raised: #f0f0f4;
-  --wb-surface-sunken: #e9e9ee;
-  --wb-surface-active: #e3e3ea;
-  --wb-stage-bg: #e9e9ee;
-  --wb-stage-grid: #dfdfe6;
+  /* Typography (theme independent) */
+  --wb-font-sans: system-ui, -apple-system, 'SF Pro Display', sans-serif;
+  --wb-font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
+  --wb-type-title: 600 13px/1.25 var(--wb-font-sans);
+  --wb-type-body: 500 13px/1.25 var(--wb-font-sans);
+  --wb-type-small: 500 11px/1.3 var(--wb-font-sans);
+  --wb-type-label: 600 11px/1.3 var(--wb-font-sans);
+  --wb-type-mono: 500 11px/1.3 var(--wb-font-mono);
+  --wb-type-micro: 500 10px/1 var(--wb-font-mono);
+  --wb-type-display: 600 20px/1.2 var(--wb-font-sans);
 
-  /* Borders and ruler ticks */
-  --wb-border: #d9d9e0;
-  --wb-border-subtle: #e6e6ec;
-  --wb-border-strong: #cbcbd5;
-  --wb-border-hover: #b4b4c0;
-  --wb-tick: #b9b9c4;
+  /* Shape (theme independent) */
+  --wb-radius: 8px;
+  --wb-radius-sm: 5px;
+  --wb-control-h: 28px;
 
-  /* Text */
-  --wb-text: #17171b;
-  --wb-text-strong: #0b0b0f;
-  --wb-text-secondary: #4c4c58;
-  --wb-text-tertiary: #6a6a76;
-  --wb-text-muted: #8b8b98;
-  --wb-text-faint: #a0a0ac;
+  /* Surfaces: DialKit light (--dial-glass-bg, --dial-surface*) */
+  --wb-bg: #f0f0f0;
+  --wb-surface: #fafafa;
+  --wb-surface-raised: rgba(0, 0, 0, 0.04);
+  --wb-surface-hover: rgba(0, 0, 0, 0.08);
+  --wb-surface-active: rgba(0, 0, 0, 0.1);
+
+  /* Borders: DialKit light (--dial-border, --dial-surface-subtle) */
+  --wb-border: rgba(0, 0, 0, 0.1);
+  --wb-border-subtle: rgba(0, 0, 0, 0.06);
+
+  /* Text: DialKit light (--dial-text-primary / -secondary / -tertiary) */
+  --wb-text: rgba(0, 0, 0, 0.9);
+  --wb-text-secondary: rgba(0, 0, 0, 0.55);
+  --wb-text-muted: rgba(0, 0, 0, 0.35);
 
   /* Accent */
   --wb-accent: #6d4aff;
   --wb-accent-hover: #5b38ee;
-  --wb-accent-ring: #a995ff;
   --wb-accent-contrast: #ffffff;
   --wb-accent-soft: rgba(109, 74, 255, 0.12);
   --wb-accent-text: #5a3de0;
-  --wb-accent-text-dim: #7a62e0;
-  --wb-accent-border: #cfc4fb;
-  --wb-accent-surface: #ece8ff;
 
-  /* Timeline bars, rows and grid */
-  --wb-bar: rgba(20, 20, 30, 0.16);
-  --wb-bar-hover: rgba(20, 20, 30, 0.26);
-  --wb-bar-handle: rgba(20, 20, 30, 0.55);
-  --wb-bar-handle-on-accent: rgba(255, 255, 255, 0.85);
-  --wb-row-hover: rgba(20, 20, 30, 0.035);
-  --wb-grid-line: rgba(20, 20, 30, 0.07);
-  --wb-control-pressed: rgba(20, 20, 30, 0.07);
-  --wb-playhead: #f0355a;
-  --wb-playhead-contrast: #ffffff;
-  --wb-mask-solid: #000000;
-
-  /* Status */
+  /* Status dots */
   --wb-success: #1f9d57;
-  --wb-success-border: #b4dfc6;
-  --wb-success-surface: #e3f4ea;
-  --wb-success-text: #17794a;
-  --wb-dot-idle: #b4b4c0;
   --wb-danger: #c2413b;
-  --wb-danger-border: #e8b9b6;
-  --wb-danger-surface: #fbe9e8;
-  --wb-danger-soft: #fdeeed;
-  --wb-danger-overlay: rgba(253, 238, 237, 0.96);
-  --wb-danger-text: #9b2f2a;
-  --wb-record: #d93b3b;
 
   /* Elevation and overlays */
-  --wb-shadow: rgba(20, 20, 30, 0.14);
   --wb-shadow-lg: rgba(20, 20, 30, 0.2);
   --wb-shadow-sm: rgba(20, 20, 30, 0.1);
   --wb-overlay-bg: rgba(255, 255, 255, 0.82);
@@ -83,104 +69,48 @@
   --wb-device-text: #f2f2f3;
   --wb-device-eyebrow: #73737a;
   --wb-device-copy: #74747b;
-  --wb-device-button-border: #36363a;
-  --wb-device-button-text: #d6d6da;
-  --wb-device-button-bg: #242427;
-  --wb-device-button-hover: #2b2b30;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  /* Surfaces */
-  --wb-bg: #0f0f10;
-  --wb-surface: #18181a;
-  --wb-surface-raised: #202023;
-  --wb-surface-sunken: #151517;
-  --wb-surface-active: #2b2b2f;
-  --wb-stage-bg: #121214;
-  --wb-stage-grid: #1a1a1d;
+  /* Surfaces: DialKit dark (--dial-glass-bg, --dial-surface*) */
+  --wb-bg: #181818;
+  --wb-surface: #212121;
+  --wb-surface-raised: rgba(255, 255, 255, 0.05);
+  --wb-surface-hover: rgba(255, 255, 255, 0.1);
+  --wb-surface-active: rgba(255, 255, 255, 0.11);
 
-  /* Borders and ruler ticks */
-  --wb-border: #2a2a2d;
-  --wb-border-subtle: #242427;
-  --wb-border-strong: #36363a;
-  --wb-border-hover: #515158;
-  --wb-tick: #3a3a3f;
+  /* Borders: DialKit dark (--dial-border, --dial-surface-subtle) */
+  --wb-border: rgba(255, 255, 255, 0.1);
+  --wb-border-subtle: rgba(255, 255, 255, 0.06);
 
-  /* Text */
-  --wb-text: #f2f2f3;
-  --wb-text-strong: #ffffff;
-  --wb-text-secondary: #c8c8cd;
-  --wb-text-tertiary: #9b9ba1;
-  --wb-text-muted: #77777d;
-  --wb-text-faint: #65656a;
+  /* Text: DialKit dark (--dial-text-primary / -secondary / -tertiary) */
+  --wb-text: rgba(255, 255, 255, 0.95);
+  --wb-text-secondary: rgba(255, 255, 255, 0.6);
+  --wb-text-muted: rgba(255, 255, 255, 0.4);
 
   /* Accent */
   --wb-accent: #7c5cff;
   --wb-accent-hover: #8b6eff;
-  --wb-accent-ring: #b9a8ff;
   --wb-accent-contrast: #ffffff;
   --wb-accent-soft: rgba(124, 92, 255, 0.14);
   --wb-accent-text: #9b8cff;
-  --wb-accent-text-dim: #7b70d8;
-  --wb-accent-border: #55496f;
-  --wb-accent-surface: #29233a;
 
-  /* Timeline bars, rows and grid */
-  --wb-bar: rgba(255, 255, 255, 0.16);
-  --wb-bar-hover: rgba(255, 255, 255, 0.24);
-  --wb-bar-handle: rgba(255, 255, 255, 0.85);
-  --wb-bar-handle-on-accent: rgba(255, 255, 255, 0.85);
-  --wb-row-hover: rgba(255, 255, 255, 0.03);
-  --wb-grid-line: rgba(255, 255, 255, 0.045);
-  --wb-control-pressed: rgba(255, 255, 255, 0.08);
-  --wb-playhead: #ff4d6a;
-  --wb-playhead-contrast: #ffffff;
-  --wb-mask-solid: #000000;
-
-  /* Status */
+  /* Status dots */
   --wb-success: #38c878;
-  --wb-success-border: #28513a;
-  --wb-success-surface: #182a20;
-  --wb-success-text: #76d49e;
-  --wb-dot-idle: #6b6b70;
   --wb-danger: #c98d8d;
-  --wb-danger-border: #59383a;
-  --wb-danger-surface: #3a2023;
-  --wb-danger-soft: #2b1d1f;
-  --wb-danger-overlay: rgba(55, 29, 31, 0.94);
-  --wb-danger-text: #e5b8bb;
-  --wb-record: #e65a5a;
 
   /* Elevation and overlays */
-  --wb-shadow: rgba(0, 0, 0, 0.5);
   --wb-shadow-lg: rgba(0, 0, 0, 0.52);
   --wb-shadow-sm: rgba(0, 0, 0, 0.35);
   --wb-overlay-bg: rgba(15, 15, 17, 0.78);
   --wb-overlay-border: rgba(255, 255, 255, 0.08);
-
-  /* Simulator capture (video / framebuffer) stays black in both themes. */
-  --wb-video-bg: #050506;
-  --wb-video-text: #66666c;
-
-  /* Simulated device placeholder: always dark, identical in both themes. */
-  --wb-device-border: #2b2b2d;
-  --wb-device-outline: #505055;
-  --wb-device-bg: #080809;
-  --wb-device-glow: rgba(118, 111, 255, 0.12);
-  --wb-device-shadow: rgba(0, 0, 0, 0.52);
-  --wb-device-text: #f2f2f3;
-  --wb-device-eyebrow: #73737a;
-  --wb-device-copy: #74747b;
-  --wb-device-button-border: #36363a;
-  --wb-device-button-text: #d6d6da;
-  --wb-device-button-bg: #242427;
-  --wb-device-button-hover: #2b2b30;
 }
 
 :root {
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: var(--wb-type-body);
+  -webkit-font-smoothing: antialiased;
   background: var(--wb-bg);
   color: var(--wb-text);
 }
@@ -203,6 +133,100 @@ button {
   font: inherit;
 }
 
+/* Shared controls: three button variants and one status pill. */
+
+.wb-button {
+  flex: 0 0 auto;
+  height: var(--wb-control-h);
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--wb-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: var(--wb-type-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.wb-button:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: 1px;
+}
+
+.wb-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wb-button.primary {
+  background: var(--wb-accent);
+  color: var(--wb-accent-contrast);
+}
+
+.wb-button.primary:where(:hover:not(:disabled)) {
+  background: var(--wb-accent-hover);
+}
+
+.wb-button.secondary {
+  background: var(--wb-surface-raised);
+  color: var(--wb-text);
+}
+
+.wb-button.secondary:where(:hover:not(:disabled)) {
+  background: var(--wb-surface-hover);
+}
+
+.wb-button.toggle {
+  background: transparent;
+  color: var(--wb-text-secondary);
+}
+
+.wb-button.toggle:where(:hover:not(:disabled)) {
+  background: var(--wb-surface-raised);
+}
+
+.wb-button.toggle[aria-pressed="true"],
+.wb-button.toggle.active {
+  background: var(--wb-accent-soft);
+  color: var(--wb-accent-text);
+}
+
+.wb-pill {
+  flex: 0 0 auto;
+  height: 22px;
+  min-width: 0;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--wb-surface-raised);
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+  white-space: nowrap;
+}
+
+.wb-pill[data-dot]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--wb-text-muted);
+}
+
+.wb-pill[data-dot="success"]::before {
+  background: var(--wb-success);
+}
+
+.wb-pill[data-dot="danger"]::before {
+  background: var(--wb-danger);
+}
+
 .workbench {
   height: 100vh;
   min-height: 620px;
@@ -219,7 +243,7 @@ button {
   gap: 12px;
   min-width: 0;
   height: 44px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--wb-border);
   background: var(--wb-surface);
 }
@@ -241,40 +265,7 @@ button {
 .brand {
   flex: 0 0 auto;
   white-space: nowrap;
-}
-
-.brand {
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.topbar-toggle {
-  flex: 0 0 auto;
-  margin: 0;
-  border: 0;
-  border-radius: 5px;
-  padding: 4px 9px;
-  color: var(--wb-text-tertiary);
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.topbar-toggle:hover {
-  color: var(--wb-text-secondary);
-}
-
-.topbar-toggle[aria-pressed="true"] {
-  color: var(--wb-text);
-  background: var(--wb-control-pressed);
-}
-
-.topbar-toggle:focus-visible {
-  outline: 2px solid var(--wb-accent);
-  outline-offset: 1px;
+  font: var(--wb-type-title);
 }
 
 .notice {
@@ -283,29 +274,24 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--wb-danger);
-  font-size: 11px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+}
+
+.notice::before,
+.capture-error::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--wb-danger);
+  vertical-align: middle;
 }
 
 .connection {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--wb-text-tertiary);
-  font-size: 11px;
   text-transform: capitalize;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--wb-dot-idle);
-}
-
-.connection[data-status="connected"] .dot {
-  background: var(--wb-success);
 }
 
 .workspace {
@@ -339,39 +325,32 @@ button {
   display: flex;
   align-items: center;
   padding: 0 12px;
-  color: var(--wb-text-tertiary);
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-label);
   border-bottom: 1px solid var(--wb-border);
 }
 
 .schema {
-  padding: 6px 8px;
+  padding: 6px 12px;
 }
 
-.schema-button {
-  width: 100%;
-  border: 0;
-  color: var(--wb-text-secondary);
-  background: transparent;
+/* Outline rows are toggle buttons that bleed 8px into the 12px gutter, so their text aligns at 12px. */
+.schema-button,
+.outline-item {
+  width: calc(100% + 16px);
+  margin-inline: -8px;
+  justify-content: flex-start;
+  padding: 0 8px;
   text-align: left;
-  border-radius: 5px;
-  cursor: pointer;
 }
 
 .schema-button {
-  padding: 7px 8px;
-  font-size: 12px;
-  font-weight: 620;
+  font: var(--wb-type-title);
 }
 
-.schema-button.active {
-  background: var(--wb-surface-active);
-  color: var(--wb-text-strong);
-}
-
-.probe-icon {
-  color: var(--wb-accent-text);
+.wb-button.schema-button.active {
+  background: var(--wb-surface-raised);
+  color: var(--wb-text);
 }
 
 .runtime-stage {
@@ -382,9 +361,9 @@ button {
   min-height: 0;
   overflow: hidden;
   background:
-    linear-gradient(var(--wb-stage-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--wb-stage-grid) 1px, transparent 1px),
-    var(--wb-stage-bg);
+    linear-gradient(var(--wb-surface-raised) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wb-surface-raised) 1px, transparent 1px),
+    var(--wb-bg);
   background-size: 24px 24px;
 }
 
@@ -392,9 +371,8 @@ button {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  font-size: 11px;
-  font-weight: 450;
-  color: var(--wb-text-faint);
+  font: var(--wb-type-small);
+  color: var(--wb-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -410,56 +388,25 @@ button {
 .simulator-select {
   min-width: 0;
   max-width: 290px;
-  height: 24px;
-  border: 1px solid var(--wb-border-strong);
-  border-radius: 6px;
-  padding: 0 24px 0 8px;
-  color: var(--wb-text-secondary);
+  height: var(--wb-control-h);
+  border: 0;
+  border-radius: var(--wb-radius);
+  padding: 0 24px 0 10px;
+  color: var(--wb-text);
   background: var(--wb-surface-raised);
-  font: inherit;
-  font-size: 11px;
-  outline: none;
+  font: var(--wb-type-body);
+  transition: background-color 100ms ease;
 }
 
-.simulator-select:focus {
-  border-color: var(--wb-border-hover);
+.simulator-select:hover:not(:disabled) {
+  background: var(--wb-surface-hover);
 }
 
-.stage-action {
-  border: 1px solid var(--wb-border-strong);
-  color: var(--wb-text-secondary);
-  background: var(--wb-surface-raised);
-  border-radius: 6px;
-  cursor: pointer;
+.simulator-select:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: 1px;
 }
 
-/* Inside the always-dark simulated device: its own tokens, identical in both themes. */
-.device-attach {
-  border: 1px solid var(--wb-device-button-border);
-  color: var(--wb-device-button-text);
-  background: var(--wb-device-button-bg);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.stage-action {
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 0 9px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.stage-action:hover:not(:disabled) {
-  background: var(--wb-surface-active);
-}
-
-.device-attach:hover:not(:disabled) {
-  background: var(--wb-device-button-hover);
-}
-
-.stage-action:disabled,
-.device-attach:disabled,
 .simulator-select:disabled {
   opacity: 0.45;
   cursor: default;
@@ -467,24 +414,10 @@ button {
 
 .capture-status {
   flex: 0 1 auto;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--wb-text-muted);
-  font-size: 11px;
-  font-weight: 450;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.capture-status-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--wb-success);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .runtime-surface {
@@ -530,33 +463,25 @@ button {
 
 .device-eyebrow {
   color: var(--wb-device-eyebrow);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font: var(--wb-type-small);
 }
 
 .device-title {
   margin-top: 10px;
   color: var(--wb-device-text);
-  font-size: 20px;
-  line-height: 1.08;
-  font-weight: 690;
-  letter-spacing: -0.03em;
+  font: var(--wb-type-display);
 }
 
 .device-copy {
   margin-top: 12px;
   color: var(--wb-device-copy);
-  font-size: 11px;
+  font: var(--wb-type-small);
   line-height: 1.5;
 }
 
 .device-attach {
   align-self: flex-start;
-  height: 28px;
   margin-top: 18px;
-  padding: 0 10px;
-  font-size: 10px;
 }
 
 .runtime-video-shell {
@@ -567,7 +492,7 @@ button {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid var(--wb-border-strong);
+  border: 1px solid var(--wb-border);
   border-radius: 18px;
   background: var(--wb-video-bg);
   box-shadow: 0 28px 80px var(--wb-shadow-lg);
@@ -589,7 +514,7 @@ button {
   display: grid;
   place-items: center;
   overflow: hidden;
-  border: 1px solid var(--wb-border-strong);
+  border: 1px solid var(--wb-border);
   border-radius: 34px;
   background: var(--wb-video-bg);
   box-shadow: 0 28px 80px var(--wb-shadow-lg);
@@ -618,7 +543,7 @@ button {
   padding: 24px;
   color: var(--wb-video-text);
   background: var(--wb-video-bg);
-  font-size: 10px;
+  font: var(--wb-type-small);
   text-align: center;
   pointer-events: none;
 }
@@ -633,27 +558,6 @@ button {
   pointer-events: none;
 }
 
-.input-status {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--wb-success-border);
-  border-radius: 6px;
-  background: var(--wb-success-surface);
-  color: var(--wb-success-text);
-  font-size: 11px;
-  font-weight: 560;
-  white-space: nowrap;
-}
-
-.input-status.pending {
-  border-color: var(--wb-border-strong);
-  background: var(--wb-surface-raised);
-  color: var(--wb-text-tertiary);
-}
-
 .runtime-video-caption {
   position: absolute;
   left: 10px;
@@ -666,11 +570,11 @@ button {
   gap: 18px;
   padding: 7px 9px;
   border: 1px solid var(--wb-overlay-border);
-  border-radius: 7px;
+  border-radius: var(--wb-radius);
   background: var(--wb-overlay-bg);
   backdrop-filter: blur(14px);
-  color: var(--wb-text-tertiary);
-  font-size: 9px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
   pointer-events: none;
 }
 
@@ -690,19 +594,19 @@ button {
   bottom: 16px;
   transform: translateX(-50%);
   max-width: min(560px, calc(100% - 32px));
-  padding: 8px 10px;
-  border: 1px solid var(--wb-danger-border);
-  border-radius: 7px;
-  background: var(--wb-danger-overlay);
-  color: var(--wb-danger-text);
-  font-size: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--wb-border);
+  border-radius: var(--wb-radius);
+  background: var(--wb-surface);
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
   line-height: 1.4;
   text-align: center;
   box-shadow: 0 10px 30px var(--wb-shadow-sm);
 }
 
 .inspector-fields {
-  padding: 6px 10px;
+  padding: 6px 12px;
 }
 
 .field {
@@ -712,34 +616,35 @@ button {
   justify-content: space-between;
   gap: 12px;
   border-bottom: 1px solid var(--wb-border-subtle);
-  font-size: 11px;
 }
 
 .field span {
-  color: var(--wb-text-muted);
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
 }
 
 .field strong {
-  color: var(--wb-text-secondary);
-  font-weight: 520;
+  color: var(--wb-text);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .empty {
-  padding: 14px 12px;
-  color: var(--wb-text-faint);
-  font-size: 11px;
+  padding: 12px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
   line-height: 1.5;
 }
 
 /*
  * Timeline region = a DialKit surface. The <section> carries `dialkit-root` + `data-theme`
- * (App.tsx), so the --dial-* tokens resolve and follow the Workbench theme. Everything in the
- * timeline region (here and in the motion-* rules below) reads --dial-* tokens only.
- * DialKit's `dialkit-timeline-*` classes are applied where their CSS suits our two-column,
- * percent-positioned grid; the rest are own rules that copy DialKit's visual declarations.
+ * (App.tsx), so the --dial-* tokens resolve and follow the Workbench theme (they equal the
+ * --wb-* neutrals). DialKit's `dialkit-timeline-*` classes are applied where their CSS suits our
+ * two-column, percent-positioned grid; the rest are own rules that copy DialKit's visual
+ * declarations. Type always comes from the --wb-type-* tokens, never from DialKit's sizes.
  */
 .timeline {
   --dial-timeline-label-w: 220px;
@@ -751,22 +656,17 @@ button {
    */
   --motion-clip-fill: color-mix(in srgb, var(--dial-text-root) 90%, var(--dial-glass-bg));
   --motion-clip-fill-hover: var(--dial-text-root);
-  /* DialKit's playhead flag is a light chip with dark text in both themes. */
-  --motion-flag-bg: var(--dial-text-root);
-  --motion-flag-fg: var(--dial-glass-bg);
   min-height: 0;
   display: grid;
   grid-template-rows: var(--dial-timeline-header-h) minmax(0, 1fr);
-  border-top: 1px solid var(--dial-border);
-  background: var(--dial-glass-bg);
-  color: var(--dial-text-label);
+  border-top: 1px solid var(--wb-border);
+  background: var(--wb-surface);
+  color: var(--wb-text-secondary);
 }
 
 .timeline[data-theme="light"] {
   --motion-clip-fill: color-mix(in srgb, var(--dial-text-root) 7%, var(--dial-glass-bg));
   --motion-clip-fill-hover: color-mix(in srgb, var(--dial-text-root) 20%, var(--dial-glass-bg));
-  --motion-flag-bg: var(--dial-glass-bg);
-  --motion-flag-fg: var(--dial-text-root);
 }
 
 /* Toolbar: same height and layout language as `dialkit-timeline-header` (not applied: its grid columns are fixed). */
@@ -779,21 +679,22 @@ button {
   padding: 4px 12px 0;
 }
 
-.timeline-play:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.timeline-play:disabled:hover {
-  background: var(--dial-surface);
+.timeline-play svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
 }
 
 .timeline-time {
   flex: 0 0 auto;
+  color: var(--wb-text);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .timeline-time-total {
-  color: var(--dial-text-tertiary);
+  color: var(--wb-text-muted);
 }
 
 .timeline-spacer {
@@ -804,8 +705,8 @@ button {
 .timeline-meta {
   min-width: 0;
   overflow: hidden;
-  color: var(--dial-text-secondary);
-  font-size: 11px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-mono);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -826,8 +727,7 @@ button {
 }
 
 .timeline-dev[open] > summary {
-  background: var(--dial-surface-active);
-  color: var(--dial-text-root);
+  background: var(--wb-surface-hover);
 }
 
 /* Popover surface = `dialkit-timeline-popover` (fixed-positioned there, so own rule). */
@@ -840,10 +740,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid var(--dial-border);
-  border-radius: 14px;
+  border: 1px solid var(--wb-border);
+  border-radius: var(--wb-radius);
   padding: 8px;
-  background: var(--dial-glass-bg);
+  background: var(--wb-surface);
   box-shadow: var(--dial-shadow);
 }
 
@@ -853,25 +753,15 @@ button {
   text-align: left;
 }
 
-.timeline-dev-menu > button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.timeline-dev-menu > button:disabled:hover {
-  background: var(--dial-surface);
-}
-
 .timeline-dev-menu > .record.active {
-  background: var(--dial-surface-active);
-  color: var(--dial-text-root);
+  background: var(--wb-surface-active);
 }
 
 .record-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 99px;
-  background: var(--dial-text-tertiary);
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--wb-text-muted);
 }
 
 .record.active .record-dot {
@@ -881,52 +771,32 @@ button {
 /* Semantic outline + contextual inspector */
 
 .outline-sections {
-  padding: 4px 0 2px 8px;
+  padding: 0 0 6px;
 }
 
-.outline-section + .outline-section {
-  margin-top: 8px;
+.outline-section {
+  padding-top: 10px;
 }
 
-.outline-section-label {
-  padding: 4px 8px 3px;
-  color: var(--wb-text-faint);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.outline-item {
-  width: 100%;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 0;
-  border-radius: 6px;
-  padding: 5px 8px;
+/* One section-heading style for the Outline and the Inspector: same type, same 10px above / 6px below. */
+.outline-section-label,
+.animation-inspector-section-title {
+  margin: 0;
+  padding: 0 0 6px;
   color: var(--wb-text-secondary);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.outline-item:hover {
-  background: var(--wb-surface-raised);
-}
-
-.outline-item.active {
-  background: var(--wb-surface-active);
-  color: var(--wb-text-strong);
+  font: var(--wb-type-label);
 }
 
 .outline-item-icon {
   width: 14px;
   flex: 0 0 14px;
-  color: var(--wb-accent-text);
-  font-size: 11px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
   text-align: center;
+}
+
+.outline-item.active .outline-item-icon {
+  color: inherit;
 }
 
 .outline-item-copy {
@@ -943,18 +813,17 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font: var(--wb-type-body);
 }
 
 .outline-item-copy small {
   flex: 0 0 auto;
-  color: var(--wb-text-faint);
-  font-size: 9px;
-  font-weight: 500;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
 }
 
 .outline-item.active .outline-item-copy small {
-  color: var(--wb-text-tertiary);
+  color: inherit;
 }
 
 .control-inspector {
@@ -972,34 +841,19 @@ button {
 
 .control-inspector-name {
   color: var(--wb-text);
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font: var(--wb-type-title);
 }
 
 .control-inspector-kind {
   margin-top: 3px;
-  color: var(--wb-text-faint);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.control-stale {
-  padding: 3px 6px;
-  border: 1px solid var(--wb-danger-border);
-  border-radius: 999px;
-  color: var(--wb-danger);
-  background: var(--wb-danger-soft);
-  font-size: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
 }
 
 .control-description {
   padding: 10px 0 0;
-  color: var(--wb-text-muted);
-  font-size: 10px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
   line-height: 1.45;
 }
 
@@ -1038,15 +892,16 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: var(--wb-text-muted);
-  font-size: 9px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
 }
 
 .control-meta-row strong {
   max-width: 65%;
   overflow: hidden;
-  color: var(--wb-text-tertiary);
-  font-weight: 500;
+  color: var(--wb-text);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1058,7 +913,7 @@ button {
   overscroll-behavior: contain;
   padding: 0 0 10px 12px;
   scrollbar-width: thin;
-  scrollbar-color: var(--dial-text-tertiary) transparent;
+  scrollbar-color: var(--wb-text-muted) transparent;
 }
 
 .timeline-body::-webkit-scrollbar {
@@ -1071,7 +926,7 @@ button {
 
 .timeline-body::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: var(--dial-text-tertiary);
+  background: var(--wb-text-muted);
 }
 
 /* Timeline-first motion workspace */
@@ -1080,8 +935,8 @@ button {
   height: 100%;
   display: grid;
   place-items: center;
-  color: var(--dial-text-tertiary);
-  font-size: 12px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
 }
 
 /* `dialkit-timeline-body` + `dialkit-timeline-grid` supply overflow, position, flex column and the 6px row gap. */
@@ -1099,13 +954,19 @@ button {
   padding-right: var(--motion-edge-gutter);
 }
 
+/* Every label cell speaks the body type; group names step up to title. */
+.timeline .dialkit-timeline-label {
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
+}
+
 /* Ruler: `dialkit-timeline-row` gives the grid + height; the sticky offset is ours (DialKit's sits below its own sticky header). */
 
 .motion-ruler-row {
   position: sticky;
   z-index: 10;
   top: 0;
-  background: var(--dial-glass-bg);
+  background: var(--wb-surface);
   backdrop-filter: blur(var(--dial-backdrop-blur));
   -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
   overflow: visible;
@@ -1113,7 +974,9 @@ button {
 
 /* DialKit labels the final tick from its left edge; keep ours inside the ruler. */
 .motion-ruler-tick .dialkit-timeline-tick-label {
-  font-size: 10px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-micro);
+  font-variant-numeric: tabular-nums;
 }
 
 .motion-ruler-tick.last .dialkit-timeline-tick-label {
@@ -1133,13 +996,24 @@ button {
   cursor: pointer;
 }
 
-.motion-group-row:hover .dialkit-timeline-group-toggle {
-  color: var(--dial-text-root);
+/* A chevron-sized toggle: the one place the 28px control height does not apply (the row is 22px). */
+.motion-group-toggle {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: -2px;
+  border-radius: var(--wb-radius-sm);
+}
+
+.motion-group-row:hover .motion-group-toggle {
+  color: var(--wb-text);
 }
 
 .motion-group-name {
   min-width: 0;
   overflow: hidden;
+  color: var(--wb-text);
+  font: var(--wb-type-title);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1149,22 +1023,18 @@ button {
   min-width: 0;
 }
 
-/* Animation row: DialKit has no row selection or hover; both are a --dial-* tint. */
+/* Animation row: DialKit has no row selection or hover; selection is a soft accent tint. */
 
 .motion-row {
-  border-radius: var(--dial-radius);
+  border-radius: var(--wb-radius);
 }
 
 .motion-row.selected {
-  background: var(--dial-surface);
+  background: var(--wb-accent-soft);
 }
 
 .motion-row:hover .motion-row-lane {
-  background: var(--dial-surface-hover);
-}
-
-.motion-row.selected .motion-row-lane {
-  background: var(--dial-surface-active);
+  background: var(--wb-surface-hover);
 }
 
 .motion-row-label {
@@ -1179,16 +1049,16 @@ button {
 
 .motion-row-label:hover,
 .motion-row.selected .motion-row-label {
-  color: var(--dial-text-root);
+  color: var(--wb-text);
 }
 
 .motion-row-glyph {
   flex: 0 0 auto;
-  color: var(--dial-text-tertiary);
+  color: var(--wb-text-muted);
 }
 
 .motion-row.selected .motion-row-glyph {
-  color: var(--dial-text-root);
+  color: var(--wb-text);
 }
 
 .motion-row-name {
@@ -1200,8 +1070,8 @@ button {
 
 .motion-row-kind {
   flex: 0 0 auto;
-  color: var(--dial-text-tertiary);
-  font-size: 11px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
   white-space: nowrap;
 }
 
@@ -1210,9 +1080,8 @@ button {
   flex: 0 0 auto;
   margin-left: auto;
   padding-left: 8px;
-  color: var(--dial-text-tertiary);
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 10px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1227,11 +1096,11 @@ button {
   position: absolute;
   inset-block: 0;
   width: 1px;
-  background: var(--dial-surface-subtle);
+  background: var(--wb-border-subtle);
   pointer-events: none;
 }
 
-/* Bars: `dialkit-timeline-clip` supplies radius, padding, cursor, z-index, the selected ring and the dragging cursor. */
+/* Bars: `dialkit-timeline-clip` supplies padding, cursor, z-index and the dragging cursor. */
 
 .motion-bar {
   top: 3px;
@@ -1239,14 +1108,24 @@ button {
   height: calc(100% - 6px);
   min-width: 6px;
   border: 0;
+  border-radius: var(--wb-radius-sm);
   color: var(--dial-text-root);
   background: var(--motion-clip-fill);
-  font: inherit;
   transition: background-color 100ms ease;
 }
 
 .motion-bar:hover {
   background: var(--motion-clip-fill-hover);
+}
+
+/* The selected bar is the one accent-filled element in the timeline body. */
+.motion-bar[data-selected] {
+  background: var(--wb-accent);
+  box-shadow: none;
+}
+
+.motion-bar[data-selected]:hover {
+  background: var(--wb-accent-hover);
 }
 
 .motion-bar:not(.movable) {
@@ -1255,17 +1134,11 @@ button {
 
 /*
  * The end of a spring is an estimate: fade the tail out instead of drawing a hard edge. A mask
- * clips to the border box, so the selected ring is drawn inside the bar here.
+ * clips to the border box, so no ring is drawn on a selected bar (it is accent-filled instead).
  */
 .motion-bar.estimated {
   -webkit-mask-image: linear-gradient(to right, currentColor calc(100% - 28px), transparent);
   mask-image: linear-gradient(to right, currentColor calc(100% - 28px), transparent);
-}
-
-.motion-bar.estimated[data-selected] {
-  box-shadow:
-    inset 0 0 0 2px var(--dial-text-root),
-    inset 0 0 0 999px var(--dial-timeline-clip-overlay);
 }
 
 /* Handles are lane siblings placed by an inline `left` (not clip children), so `dialkit-timeline-clip-handle` cannot apply. */
@@ -1286,7 +1159,7 @@ button {
   left: 3px;
   width: 2px;
   border-radius: 1px;
-  background: var(--dial-glass-bg);
+  background: var(--wb-surface);
   opacity: 0;
   transition: opacity 100ms ease;
 }
@@ -1295,7 +1168,9 @@ button {
   opacity: 0.5;
 }
 
+/* An active handle sits on the accent-filled selected bar. */
 .motion-bar-resize.active::after {
+  background: var(--wb-accent-contrast);
   opacity: 0.85;
 }
 
@@ -1317,7 +1192,7 @@ button {
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: var(--dial-text-root);
+  background: var(--wb-accent);
 }
 
 .motion-playhead-marker {
@@ -1336,7 +1211,7 @@ button {
   bottom: 0;
   left: -1px;
   width: 2px;
-  background: var(--dial-text-root);
+  background: var(--wb-accent);
 }
 
 /* Centered on the stem at every position; overhangs the ruler at 0% / 100%. */
@@ -1348,31 +1223,26 @@ button {
   transform: translate(-50%, -50%);
   min-width: 52px;
   height: 18px;
-  border: 1px solid var(--dial-border-hover);
-  border-radius: 6px;
+  border-radius: var(--wb-radius);
   padding: 0 7px;
-  color: var(--motion-flag-fg);
-  background: var(--motion-flag-bg);
-  box-shadow: var(--dial-shadow-collapsed);
-  font-family: "Geist Mono", ui-monospace, monospace;
-  font-size: 10px;
-  font-weight: 600;
+  color: var(--wb-accent-contrast);
+  background: var(--wb-accent);
+  font: var(--wb-type-micro);
   font-variant-numeric: tabular-nums;
-  line-height: 16px;
+  line-height: 18px;
   text-align: center;
   white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .timeline .dialkit-toolbar-add,
-  .timeline .dialkit-toolbar-copy,
+  .wb-button,
+  .simulator-select,
   .motion-bar,
   .motion-bar-resize::after,
   .motion-group-toggle svg {
     transition: none;
   }
 }
-
 
 .animation-inspector {
   padding: 12px;
@@ -1389,49 +1259,18 @@ button {
 
 .animation-inspector-name {
   color: var(--wb-text);
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font: var(--wb-type-title);
 }
 
 .animation-inspector-kind {
   margin-top: 3px;
-  color: var(--wb-accent-text-dim);
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.animation-playhead-state {
-  padding: 3px 6px;
-  border: 1px solid var(--wb-border-strong);
-  border-radius: 999px;
   color: var(--wb-text-muted);
-  background: var(--wb-surface-raised);
-  font-size: 8px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.animation-playhead-state.active {
-  border-color: var(--wb-accent-border);
-  color: var(--wb-accent-text);
-  background: var(--wb-accent-surface);
+  font: var(--wb-type-small);
 }
 
 .animation-inspector-section {
   padding: 10px 0;
   border-bottom: 1px solid var(--wb-border-subtle);
-}
-
-.animation-inspector-section-title {
-  margin-bottom: 6px;
-  color: var(--wb-text-faint);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .animation-inspector-row {
@@ -1440,22 +1279,22 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 9px;
 }
 
 .animation-inspector-row span {
-  color: var(--wb-text-muted);
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
 }
 
 .animation-inspector-row strong {
   max-width: 68%;
   overflow: hidden;
-  color: var(--wb-text-secondary);
-  font-weight: 520;
+  color: var(--wb-text);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .animation-source-expression {
@@ -1465,10 +1304,11 @@ button {
   overflow: auto;
   padding: 7px;
   border: 1px solid var(--wb-border);
-  border-radius: 5px;
-  color: var(--wb-text-tertiary);
-  background: var(--wb-surface-sunken);
-  font-size: 8px;
+  border-radius: var(--wb-radius);
+  color: var(--wb-text-secondary);
+  background: var(--wb-surface-raised);
+  font: var(--wb-type-mono);
+  font-variant-numeric: tabular-nums;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1476,8 +1316,7 @@ button {
 
 .animation-inspector-note {
   margin-top: 8px;
-  color: var(--wb-text-faint);
-  font-size: 8px;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
   line-height: 1.45;
 }
-

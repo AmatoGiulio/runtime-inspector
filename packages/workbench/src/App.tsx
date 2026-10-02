@@ -876,7 +876,7 @@ function App() {
         <div className="brand">Runtime Inspector</div>
         <button
           type="button"
-          className="topbar-toggle"
+          className="wb-button toggle"
           aria-pressed={outlineVisible}
           onClick={() => setOutlineVisible((visible) => !visible)}
         >
@@ -886,8 +886,7 @@ function App() {
         <div className="topbar-spacer" />
 
         {runtimeCapture ? (
-          <span className="capture-status">
-            <span className="capture-status-dot" />
+          <span className="wb-pill capture-status" data-dot="success">
             {captureSummary(runtimeCapture, framebufferFrameSource)}
           </span>
         ) : window.runtimeDesktop ? (
@@ -917,23 +916,35 @@ function App() {
           {runtimeCapture && window.runtimeDesktop ? (
             runtimeCapture.source === "framebuffer" ? (
               inputReady ? (
-                <span className="input-status" title="Native Simulator HID input enabled">
+                <span
+                  className="wb-pill"
+                  data-dot="success"
+                  title="Native Simulator HID input enabled"
+                >
                   Input on
                 </span>
               ) : (
-                <button className="stage-action" type="button" onClick={retrySimulatorInput}>
+                <button
+                  className="wb-button secondary"
+                  type="button"
+                  onClick={retrySimulatorInput}
+                >
                   Retry Input
                 </button>
               )
             ) : (
-              <span className="input-status pending" title="Window fallback is view-only">
+              <span
+                className="wb-pill"
+                data-dot="muted"
+                title="Window fallback is view-only"
+              >
                 View only
               </span>
             )
           ) : null}
 
           <button
-            className="stage-action"
+            className={runtimeCapture ? "wb-button secondary" : "wb-button primary"}
             type="button"
             onClick={runtimeCapture ? detachRuntimeCapture : attachRuntimeCapture}
             disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
@@ -950,7 +961,7 @@ function App() {
 
         <button
           type="button"
-          className="topbar-toggle theme-toggle"
+          className="wb-button toggle"
           onClick={cycleTheme}
           title={`Theme: ${themeLabel}`}
           aria-label={`Theme: ${themeLabel}`}
@@ -958,8 +969,11 @@ function App() {
           {themeLabel}
         </button>
 
-        <div className="connection" data-status={state.status}>
-          <span className="dot" />
+        <div
+          className="wb-pill connection"
+          data-status={state.status}
+          data-dot={state.status === "connected" ? "success" : "muted"}
+        >
           {state.status}
         </div>
       </header>
@@ -984,7 +998,11 @@ function App() {
                 return (
                   <div className="schema" key={id}>
                     <button
-                      className={id === schemaId ? "schema-button active" : "schema-button"}
+                      className={
+                        id === schemaId
+                          ? "wb-button toggle schema-button active"
+                          : "wb-button toggle schema-button"
+                      }
                       onClick={() => {
                         setSchemaId(id);
                         if (schemaProbes[0]) {
@@ -1010,8 +1028,8 @@ function App() {
                                 className={
                                   inspectorMode === "control" &&
                                   control.id === selectedControlId
-                                    ? "outline-item active"
-                                    : "outline-item"
+                                    ? "wb-button toggle outline-item active"
+                                    : "wb-button toggle outline-item"
                                 }
                                 onClick={() => {
                                   setSchemaId(id);
@@ -1040,8 +1058,8 @@ function App() {
                                 key={probe.id}
                                 className={
                                   inspectorMode === "probe" && probe.id === probeId
-                                    ? "outline-item active"
-                                    : "outline-item"
+                                    ? "wb-button toggle outline-item active"
+                                    : "wb-button toggle outline-item"
                                 }
                                 onClick={() => {
                                   setSchemaId(id);
@@ -1049,7 +1067,7 @@ function App() {
                                   setInspectorMode("probe");
                                 }}
                               >
-                                <span className="outline-item-icon probe-icon">⌁</span>
+                                <span className="outline-item-icon">⌁</span>
                                 <span className="outline-item-copy">
                                   <span>{probe.label ?? probe.id}</span>
                                   <small>{probe.valueType}</small>
@@ -1110,7 +1128,7 @@ function App() {
             ) : (
               <div className="device-placeholder">
                 <div className="device-screen">
-                  <div className="device-eyebrow">REAL RUNTIME</div>
+                  <div className="device-eyebrow">Real runtime</div>
                   <div className="device-title">
                     {window.runtimeDesktop
                       ? "Launch the iOS Simulator"
@@ -1122,7 +1140,7 @@ function App() {
                       : "Choose the Simulator window in the macOS sharing picker. Browser capture is a view-only fallback."}
                   </div>
                   <button
-                    className="device-attach"
+                    className="wb-button primary device-attach"
                     type="button"
                     onClick={attachRuntimeCapture}
                     disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
@@ -1181,7 +1199,7 @@ function App() {
       <section className="timeline dialkit-root" data-theme={resolvedTheme}>
         <div className="timeline-toolbar">
           <button
-            className="timeline-play dialkit-toolbar-add"
+            className="wb-button primary timeline-play"
             type="button"
             title="Play"
             aria-label="Play"
@@ -1194,6 +1212,7 @@ function App() {
                 fill="currentColor"
               />
             </svg>
+            Play
           </button>
           <div className="timeline-time dialkit-timeline-time">
             {timelineDurationMs !== undefined ? (
@@ -1219,13 +1238,13 @@ function App() {
                   : "No interaction"}
           </div>
           <details className="timeline-dev">
-            <summary className="dialkit-toolbar-copy">Developer</summary>
+            <summary className="wb-button secondary">Developer</summary>
             <div className="timeline-dev-menu">
               <button
                 className={
                   isRecording
-                    ? "record active dialkit-toolbar-copy"
-                    : "record dialkit-toolbar-copy"
+                    ? "wb-button secondary record active"
+                    : "wb-button secondary record"
                 }
                 onClick={toggleRecording}
               >
@@ -1233,7 +1252,7 @@ function App() {
                 {isRecording ? "Stop" : "Record"}
               </button>
               <button
-                className="tool-button dialkit-toolbar-copy"
+                className="wb-button secondary"
                 onClick={runViewportBenchmark}
                 disabled={
                   !schemaId ||
@@ -1245,7 +1264,7 @@ function App() {
                 {viewportBenchmarkBusy ? "Benchmarking…" : "Benchmark viewport"}
               </button>
               <button
-                className="tool-button dialkit-toolbar-copy"
+                className="wb-button secondary"
                 onClick={() => session.clearRecording()}
                 disabled={isRecording || !recording}
               >
