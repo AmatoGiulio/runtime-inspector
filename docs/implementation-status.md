@@ -247,21 +247,23 @@ No new RIP messages were introduced.
 
 ### M5b experimental automatic Reanimated discovery
 
-**Implemented on `feat/runtime-workbench-desktop`, pending device validation**
+**Validated manually on the iOS Simulator on 2026-10-02**
 
-This spike tests the product-critical question: can the Workbench discover common Reanimated animations without requiring one manual probe declaration per animation?
+The product-critical spike now proves that common Reanimated primitives can appear in the Workbench without one manual probe declaration per animation.
 
-The existing dev-only Babel plugin now recognizes direct `.value = withTiming(...)` and `.value = withSpring(...)` assignments with no explicit completion callback. It derives the assignment target, source location and, where statically available, the owning `useInspector` schema id.
+The dev-only Babel plugin recognizes direct `.value = withTiming(...)` and `.value = withSpring(...)` assignments with no explicit completion callback. The application still constructs its original Reanimated animation object first; Runtime Inspector then observes and returns that exact object unchanged. This behavior-transparent form was manually validated: Replay animates normally, the Workbench receives the discovered rows, and the Expo app remains stable.
 
-The transformed call reports additive `animation.started` / `animation.completed` lifecycle messages through RIP. `panel-core` collects the spans and the Workbench renders the latest interaction burst as **Auto-detected animations** rows in the timeline.
+The discovery event carries the assignment target, source location, owning `useInspector` schema when statically known, primitive target literals, safe literal config fields (for example `duration: 260`), and a control reference for dynamic config objects such as `card.spring.value`.
 
-The initial example should automatically discover the four direct timing animations and the four return springs in `replayTransition()`. Nested `withSequence` / `withRepeat` / `withDelay` trees remain intentionally unsupported by this first proof.
+`panel-core` resolves dynamic config references against the current inspector state. Timing spans use their declared duration. Spring spans use the existing spring response model to derive an explicitly estimated settling span; this is presentation metadata, not a claim that an actual completion event was observed.
 
-Acceptance for the spike is behavioral, not visual polish:
+The Workbench groups the newest start events into a derived **latest interaction burst** and renders those expected spans. Exact runtime completion remains intentionally unsolved without a behavior-transparent completion signal.
 
-1. existing tests and typecheck pass;
-2. Replay still behaves identically on the device;
-3. timing rows appear automatically with ~260 ms duration;
-4. return-spring rows appear automatically after the existing 220 ms delay;
-5. emitted rows carry the expected `card-transition` schema and `App.tsx` source location;
-6. no manual `useRuntimeProbe` declaration is required for those animation lifecycle rows.
+Still intentionally unsupported by this proof:
+
+- nested modifier trees such as `withDelay`, `withSequence`, or `withRepeat`;
+- calls with an explicit completion callback;
+- assignments inside known UI-runtime/worklet callbacks (skipped rather than risking app behavior);
+- arbitrary custom animation functions.
+
+Validated example result: the four direct timing animations and four return springs in `replayTransition()` are discovered automatically, without using the manual probe declaration for those lifecycle rows.
