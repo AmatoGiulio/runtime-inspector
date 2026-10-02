@@ -448,6 +448,13 @@ export function AnimationTimeline({
     releaseCapture(event);
   }
 
+  // Quarter points between the major ticks: DialKit's fine marks. `minorTicks` (midpoints) are its medium marks.
+  const fineTicks = model.ticks.slice(1).flatMap((tick, index) => {
+    const previous = model.ticks[index]!;
+    const step = (tick - previous) / 4;
+    return [previous + step, previous + step * 3];
+  });
+
   const gridLines = model.ticks.map((tick) => (
     <span
       className="motion-grid-line"
@@ -457,8 +464,8 @@ export function AnimationTimeline({
   ));
 
   return (
-    <div className="motion-timeline">
-      <div className="motion-timeline-grid">
+    <div className="motion-timeline dialkit-timeline-body">
+      <div className="motion-timeline-grid dialkit-timeline-grid">
         <div className="motion-playhead-overlay" aria-hidden="true">
           <span
             className="motion-playhead"
@@ -466,29 +473,37 @@ export function AnimationTimeline({
           />
         </div>
 
-        <div className="motion-ruler-row">
-          <div className="motion-ruler-label">
-            <span>{formatSeconds(displayPlayheadMs)}</span>
-          </div>
-          <div className="motion-ruler" {...scrubHandlers}>
+        <div className="motion-ruler-row dialkit-timeline-row">
+          <div className="motion-ruler-label dialkit-timeline-label" />
+          <div className="motion-ruler dialkit-timeline-ruler" {...scrubHandlers}>
+            {fineTicks.map((tick) => (
+              <div
+                className="dialkit-timeline-tick dialkit-timeline-tick-fine"
+                key={`fine:${tick}`}
+                style={{ left: percentOf(tick) }}
+              />
+            ))}
+            {model.minorTicks.map((tick) => (
+              <div
+                className="dialkit-timeline-tick dialkit-timeline-tick-medium"
+                key={`medium:${tick}`}
+                style={{ left: percentOf(tick) }}
+              />
+            ))}
             {model.ticks.map((tick, index) => (
               <div
                 className={classNames(
                   "motion-ruler-tick",
+                  "dialkit-timeline-tick",
                   index > 0 && index === model.ticks.length - 1 && "last"
                 )}
                 key={tick}
                 style={{ left: percentOf(tick) }}
               >
-                <span>{formatTime(tick)}</span>
+                <span className="dialkit-timeline-tick-label">
+                  {formatTime(tick)}
+                </span>
               </div>
-            ))}
-            {model.minorTicks.map((tick) => (
-              <span
-                className="motion-ruler-dot"
-                key={tick}
-                style={{ left: percentOf(tick) }}
-              />
             ))}
             <span
               className="motion-playhead-marker"
@@ -509,22 +524,35 @@ export function AnimationTimeline({
           return (
             <div className="motion-group" key={group.id}>
               <div
-                className="motion-group-row"
+                className="motion-group-row dialkit-timeline-row dialkit-timeline-group-row"
                 onClick={() => toggleGroup(group.id)}
               >
-                <div className="motion-group-label">
+                <div className="motion-group-label dialkit-timeline-label">
                   {/* The row's click handler toggles; a keyboard activation of this button bubbles to it. */}
                   <button
-                    className="motion-group-toggle"
+                    className="motion-group-toggle dialkit-timeline-group-toggle"
                     type="button"
+                    data-open={!collapsed}
                     aria-expanded={!collapsed}
                     aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.label}`}
                   >
-                    {collapsed ? "▸" : "▾"}
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 9.5L12 15.5L18 9.5" />
+                    </svg>
                   </button>
                   <span className="motion-group-name">{group.label}</span>
                 </div>
-                <div className="motion-group-lane">{gridLines}</div>
+                <div className="motion-group-lane dialkit-timeline-lane">
+                  {gridLines}
+                </div>
               </div>
 
               {collapsed
@@ -578,13 +606,15 @@ export function AnimationTimeline({
                       <div
                         className={classNames(
                           "motion-row",
+                          "dialkit-timeline-row",
                           selected && "selected",
                           dragging && "resizing"
                         )}
+                        data-grouped=""
                         key={animation.instanceId}
                       >
                         <button
-                          className="motion-row-label"
+                          className="motion-row-label dialkit-timeline-label"
                           type="button"
                           aria-pressed={selected}
                           onClick={() => onSelectAnimation(animation.instanceId)}
@@ -600,16 +630,22 @@ export function AnimationTimeline({
                               : "—"}
                           </span>
                         </button>
-                        <div className="motion-row-lane" {...scrubHandlers}>
+                        <div
+                          className="motion-row-lane dialkit-timeline-lane"
+                          {...scrubHandlers}
+                        >
                           {gridLines}
                           <button
                             className={classNames(
                               "motion-bar",
+                              "dialkit-timeline-clip",
                               row.estimated && !dragging && "estimated",
                               selected && "selected",
                               movable && "movable",
                               moving && "moving"
                             )}
+                            data-selected={selected ? "" : undefined}
+                            data-dragging={dragging ? "" : undefined}
                             type="button"
                             aria-label={`${row.label} · ${row.kindLabel}`}
                             style={{

@@ -734,63 +734,66 @@ button {
   line-height: 1.5;
 }
 
+/*
+ * Timeline region = a DialKit surface. The <section> carries `dialkit-root` + `data-theme`
+ * (App.tsx), so the --dial-* tokens resolve and follow the Workbench theme. Everything in the
+ * timeline region (here and in the motion-* rules below) reads --dial-* tokens only.
+ * DialKit's `dialkit-timeline-*` classes are applied where their CSS suits our two-column,
+ * percent-positioned grid; the rest are own rules that copy DialKit's visual declarations.
+ */
 .timeline {
+  --dial-timeline-label-w: 220px;
+  --dial-timeline-header-h: calc(var(--dial-row-height) + 4px);
+  /*
+   * DialKit paints clips a fixed off-white and tints them with --dial-timeline-clip-overlay in
+   * light themes; the same result expressed with tokens only (the overlay is still applied by
+   * `dialkit-timeline-clip`, so the light fill here is the pre-overlay value).
+   */
+  --motion-clip-fill: color-mix(in srgb, var(--dial-text-root) 90%, var(--dial-glass-bg));
+  --motion-clip-fill-hover: var(--dial-text-root);
+  /* DialKit's playhead flag is a light chip with dark text in both themes. */
+  --motion-flag-bg: var(--dial-text-root);
+  --motion-flag-fg: var(--dial-glass-bg);
   min-height: 0;
-  border-top: 1px solid var(--wb-border);
-  background: var(--wb-surface-sunken);
   display: grid;
-  grid-template-rows: 42px minmax(0, 1fr);
+  grid-template-rows: var(--dial-timeline-header-h) minmax(0, 1fr);
+  border-top: 1px solid var(--dial-border);
+  background: var(--dial-glass-bg);
+  color: var(--dial-text-label);
 }
 
+.timeline[data-theme="light"] {
+  --motion-clip-fill: color-mix(in srgb, var(--dial-text-root) 7%, var(--dial-glass-bg));
+  --motion-clip-fill-hover: color-mix(in srgb, var(--dial-text-root) 20%, var(--dial-glass-bg));
+  --motion-flag-bg: var(--dial-glass-bg);
+  --motion-flag-fg: var(--dial-text-root);
+}
+
+/* Toolbar: same height and layout language as `dialkit-timeline-header` (not applied: its grid columns are fixed). */
 .timeline-toolbar {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--wb-border);
+  padding: 4px 12px 0;
 }
 
-.play-button {
-  flex: 0 0 auto;
-  height: 30px;
-  border: 0;
-  border-radius: 7px;
-  padding: 0 14px;
-  color: var(--wb-accent-contrast);
-  background: var(--wb-accent);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 100ms ease;
-}
-
-.play-button:hover:not(:disabled) {
-  background: var(--wb-accent-hover);
-}
-
-.play-button:focus-visible {
-  outline: 2px solid var(--wb-accent-ring);
-  outline-offset: 2px;
-}
-
-.play-button:disabled {
-  color: var(--wb-text-faint);
-  background: var(--wb-surface-active);
+.timeline-play:disabled {
+  opacity: 0.35;
   cursor: default;
+}
+
+.timeline-play:disabled:hover {
+  background: var(--dial-surface);
 }
 
 .timeline-time {
   flex: 0 0 auto;
-  color: var(--wb-text);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .timeline-time-total {
-  color: var(--wb-text-muted);
+  color: var(--dial-text-tertiary);
 }
 
 .timeline-spacer {
@@ -798,46 +801,10 @@ button {
   min-width: 0;
 }
 
-.record,
-.tool-button {
-  height: 26px;
-  border: 1px solid var(--wb-border-strong);
-  border-radius: 6px;
-  padding: 0 9px;
-  color: var(--wb-text-secondary);
-  background: var(--wb-surface-raised);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.record {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.record-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 99px;
-  background: var(--wb-record);
-}
-
-.record.active {
-  color: var(--wb-text-strong);
-  border-color: var(--wb-danger-border);
-  background: var(--wb-danger-surface);
-}
-
-.tool-button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
 .timeline-meta {
   min-width: 0;
   overflow: hidden;
-  color: var(--wb-text-muted);
+  color: var(--dial-text-secondary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
@@ -850,16 +817,7 @@ button {
 }
 
 .timeline-dev > summary {
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0 8px;
-  color: var(--wb-text-muted);
-  font-size: 11px;
   list-style: none;
-  cursor: pointer;
   user-select: none;
 }
 
@@ -867,18 +825,12 @@ button {
   display: none;
 }
 
-.timeline-dev > summary:hover,
 .timeline-dev[open] > summary {
-  border-color: var(--wb-border-strong);
-  color: var(--wb-text-secondary);
-  background: var(--wb-surface-raised);
+  background: var(--dial-surface-active);
+  color: var(--dial-text-root);
 }
 
-.timeline-dev > summary:focus-visible {
-  outline: 2px solid var(--wb-accent);
-  outline-offset: 1px;
-}
-
+/* Popover surface = `dialkit-timeline-popover` (fixed-positioned there, so own rule). */
 .timeline-dev-menu {
   position: absolute;
   z-index: 30;
@@ -888,16 +840,42 @@ button {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border: 1px solid var(--wb-border);
-  border-radius: 8px;
+  border: 1px solid var(--dial-border);
+  border-radius: 14px;
   padding: 8px;
-  background: var(--wb-surface);
-  box-shadow: 0 12px 32px var(--wb-shadow);
+  background: var(--dial-glass-bg);
+  box-shadow: var(--dial-shadow);
 }
 
 .timeline-dev-menu > button {
   width: 100%;
+  justify-content: flex-start;
   text-align: left;
+}
+
+.timeline-dev-menu > button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.timeline-dev-menu > button:disabled:hover {
+  background: var(--dial-surface);
+}
+
+.timeline-dev-menu > .record.active {
+  background: var(--dial-surface-active);
+  color: var(--dial-text-root);
+}
+
+.record-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--dial-text-tertiary);
+}
+
+.record.active .record-dot {
+  background: currentColor;
 }
 
 /* Semantic outline + contextual inspector */
@@ -1077,6 +1055,23 @@ button {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 0 10px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dial-text-tertiary) transparent;
+}
+
+.timeline-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.timeline-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.timeline-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--dial-text-tertiary);
 }
 
 /* Timeline-first motion workspace */
@@ -1085,225 +1080,115 @@ button {
   height: 100%;
   display: grid;
   place-items: center;
-  color: var(--wb-text-faint);
+  color: var(--dial-text-tertiary);
   font-size: 12px;
 }
 
+/* `dialkit-timeline-body` + `dialkit-timeline-grid` supply overflow, position, flex column and the 6px row gap. */
 .motion-timeline {
-  --motion-label-width: 240px;
-  /* Empty trailing column so the playhead pill can overhang the ruler's right edge unclipped. */
+  /* Empty trailing gutter so the playhead flag can overhang the ruler's right edge unclipped. */
   --motion-edge-gutter: 28px;
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--wb-surface-sunken);
 }
 
 .motion-timeline-grid {
-  position: relative;
   flex: 1 0 auto;
   isolation: isolate;
+  padding-right: var(--motion-edge-gutter);
 }
 
-/* Label/lane separator, drawn once so it also spans the area below the last row. */
-.motion-timeline-grid::before {
-  content: "";
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--motion-label-width) - 1px);
-  width: 1px;
-  background: var(--wb-border);
-  pointer-events: none;
-}
-
-.motion-ruler-row,
-.motion-group-row,
-.motion-row {
-  display: grid;
-  grid-template-columns:
-    var(--motion-label-width) minmax(0, 1fr) var(--motion-edge-gutter);
-}
-
-/* Ruler */
+/* Ruler: `dialkit-timeline-row` gives the grid + height; the sticky offset is ours (DialKit's sits below its own sticky header). */
 
 .motion-ruler-row {
   position: sticky;
   z-index: 10;
   top: 0;
-  height: 32px;
-  border-bottom: 1px solid var(--wb-border);
-  background: var(--wb-surface-sunken);
+  background: var(--dial-glass-bg);
+  backdrop-filter: blur(var(--dial-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--dial-backdrop-blur));
   overflow: visible;
 }
 
-.motion-ruler-label {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  border-right: 1px solid var(--wb-border);
-  color: var(--wb-text);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.motion-ruler {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  cursor: ew-resize;
-  touch-action: none;
-  user-select: none;
-}
-
-.motion-ruler-tick {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 0;
-  pointer-events: none;
-}
-
-.motion-ruler-tick::before {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 1px;
-  height: 6px;
-  background: var(--wb-tick);
-}
-
-.motion-ruler-tick > span {
-  position: absolute;
-  top: 50%;
-  left: 5px;
-  color: var(--wb-text-muted);
+/* DialKit labels the final tick from its left edge; keep ours inside the ruler. */
+.motion-ruler-tick .dialkit-timeline-tick-label {
   font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  white-space: nowrap;
-  transform: translateY(-50%);
 }
 
-/* Keep the final label inside the ruler instead of overflowing its right edge. */
-.motion-ruler-tick.last > span {
-  right: 5px;
+.motion-ruler-tick.last .dialkit-timeline-tick-label {
+  right: 4px;
   left: auto;
-}
-
-.motion-ruler-dot {
-  position: absolute;
-  top: 50%;
-  width: 3px;
-  height: 3px;
-  margin: -1.5px 0 0 -1.5px;
-  border-radius: 50%;
-  background: var(--wb-tick);
-  pointer-events: none;
 }
 
 /* Group header */
 
-.motion-group-row {
-  height: 30px;
-  border-bottom: 1px solid var(--wb-border-subtle);
-  cursor: pointer;
-}
-
-.motion-group-label {
-  min-width: 0;
+.motion-group {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 12px 0 6px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.motion-group-toggle {
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: 4px;
-  padding: 0;
-  color: var(--wb-text-tertiary);
-  background: transparent;
-  font-size: 11px;
-  line-height: 1;
+.motion-group-row {
   cursor: pointer;
 }
 
-.motion-group-row:hover .motion-group-toggle {
-  color: var(--wb-text);
+.motion-group-row:hover .dialkit-timeline-group-toggle {
+  color: var(--dial-text-root);
 }
 
 .motion-group-name {
   min-width: 0;
   overflow: hidden;
-  color: var(--wb-text);
-  font-size: 12px;
-  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .motion-group-lane,
 .motion-row-lane {
-  position: relative;
   min-width: 0;
-  overflow: hidden;
 }
 
-/* Animation row */
+/* Animation row: DialKit has no row selection or hover; both are a --dial-* tint. */
 
 .motion-row {
-  height: 34px;
-  border-bottom: 1px solid var(--wb-border-subtle);
-}
-
-.motion-row:hover {
-  background: var(--wb-row-hover);
+  border-radius: var(--dial-radius);
 }
 
 .motion-row.selected {
-  background: var(--wb-accent-soft);
+  background: var(--dial-surface);
+}
+
+.motion-row:hover .motion-row-lane {
+  background: var(--dial-surface-hover);
+}
+
+.motion-row.selected .motion-row-lane {
+  background: var(--dial-surface-active);
 }
 
 .motion-row-label {
   width: 100%;
+  height: 100%;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   border: 0;
-  padding: 0 12px 0 30px;
-  color: var(--wb-text-secondary);
   background: transparent;
-  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
+.motion-row-label:hover,
 .motion-row.selected .motion-row-label {
-  color: var(--wb-text-strong);
-}
-
-.motion-row-label:focus-visible,
-.motion-group-toggle:focus-visible,
-.motion-bar:focus-visible {
-  outline: 2px solid var(--wb-accent);
-  outline-offset: -2px;
+  color: var(--dial-text-root);
 }
 
 .motion-row-glyph {
   flex: 0 0 auto;
-  color: var(--wb-text-tertiary);
+  color: var(--dial-text-tertiary);
 }
 
 .motion-row.selected .motion-row-glyph {
-  color: var(--wb-accent-text);
+  color: var(--dial-text-root);
 }
 
 .motion-row-name {
@@ -1313,18 +1198,23 @@ button {
   white-space: nowrap;
 }
 
-.motion-row-kind,
-.motion-row-duration {
+.motion-row-kind {
   flex: 0 0 auto;
-  color: var(--wb-text-muted);
+  color: var(--dial-text-tertiary);
   font-size: 11px;
   white-space: nowrap;
 }
 
+/* `dialkit-timeline-clip-duration` is dark-on-clip; this is the same type in the label column. */
 .motion-row-duration {
+  flex: 0 0 auto;
   margin-left: auto;
   padding-left: 8px;
+  color: var(--dial-text-tertiary);
+  font-family: "Geist Mono", ui-monospace, monospace;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .motion-row-lane {
@@ -1337,86 +1227,79 @@ button {
   position: absolute;
   inset-block: 0;
   width: 1px;
-  background: var(--wb-grid-line);
+  background: var(--dial-surface-subtle);
   pointer-events: none;
 }
 
+/* Bars: `dialkit-timeline-clip` supplies radius, padding, cursor, z-index, the selected ring and the dragging cursor. */
+
 .motion-bar {
-  position: absolute;
-  z-index: 2;
-  top: calc(50% - 9px);
-  height: 18px;
+  top: 3px;
+  bottom: auto;
+  height: calc(100% - 6px);
   min-width: 6px;
   border: 0;
-  border-radius: 5px;
-  padding: 0;
-  background: var(--wb-bar);
-  cursor: pointer;
+  color: var(--dial-text-root);
+  background: var(--motion-clip-fill);
+  font: inherit;
   transition: background-color 100ms ease;
 }
 
 .motion-bar:hover {
-  background: var(--wb-bar-hover);
+  background: var(--motion-clip-fill-hover);
 }
 
-.motion-bar.movable {
-  cursor: grab;
+.motion-bar:not(.movable) {
+  cursor: pointer;
 }
 
-.motion-bar.moving {
-  cursor: grabbing;
-  opacity: 0.85;
-}
-
-.motion-bar.selected,
-.motion-bar.selected:hover {
-  background: var(--wb-accent);
-}
-
-/* The end of a spring is an estimate: fade the tail out instead of drawing a hard edge. */
+/*
+ * The end of a spring is an estimate: fade the tail out instead of drawing a hard edge. A mask
+ * clips to the border box, so the selected ring is drawn inside the bar here.
+ */
 .motion-bar.estimated {
-  -webkit-mask-image: linear-gradient(to right, var(--wb-mask-solid) calc(100% - 28px), transparent);
-  mask-image: linear-gradient(to right, var(--wb-mask-solid) calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, currentColor calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, currentColor calc(100% - 28px), transparent);
 }
 
+.motion-bar.estimated[data-selected] {
+  box-shadow:
+    inset 0 0 0 2px var(--dial-text-root),
+    inset 0 0 0 999px var(--dial-timeline-clip-overlay);
+}
+
+/* Handles are lane siblings placed by an inline `left` (not clip children), so `dialkit-timeline-clip-handle` cannot apply. */
 .motion-bar-resize {
   position: absolute;
-  z-index: 3;
-  top: calc(50% - 9px);
+  z-index: 2;
+  top: 3px;
+  bottom: 3px;
   width: 8px;
-  height: 18px;
-  cursor: ew-resize;
-}
-
-.motion-bar-resize.start {
-  /* Positioned at the bar start by an inline `left`; same handle as the end. */
   cursor: ew-resize;
 }
 
 .motion-bar-resize::after {
   content: "";
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 5px;
+  bottom: 5px;
   left: 3px;
   width: 2px;
   border-radius: 1px;
-  background: var(--wb-bar-handle);
+  background: var(--dial-glass-bg);
   opacity: 0;
   transition: opacity 100ms ease;
 }
 
-.motion-row:hover .motion-bar-resize::after,
-.motion-bar-resize.active::after {
-  opacity: 1;
+.motion-row:hover .motion-bar-resize::after {
+  opacity: 0.5;
 }
 
-/* Active handles sit on the accent-filled selected bar. */
 .motion-bar-resize.active::after {
-  background: var(--wb-bar-handle-on-accent);
+  opacity: 0.85;
 }
 
-/* Playhead: line over the rows (below the sticky ruler), line + time pill inside the ruler. */
+/* Playhead: stem over the rows (below the sticky ruler), stem + time flag inside the ruler. */
 
 .motion-playhead-overlay {
   position: absolute;
@@ -1424,7 +1307,7 @@ button {
   top: 0;
   right: var(--motion-edge-gutter);
   bottom: 0;
-  left: var(--motion-label-width);
+  left: var(--dial-timeline-label-w);
   pointer-events: none;
 }
 
@@ -1432,8 +1315,9 @@ button {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
-  background: var(--wb-playhead);
+  width: 2px;
+  margin-left: -1px;
+  background: var(--dial-text-root);
 }
 
 .motion-playhead-marker {
@@ -1448,36 +1332,43 @@ button {
 .motion-playhead-marker::before {
   content: "";
   position: absolute;
-  top: 0;
+  top: 50%;
   bottom: 0;
-  left: 0;
-  width: 1px;
-  background: var(--wb-playhead);
+  left: -1px;
+  width: 2px;
+  background: var(--dial-text-root);
 }
 
-/* Centered on the line at every position; overhangs the ruler at 0% / 100%. */
+/* Centered on the stem at every position; overhangs the ruler at 0% / 100%. */
 .motion-playhead-pill {
   position: absolute;
   z-index: 2;
-  top: calc(50% - 9px);
+  top: 50%;
   left: 0;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
+  min-width: 52px;
   height: 18px;
-  border-radius: 9px;
+  border: 1px solid var(--dial-border-hover);
+  border-radius: 6px;
   padding: 0 7px;
-  color: var(--wb-playhead-contrast);
-  background: var(--wb-playhead);
+  color: var(--motion-flag-fg);
+  background: var(--motion-flag-bg);
+  box-shadow: var(--dial-shadow-collapsed);
+  font-family: "Geist Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 18px;
+  line-height: 16px;
+  text-align: center;
   white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .play-button,
+  .timeline .dialkit-toolbar-add,
+  .timeline .dialkit-toolbar-copy,
   .motion-bar,
-  .motion-bar-resize::after {
+  .motion-bar-resize::after,
+  .motion-group-toggle svg {
     transition: none;
   }
 }

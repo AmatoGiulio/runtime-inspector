@@ -1178,17 +1178,24 @@ function App() {
         </aside>
       </section>
 
-      <section className="timeline">
+      <section className="timeline dialkit-root" data-theme={resolvedTheme}>
         <div className="timeline-toolbar">
           <button
-            className="play-button"
+            className="timeline-play dialkit-toolbar-add"
             type="button"
+            title="Play"
+            aria-label="Play"
             onClick={() => replay()}
             disabled={!replayTarget}
           >
-            ▶ Play
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z"
+                fill="currentColor"
+              />
+            </svg>
           </button>
-          <div className="timeline-time">
+          <div className="timeline-time dialkit-timeline-time">
             {timelineDurationMs !== undefined ? (
               <>
                 <span>{formatTime(playheadMs)}</span>
@@ -1212,14 +1219,21 @@ function App() {
                   : "No interaction"}
           </div>
           <details className="timeline-dev">
-            <summary>Developer</summary>
+            <summary className="dialkit-toolbar-copy">Developer</summary>
             <div className="timeline-dev-menu">
-              <button className={isRecording ? "record active" : "record"} onClick={toggleRecording}>
+              <button
+                className={
+                  isRecording
+                    ? "record active dialkit-toolbar-copy"
+                    : "record dialkit-toolbar-copy"
+                }
+                onClick={toggleRecording}
+              >
                 <span className="record-dot" />
                 {isRecording ? "Stop" : "Record"}
               </button>
               <button
-                className="tool-button"
+                className="tool-button dialkit-toolbar-copy"
                 onClick={runViewportBenchmark}
                 disabled={
                   !schemaId ||
@@ -1231,7 +1245,7 @@ function App() {
                 {viewportBenchmarkBusy ? "Benchmarking…" : "Benchmark viewport"}
               </button>
               <button
-                className="tool-button"
+                className="tool-button dialkit-toolbar-copy"
                 onClick={() => session.clearRecording()}
                 disabled={isRecording || !recording}
               >
