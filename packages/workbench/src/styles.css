@@ -497,6 +497,47 @@ button {
   justify-content: center;
 }
 
+/*
+ * Real device chrome (the selected model's bezel from the local Xcode install). The frame's box is
+ * the device's OUTER box: its border is the bezel thickness and the screen sits in the content box.
+ * `--device-k` is CSS px per point: the stage height divided by the device's outer height in points
+ * (screen + top and bottom bezel), so screen and bezel scale together and the outer box fits exactly.
+ * The composite (set inline as border-image-source/slice) is a 9-slice with square corner slices of
+ * `--device-corner` points; the screen shape comes from a framebuffer mask set inline on the screen.
+ */
+.device-frame.real {
+  --device-k: calc(
+    (100vh - var(--wb-timeline-h) - 44px - 32px) /
+      (var(--device-screen-h) + var(--device-bezel-top) + var(--device-bezel-bottom))
+  );
+  padding: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width:
+    calc(var(--device-k) * var(--device-bezel-top))
+    calc(var(--device-k) * var(--device-bezel-right))
+    calc(var(--device-k) * var(--device-bezel-bottom))
+    calc(var(--device-k) * var(--device-bezel-left));
+  border-image-width: calc(var(--device-k) * var(--device-corner));
+  border-image-repeat: stretch;
+  border-radius: calc(var(--device-k) * var(--device-outer-radius));
+  background: none;
+  outline: none;
+}
+
+.device-frame.real .device-frame-screen {
+  height: calc(var(--device-k) * var(--device-screen-h));
+  border-radius: 0;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.device-frame.real .device-frame-screen.unmasked {
+  border-radius: calc(var(--device-k) * var(--device-inner-radius));
+}
+
 .device-frame-screen.interactive {
   cursor: default;
   touch-action: none;

@@ -105,6 +105,8 @@ function App() {
   const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
   const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
   const [selectedSimulatorUdid, setSelectedSimulatorUdid] = useState<string>();
+  // The real bezel of the selected Simulator's device type; undefined keeps the generic frame.
+  const [deviceChrome, setDeviceChrome] = useState<RuntimeDesktopDeviceChrome>();
   const [desktopBusy, setDesktopBusy] = useState(false);
   const [inputReady, setInputReady] = useState(false);
   const [framebufferHasFrame, setFramebufferHasFrame] = useState(false);
@@ -147,6 +149,31 @@ function App() {
       }
     | undefined
   >(undefined);
+
+  useEffect(() => {
+    // Desktop only; a plain browser has no bridge and keeps the generic frame.
+    const desktop = window.runtimeDesktop;
+    setDeviceChrome(undefined);
+    if (!desktop || typeof desktop.getDeviceChrome !== "function" || !selectedSimulatorUdid) return;
+
+    let cancelled = false;
+    desktop
+      .getDeviceChrome(selectedSimulatorUdid)
+      .then((chrome) => {
+        if (!cancelled) setDeviceChrome(chrome ?? undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setDeviceChrome(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSimulatorUdid]);
+
+  const deviceFrameStyle = useMemo<CSSProperties | undefined>(
+    () => (deviceChrome ? realDeviceFrameStyle(deviceChrome) : undefined),
+    [deviceChrome]
+  );
 
   useEffect(() => {
     if (schemaId || !schemaIds[0]) return;
@@ -1215,14 +1242,20 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="device-frame">
+              <div
+                className={`device-frame${deviceChrome ? " real" : ""}`}
+                style={deviceFrameStyle}
+              >
                 <div
-                  className={`device-frame-screen${isFramebuffer && inputReady ? " interactive" : ""}`}
-                  style={
+                  className={`device-frame-screen${isFramebuffer && inputReady ? " interactive" : ""}${
+                    deviceChrome && !deviceChrome.maskDataUrl ? " unmasked" : ""
+                  }`}
+                  style={realDeviceScreenStyle(
+                    deviceChrome,
                     isFramebuffer && runtimeCapture?.width && runtimeCapture?.height
-                      ? { aspectRatio: String(runtimeCapture.width / runtimeCapture.height) }
+                      ? runtimeCapture.width / runtimeCapture.height
                       : undefined
-                  }
+                  )}
                   onPointerDown={handleRuntimePointerDown}
                   onPointerMove={handleRuntimePointerMove}
                   onPointerUp={handleRuntimePointerUp}
@@ -1599,6 +1632,60 @@ function animationSpringParameter(
 }
 
 /** The stored timeline height, re-clamped to the current viewport; undefined when absent or invalid. */
+/**
+ * Frame style for the real bezel. Geometry is exposed as unitless point values; the stylesheet
+ * derives `--device-k` (CSS px per point) from the available stage height. The composite is a
+ * 9-slice whose corner slice is `cornerSlicePt` points, i.e. `cornerSlicePt * compositeScale` px.
+ */
+function realDeviceFrameStyle(chrome: RuntimeDesktopDeviceChrome): CSSProperties {
+  const { geometry } = chrome;
+  const { bezel } = geometry;
+  const innerRadiusPt = Math.max(
+    0,
+    (geometry.outerCornerRadiusPt ?? 0) - Math.min(bezel.top, bezel.right, bezel.bottom, bezel.left)
+  );
+
+  return {
+    "--device-screen-w": String(geometry.screen.widthPt),
+    "--device-screen-h": String(geometry.screen.heightPt),
+    "--device-bezel-top": String(bezel.top),
+    "--device-bezel-right": String(bezel.right),
+    "--device-bezel-bottom": String(bezel.bottom),
+    "--device-bezel-left": String(bezel.left),
+    "--device-corner": String(geometry.cornerSlicePt),
+    "--device-outer-radius": String(geometry.outerCornerRadiusPt ?? 0),
+    "--device-inner-radius": String(innerRadiusPt),
+    borderImageSource: `url("${chrome.compositeDataUrl}")`,
+    borderImageSlice: `${geometry.cornerSlicePt * chrome.compositeScale} fill`
+  } as CSSProperties;
+}
+
+/**
+ * Screen style: the device aspect ratio (the live framebuffer's own ratio wins once frames
+ * arrive) and the true screen shape as a mask. A mask never changes the element's box, so the
+ * pointer handlers' getBoundingClientRect() stays exactly the framebuffer box.
+ */
+function realDeviceScreenStyle(
+  chrome: RuntimeDesktopDeviceChrome | undefined,
+  framebufferAspect: number | undefined
+): CSSProperties | undefined {
+  const style: CSSProperties = {};
+
+  if (chrome) {
+    style.aspectRatio = String(chrome.geometry.screen.widthPt / chrome.geometry.screen.heightPt);
+    if (chrome.maskDataUrl) {
+      const mask = `url("${chrome.maskDataUrl}")`;
+      style.maskImage = mask;
+      style.WebkitMaskImage = mask;
+    }
+  }
+  if (framebufferAspect !== undefined) {
+    style.aspectRatio = String(framebufferAspect);
+  }
+
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
 function readStoredTimelineHeight(): number | undefined {
   try {
     const raw = window.localStorage.getItem(TIMELINE_HEIGHT_STORAGE_KEY);

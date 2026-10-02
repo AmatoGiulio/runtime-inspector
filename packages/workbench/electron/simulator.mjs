@@ -25,7 +25,10 @@ export function flattenSimulatorDevices(payload) {
         state: typeof device.state === "string" ? device.state : "Unknown",
         runtimeId,
         runtime: runtimeLabel(runtimeId),
-        isAvailable: device.isAvailable !== false
+        isAvailable: device.isAvailable !== false,
+        ...(typeof device.deviceTypeIdentifier === "string"
+          ? { deviceTypeIdentifier: device.deviceTypeIdentifier }
+          : {})
       });
     }
   }

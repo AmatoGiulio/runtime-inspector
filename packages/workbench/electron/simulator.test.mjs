@@ -55,6 +55,29 @@ test("flattenSimulatorDevices keeps available iOS devices and prioritizes booted
   );
 });
 
+test("flattenSimulatorDevices exposes the CoreSimulator deviceTypeIdentifier when present", () => {
+  const devices = flattenSimulatorDevices({
+    devices: {
+      "com.apple.CoreSimulator.SimRuntime.iOS-26-3": [
+        {
+          udid: "A",
+          name: "iPhone 17 Pro Max",
+          state: "Booted",
+          isAvailable: true,
+          deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max"
+        },
+        { udid: "B", name: "iPhone Legacy", state: "Shutdown", isAvailable: true }
+      ]
+    }
+  });
+
+  assert.equal(
+    devices.find((device) => device.udid === "A").deviceTypeIdentifier,
+    "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max"
+  );
+  assert.equal("deviceTypeIdentifier" in devices.find((device) => device.udid === "B"), false);
+});
+
 test("normalizeSimulatorDeviceCrop maps the AX device group into window-relative coordinates", () => {
   const crop = normalizeSimulatorDeviceCrop(
     {

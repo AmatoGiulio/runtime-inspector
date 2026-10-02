@@ -8,6 +8,30 @@ declare global {
     runtimeId: string;
     runtime: string;
     isAvailable: boolean;
+    deviceTypeIdentifier?: string;
+  }
+
+  interface RuntimeDesktopDeviceChromeGeometry {
+    screen: { widthPt: number; heightPt: number };
+    /** Bezel thickness in points. */
+    bezel: { top: number; right: number; bottom: number; left: number };
+    /** Size in points of the composite's square corner slices. */
+    cornerSlicePt: number;
+    outerCornerRadiusPt?: number;
+    compositeName: string;
+    maskName?: string;
+  }
+
+  /** The real bezel of an iOS Simulator device type, rasterized from the local Xcode install. */
+  interface RuntimeDesktopDeviceChrome {
+    deviceTypeIdentifier: string;
+    name: string;
+    geometry: RuntimeDesktopDeviceChromeGeometry;
+    compositeDataUrl: string;
+    compositeSizePx: { width: number; height: number };
+    /** Composite pixels per point. */
+    compositeScale: number;
+    maskDataUrl?: string;
   }
 
   interface RuntimeDesktopCrop {
@@ -80,6 +104,7 @@ declare global {
     onSimulatorFramebufferError(
       callback: (error: { message: string }) => void
     ): () => void;
+    getDeviceChrome(udid: string): Promise<RuntimeDesktopDeviceChrome | null>;
     getScreenPermission(): Promise<string>;
     prepareSimulatorInput(): Promise<boolean>;
     sendSimulatorPointer(event: {

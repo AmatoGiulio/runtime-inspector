@@ -19,6 +19,7 @@ import {
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
 import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
+import { loadDeviceChrome } from "./device-chrome.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -129,6 +130,22 @@ function registerDesktopIpc() {
   ipcMain.handle("runtime-desktop:list-simulators", async () => {
     ensureDarwin();
     return listIOSSimulators();
+  });
+
+  // The real iPhone bezel, read from the user's Xcode. Any failure degrades to null (generic frame).
+  ipcMain.handle("runtime-desktop:get-device-chrome", async (_event, udid) => {
+    try {
+      if (process.platform !== "darwin" || typeof udid !== "string") return null;
+      const devices = await listIOSSimulators();
+      const deviceTypeIdentifier = devices.find((device) => device.udid === udid)?.deviceTypeIdentifier;
+      if (!deviceTypeIdentifier) return null;
+      const chrome = await loadDeviceChrome(deviceTypeIdentifier, {
+        cacheDir: path.join(app.getPath("userData"), "device-chrome")
+      });
+      return chrome ?? null;
+    } catch {
+      return null;
+    }
   });
 
   ipcMain.handle("runtime-desktop:start-simulator-framebuffer", async (event, udid) => {
