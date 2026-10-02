@@ -387,6 +387,59 @@ describe("serializeValueExpression", () => {
   });
 });
 
+describe("runtime animation observation protocol", () => {
+  it("parses automatic animation lifecycle messages", () => {
+    expect(
+      parseRIPMessage({
+        type: "animation.started",
+        instanceId: "anim-1",
+        callsiteId: "src/Card.tsx:20:4:timing:card.moveX",
+        schemaId: "card-transition",
+        target: "card.moveX",
+        animationKind: "timing",
+        startedAtRuntimeMs: 1000,
+        toValue: -110,
+        config: { duration: 260 },
+        source: {
+          file: "src/Card.tsx",
+          line: 20,
+          column: 4,
+          enclosure: ["Card", "replay"],
+          expression: "withTiming(-110, { duration: 260 })"
+        }
+      }).type
+    ).toBe("animation.started");
+
+    expect(
+      parseRIPMessage({
+        type: "animation.completed",
+        instanceId: "anim-1",
+        callsiteId: "src/Card.tsx:20:4:timing:card.moveX",
+        schemaId: "card-transition",
+        target: "card.moveX",
+        animationKind: "timing",
+        endedAtRuntimeMs: 1260,
+        finished: true,
+        current: -110
+      }).type
+    ).toBe("animation.completed");
+  });
+
+  it("rejects non-finite animation timing metadata", () => {
+    expect(() =>
+      parseRIPMessage({
+        type: "animation.started",
+        instanceId: "anim-bad",
+        callsiteId: "callsite",
+        target: "moveX",
+        animationKind: "timing",
+        startedAtRuntimeMs: Number.NaN,
+        config: {}
+      })
+    ).toThrow();
+  });
+});
+
 describe("recording protocol (RFC 0005 M0)", () => {
   it("parses trace schema and recording lifecycle messages", () => {
     expect(
