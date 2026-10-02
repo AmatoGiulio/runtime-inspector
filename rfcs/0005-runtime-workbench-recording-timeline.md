@@ -196,6 +196,39 @@ Out of scope for 3b:
 - easing editing from the timeline;
 - source write-back of the tuned duration. RFC 0004 anchors identify a `useSharedValue` declaration by name; a literal inside a call argument needs its own anchor shape and a follow-up RFC 0004 amendment.
 
+### 3c. Movable start and literal spring parameters
+
+3b made one literal (`duration`) tunable. Two things still block a timeline that can be *arranged*: a block cannot be moved in time, and a spring written with literal parameters cannot be tuned. Both are solved with the same rule as 3b — a source literal becomes an ordinary control — and with no new command message.
+
+**Start.** Stagger in Reanimated is idiomatically written with `withDelay`. Discovery now covers two assignment shapes:
+
+```ts
+shared.value = withDelay(120, withTiming(target, config));   // delayed
+shared.value = withTiming(target, config);                    // bare
+```
+
+- *Delayed, numeric-literal delay* (0–10000): the literal is wrapped, `withDelay(__riAnimationDelay(120, binding), …)`. The helper registers a slider in the `auto` schema defaulting to the literal and returns the literal until that slider is changed.
+- *Delayed, non-literal delay*: the expression is wrapped only so its value can be observed. No control is created; the block is placed correctly but cannot be moved.
+- *Bare*: the animation is wrapped, `__riAnimationStart(withTiming(…), binding, withDelay)`, with a slider defaulting to `0`. While it is `0` the helper returns the **same animation object**; otherwise it returns `withDelay(value, animation)`. `withDelay` is imported into the application module by the plugin from the module's existing `react-native-reanimated` import; a module without that import is left un-wrapped (3a/3b behavior).
+
+`animation.started` gains two additive optional fields:
+
+```json
+"startDelayMs": 120,
+"startControl": { "schemaId": "auto", "controlId": "App.tsx:31:4:timing:titleY:delay" }
+```
+
+`startedAtRuntimeMs` is the moment the motion is expected to begin, i.e. call time **plus** the applied delay. `startDelayMs` is that applied delay, so a client can recover the call time (`startedAtRuntimeMs - startDelayMs`) and anchor a replay's time origin at the interaction rather than at its first visible motion. `startControl` is a reference like `parameterControls`: adding Δ to that control moves the block by Δ on the next run. A start can only be moved within the control's range (never before the call itself).
+
+**Spring literals.** A discovered `withSpring` whose config is an object literal gets `parameterControls` for each of `damping` (0–100, step 0.1), `stiffness` (1–1000, step 1) and `mass` (0.1–10, step 0.1) that is a numeric literal inside its range, using the 3b mechanism unchanged. A spring driven by an Inspector `spring` control keeps using `configControlId`.
+
+Out of scope for 3c:
+
+- stagger produced by `setTimeout` or by application state — it stays invisible to discovery;
+- `withSequence` / `withRepeat` trees, and `withDelay` wrapping anything other than a direct `withTiming` / `withSpring`;
+- calls with a completion callback (unchanged from 3a);
+- source write-back of these literals (same RFC 0004 gap as 3b).
+
 ### 4. V1 timeline is observational
 
 The playhead inspects a recorded trace.
