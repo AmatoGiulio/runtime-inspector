@@ -149,7 +149,9 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         if (right.arguments.length > 2 || right.arguments.length === 0) return;
         if (right.arguments.some((argument) => argument.type === "SpreadElement")) return;
 
-        const meta = buildAnimationMeta(path, state, target, animationKind, api);
+        if (isInsideKnownWorkletContext(path)) return;
+
+        const meta = buildAnimationMeta(path, state, target, animationKind, right, api);
         if (!meta) return;
 
         // Preserve the application's original Reanimated call exactly. Runtime
@@ -229,6 +231,7 @@ function buildAnimationMeta(
   state: PluginPass,
   target: { target: string; root: string },
   animationKind: "timing" | "spring",
+  animationCall: CallExpression,
   api: BabelAPI
 ) {
   const filename = state.filename ?? state.file.opts.filename ?? undefined;
@@ -268,6 +271,38 @@ function buildAnimationMeta(
     )
   ];
 
+  const toValue = staticPrimitive(animationCall.arguments[0]);
+  if (toValue !== undefined) {
+    properties.push(
+      t.objectProperty(t.identifier("toValue"), primitiveLiteral(t, toValue))
+    );
+  }
+
+  const staticConfig = staticConfigObject(animationCall.arguments[1]);
+  if (staticConfig) {
+    properties.push(
+      t.objectProperty(
+        t.identifier("config"),
+        t.objectExpression(
+          Object.entries(staticConfig).map(([key, value]) =>
+            t.objectProperty(t.identifier(key), primitiveLiteral(t, value))
+          )
+        )
+      )
+    );
+  }
+
+  const configControlId = resolveConfigControlId(
+    path,
+    animationCall.arguments[1],
+    stateBag._riInspectorSchemas
+  );
+  if (configControlId) {
+    properties.push(
+      t.objectProperty(t.identifier("configControlId"), t.stringLiteral(configControlId))
+    );
+  }
+
   if (schemaId) {
     properties.splice(
       1,
@@ -277,6 +312,183 @@ function buildAnimationMeta(
   }
 
   return t.objectExpression(properties);
+}
+
+type PrimitiveMetaValue = string | number | boolean | null;
+
+function primitiveLiteral(
+  t: BabelAPI["types"],
+  value: PrimitiveMetaValue
+) {
+  if (value === null) return t.nullLiteral();
+  if (typeof value === "number") return t.numericLiteral(value);
+  if (typeof value === "boolean") return t.booleanLiteral(value);
+  return t.stringLiteral(value);
+}
+
+function staticPrimitive(node: Node | null | undefined): PrimitiveMetaValue | undefined {
+  if (!node) return undefined;
+  if (node.type === "NumericLiteral") return node.value;
+  if (node.type === "StringLiteral") return node.value;
+  if (node.type === "BooleanLiteral") return node.value;
+  if (node.type === "NullLiteral") return null;
+  if (
+    node.type === "UnaryExpression" &&
+    node.operator === "-" &&
+    node.argument.type === "NumericLiteral"
+  ) {
+    return -node.argument.value;
+  }
+  return undefined;
+}
+
+function staticConfigObject(
+  node: Node | null | undefined
+): Record<string, PrimitiveMetaValue> | undefined {
+  if (!node || node.type !== "ObjectExpression") return undefined;
+
+  const config: Record<string, PrimitiveMetaValue> = {};
+  for (const property of node.properties) {
+    if (property.type !== "ObjectProperty" || property.computed) continue;
+
+    const key =
+      property.key.type === "Identifier"
+        ? property.key.name
+        : property.key.type === "StringLiteral"
+          ? property.key.value
+          : undefined;
+    if (!key) continue;
+
+    const value = staticPrimitive(property.value as Node);
+    if (value !== undefined) {
+      config[key] = value;
+    }
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+function resolveConfigControlId(
+  path: NodePath,
+  node: Node | null | undefined,
+  inspectorSchemas: Map<string, string> | undefined,
+  seen = new Set<string>()
+): string | undefined {
+  if (!node) return undefined;
+
+  if (node.type === "MemberExpression" && !node.computed) {
+    const parts = memberExpressionParts(node);
+    if (parts && parts.length === 3 && parts[2] === "value") {
+      const [root, controlId] = parts;
+      if (inspectorSchemas?.has(root)) {
+        return controlId;
+      }
+    }
+    return undefined;
+  }
+
+  if (node.type !== "Identifier" || seen.has(node.name)) return undefined;
+  seen.add(node.name);
+
+  const binding = path.scope.getBinding(node.name);
+  const bindingPath = binding?.path;
+  if (!bindingPath) return undefined;
+
+  if (bindingPath.isVariableDeclarator()) {
+    return resolveConfigControlId(
+      bindingPath,
+      bindingPath.node.init as Node | null | undefined,
+      inspectorSchemas,
+      seen
+    );
+  }
+
+  const declarator = bindingPath.findParent((candidate) => candidate.isVariableDeclarator());
+  if (declarator?.isVariableDeclarator()) {
+    return resolveConfigControlId(
+      declarator,
+      declarator.node.init as Node | null | undefined,
+      inspectorSchemas,
+      seen
+    );
+  }
+
+  return undefined;
+}
+
+function memberExpressionParts(node: Node): string[] | undefined {
+  if (node.type === "Identifier") return [node.name];
+  if (node.type !== "MemberExpression" || node.computed) return undefined;
+  if (node.property.type !== "Identifier") return undefined;
+
+  const objectParts = memberExpressionParts(node.object);
+  return objectParts ? [...objectParts, node.property.name] : undefined;
+}
+
+const knownAutoWorkletCalls = new Set([
+  "useAnimatedStyle",
+  "useAnimatedProps",
+  "useDerivedValue",
+  "useAnimatedReaction",
+  "useAnimatedScrollHandler",
+  "useFrameCallback"
+]);
+
+const knownGestureWorkletMethods = new Set([
+  "onBegin",
+  "onStart",
+  "onUpdate",
+  "onChange",
+  "onEnd",
+  "onFinalize",
+  "onTouchesDown",
+  "onTouchesMove",
+  "onTouchesUp",
+  "onTouchesCancelled"
+]);
+
+function isInsideKnownWorkletContext(path: NodePath): boolean {
+  let current: NodePath | null = path.parentPath;
+
+  while (current) {
+    if (
+      current.isFunctionExpression() ||
+      current.isArrowFunctionExpression() ||
+      current.isFunctionDeclaration()
+    ) {
+      if (
+        current.node.body.type === "BlockStatement" &&
+        current.node.body.directives.some(
+          (directive) => directive.value.value === "worklet"
+        )
+      ) {
+        return true;
+      }
+
+      const parent = current.parentPath;
+      if (parent?.isCallExpression()) {
+        const callee = parent.node.callee;
+        if (
+          callee.type === "Identifier" &&
+          knownAutoWorkletCalls.has(callee.name)
+        ) {
+          return true;
+        }
+        if (
+          callee.type === "MemberExpression" &&
+          !callee.computed &&
+          callee.property.type === "Identifier" &&
+          knownGestureWorkletMethods.has(callee.property.name)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    current = current.parentPath;
+  }
+
+  return false;
 }
 
 function programState(path: NodePath) {
