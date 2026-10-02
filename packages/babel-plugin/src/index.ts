@@ -12,8 +12,7 @@ import { relative, sep } from "node:path";
 import { parseDirectiveComment, type ParsedDirective } from "./directive";
 
 const HELPER_NAME = "__riInspect";
-const TIMING_HELPER_NAME = "__riWithTiming";
-const SPRING_HELPER_NAME = "__riWithSpring";
+const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
 const SOURCE_MODULE = "@runtime-inspector/react-native";
 
 /**
@@ -153,25 +152,17 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         const meta = buildAnimationMeta(path, state, target, animationKind, api);
         if (!meta) return;
 
-        const helperName =
-          animationKind === "timing" ? TIMING_HELPER_NAME : SPRING_HELPER_NAME;
-        const toValue = right.arguments[0];
-        if (!toValue || toValue.type === "ArgumentPlaceholder") {
-          return;
-        }
-        const config =
-          right.arguments[1] && right.arguments[1].type !== "ArgumentPlaceholder"
-            ? right.arguments[1]
-            : api.types.identifier("undefined");
-
+        // Preserve the application's original Reanimated call exactly. Runtime
+        // Inspector observes the animation object *after* Reanimated constructs it
+        // and returns that same object unchanged.
+        const originalAnimationCall = api.types.cloneNode(right, true);
         path.get("right").replaceWith(
-          api.types.callExpression(api.types.identifier(helperName), [
-            toValue as never,
-            config as never,
+          api.types.callExpression(api.types.identifier(ANIMATION_OBSERVER_HELPER_NAME), [
+            originalAnimationCall,
             meta
           ])
         );
-        ensureRuntimeHelperImport(path, helperName, api);
+        ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
       }
     }
   };
