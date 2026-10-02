@@ -351,8 +351,16 @@ function App() {
     schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
   const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
-  const detectedAnimations = state.runtimeAnimations
-    .filter((animation) => !schemaId || animation.schemaId === schemaId)
+  const schemaAnimations = state.runtimeAnimations.filter(
+    (animation) => !schemaId || animation.schemaId === schemaId
+  );
+  const latestAnimationStart = schemaAnimations.at(-1)?.startedAtRuntimeMs;
+  const detectedAnimations = schemaAnimations
+    .filter(
+      (animation) =>
+        latestAnimationStart === undefined ||
+        latestAnimationStart - animation.startedAtRuntimeMs <= 1500
+    )
     .slice(-12);
 
   useEffect(() => {
