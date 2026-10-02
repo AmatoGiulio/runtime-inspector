@@ -1017,11 +1017,18 @@ function App() {
   );
 }
 
+interface AnimationPropertyTrack {
+  target: string;
+  label: string;
+  animations: RuntimeAnimationTrace[];
+}
+
 function DetectedAnimationTracks({
   animations
 }: {
   animations: RuntimeAnimationTrace[];
 }) {
+  const tracks = groupAnimationsByTarget(animations);
   const starts = animations.map((animation) => animation.startedAtRuntimeMs);
   const ends = animations.map((animation) => animationDisplayEnd(animation));
   const minTime = Math.min(...starts);
@@ -1032,57 +1039,120 @@ function DetectedAnimationTracks({
     <div className="detected-animations">
       <div className="detected-animations-title">
         <span>Latest interaction · auto-detected</span>
-        <strong>{animations.length}</strong>
+        <strong>
+          {tracks.length} {tracks.length === 1 ? "property" : "properties"} · {animations.length} spans
+        </strong>
       </div>
-      {animations.map((animation) => {
-        const start = ((animation.startedAtRuntimeMs - minTime) / span) * 100;
-        const endTime = animationDisplayEnd(animation);
-        const width = Math.max(1.5, ((endTime - animation.startedAtRuntimeMs) / span) * 100);
-        const actualDuration =
-          animation.endedAtRuntimeMs !== undefined
-            ? Math.max(0, animation.endedAtRuntimeMs - animation.startedAtRuntimeMs)
-            : undefined;
-        const displayDuration = actualDuration ?? animation.expectedDurationMs;
-        const estimated =
-          actualDuration === undefined && animation.durationBasis === "spring-estimate";
-
-        return (
-          <div className="detected-animation-row" key={animation.instanceId}>
-            <div className="detected-animation-label">
-              <strong>{animation.target}</strong>
-              <span>
-                {animation.animationKind}
-                {displayDuration !== undefined
-                  ? ` · ${estimated ? "~" : ""}${formatTime(displayDuration)}`
-                  : ""}
-              </span>
-            </div>
-            <div className="detected-animation-lane">
-              <div
-                className={`detected-animation-span ${animation.animationKind}${estimated ? " estimated" : ""}`}
-                style={{ left: `${start}%`, width: `${width}%` }}
-                title={[
-                  animation.source
-                    ? `${animation.source.file}:${animation.source.line}`
-                    : animation.callsiteId,
-                  animation.configControlId
-                    ? `config: ${animation.configControlId}`
-                    : undefined,
-                  Object.keys(animation.resolvedConfig).length
-                    ? Object.entries(animation.resolvedConfig)
-                        .map(([key, value]) => `${key}=${String(value)}`)
-                        .join(" · ")
-                    : undefined
-                ]
-                  .filter(Boolean)
-                  .join("\n")}
-              />
-            </div>
+      {tracks.map((track) => (
+        <div className="detected-animation-row" key={track.target}>
+          <div className="detected-animation-label">
+            <strong>{track.label}</strong>
+            <span>{track.animations.map((animation) => animation.animationKind).join(" → ")}</span>
           </div>
-        );
-      })}
+          <div className="detected-animation-lane">
+            {track.animations.map((animation) => {
+              const startPercent =
+                ((animation.startedAtRuntimeMs - minTime) / span) * 100;
+              const endTime = animationDisplayEnd(animation);
+              const widthPercent = Math.max(
+                1.5,
+                ((endTime - animation.startedAtRuntimeMs) / span) * 100
+              );
+              const actualDuration =
+                animation.endedAtRuntimeMs !== undefined
+                  ? Math.max(
+                      0,
+                      animation.endedAtRuntimeMs - animation.startedAtRuntimeMs
+                    )
+                  : undefined;
+              const displayDuration =
+                actualDuration ?? animation.expectedDurationMs;
+              const estimated =
+                actualDuration === undefined &&
+                animation.durationBasis === "spring-estimate";
+
+              return (
+                <div
+                  className={`detected-animation-span ${animation.animationKind}${estimated ? " estimated" : ""}`}
+                  key={animation.instanceId}
+                  style={{
+                    left: `${startPercent}%`,
+                    width: `${widthPercent}%`
+                  }}
+                  title={animationSpanTitle(
+                    animation,
+                    displayDuration,
+                    estimated
+                  )}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
+}
+
+function groupAnimationsByTarget(
+  animations: RuntimeAnimationTrace[]
+): AnimationPropertyTrack[] {
+  const tracks = new Map<string, AnimationPropertyTrack>();
+
+  for (const animation of animations) {
+    const existing = tracks.get(animation.target);
+    if (existing) {
+      existing.animations.push(animation);
+      continue;
+    }
+
+    tracks.set(animation.target, {
+      target: animation.target,
+      label: animationTargetLabel(animation.target),
+      animations: [animation]
+    });
+  }
+
+  return Array.from(tracks.values()).map((track) => ({
+    ...track,
+    animations: [...track.animations].sort(
+      (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
+    )
+  }));
+}
+
+function animationTargetLabel(target: string): string {
+  const leaf = target.split(".").at(-1) ?? target;
+  return leaf
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+function animationSpanTitle(
+  animation: RuntimeAnimationTrace,
+  duration: number | undefined,
+  estimated: boolean
+): string {
+  return [
+    animation.animationKind +
+      (duration !== undefined
+        ? ` · ${estimated ? "~" : ""}${formatTime(duration)}`
+        : ""),
+    animation.source
+      ? `${animation.source.file}:${animation.source.line}`
+      : animation.callsiteId,
+    animation.configControlId
+      ? `config: ${animation.configControlId}`
+      : undefined,
+    Object.keys(animation.resolvedConfig).length
+      ? Object.entries(animation.resolvedConfig)
+          .map(([key, value]) => `${key}=${String(value)}`)
+          .join(" · ")
+      : undefined
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 const ANIMATION_BURST_IDLE_GAP_MS = 450;
