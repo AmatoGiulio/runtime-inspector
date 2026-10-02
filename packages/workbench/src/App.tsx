@@ -28,9 +28,12 @@ import { AnimationTimeline } from "./AnimationTimeline";
 import {
   buildTimelineModel,
   latestAnimationBurst,
+  mergeBurst,
+  nextStickyDuration,
   parameterControl,
   startControl,
-  timelineOriginMs
+  timelineOriginMs,
+  timelineSignature
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
 import { TIMELINE_HEIGHT_STORAGE_KEY, clampTimelineHeight } from "./layout";
@@ -425,18 +428,58 @@ function App() {
     schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
   const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
-  const detectedAnimations = useMemo(
+  const latestBurst = useMemo(
     () => latestAnimationBurst(state.runtimeAnimations),
     [state.runtimeAnimations]
   );
-  const detectedAnimationOriginMs = timelineOriginMs(detectedAnimations);
+  // What the timeline renders: a replay's events arrive one render at a time, so the latest burst
+  // alone would unmount every row but the first. Rows that have not come back yet stay (rebased).
+  const displayedAnimations = useSettledBurst(latestBurst);
+  const detectedAnimationOriginMs = timelineOriginMs(displayedAnimations);
+  // Sticky ruler: while the same set of animations is on screen the scale only grows, so moving or
+  // lengthening one block does not rescale the others.
+  const timelineScaleRef = useRef<
+    { signature: string; durationMs: number } | undefined
+  >(undefined);
+  const [, setTimelineScaleEpoch] = useState(0);
+  const timelineScaleSignature = useMemo(
+    () => timelineSignature(displayedAnimations),
+    [displayedAnimations]
+  );
+  const timelineContentDurationMs = useMemo(
+    () =>
+      displayedAnimations.length > 0
+        ? buildTimelineModel(displayedAnimations).durationMs
+        : undefined,
+    [displayedAnimations]
+  );
+  let timelineMinDurationMs: number | undefined;
+  if (timelineContentDurationMs !== undefined) {
+    const next = nextStickyDuration(
+      timelineScaleRef.current,
+      timelineScaleSignature,
+      timelineContentDurationMs
+    );
+    timelineScaleRef.current = next;
+    timelineMinDurationMs = next.durationMs;
+  }
   const timelineDurationMs = useMemo(
     () =>
-      detectedAnimations.length > 0
-        ? buildTimelineModel(detectedAnimations).durationMs
+      displayedAnimations.length > 0
+        ? buildTimelineModel(displayedAnimations, {
+            minDurationMs: timelineMinDurationMs
+          }).durationMs
         : undefined,
-    [detectedAnimations]
+    [displayedAnimations, timelineMinDurationMs]
   );
+  function refitTimelineScale() {
+    if (timelineContentDurationMs === undefined) return;
+    timelineScaleRef.current = {
+      signature: timelineScaleSignature,
+      durationMs: timelineContentDurationMs
+    };
+    setTimelineScaleEpoch((epoch) => epoch + 1);
+  }
   const replayTarget = useMemo(() => {
     for (const schema of state.schemas) {
       for (const group of schema.groups) {
@@ -454,7 +497,7 @@ function App() {
     return undefined;
   }, [state.schemas]);
   const selectedAnimation = selectedAnimationId
-    ? detectedAnimations.find(
+    ? displayedAnimations.find(
         (animation) => animation.instanceId === selectedAnimationId
       )
     : undefined;
@@ -579,9 +622,9 @@ function App() {
 
   useEffect(() => {
     const pending = pendingAnimationSelectionRef.current;
-    if (!pending || detectedAnimations.length === 0) return;
+    if (!pending || displayedAnimations.length === 0) return;
 
-    const next = [...detectedAnimations]
+    const next = [...displayedAnimations]
       .reverse()
       .find(
         (animation) =>
@@ -593,7 +636,7 @@ function App() {
     pendingAnimationSelectionRef.current = undefined;
     setSelectedAnimationId(next.instanceId);
     setInspectorMode("animation");
-  }, [detectedAnimations, detectedAnimationOriginMs]);
+  }, [displayedAnimations, detectedAnimationOriginMs]);
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -1399,8 +1442,8 @@ function App() {
               ? benchmarkSummary(viewportBenchmarkResult)
               : recording
                 ? `${recording.samples.length} samples · ${recording.sampleRateHz} Hz${recording.incomplete ? " · gap" : ""}`
-                : detectedAnimations.length > 0
-                  ? `${detectedAnimations.length} animations`
+                : displayedAnimations.length > 0
+                  ? `${displayedAnimations.length} animations`
                   : "No interaction"}
           </div>
           <details className="timeline-dev">
@@ -1447,10 +1490,12 @@ function App() {
         </div>
 
         <div className="timeline-body">
-          {detectedAnimations.length > 0 ? (
+          {displayedAnimations.length > 0 ? (
             <AnimationTimeline
-              animations={detectedAnimations}
+              animations={displayedAnimations}
               selectedAnimationId={selectedAnimationId}
+              minDurationMs={timelineMinDurationMs}
+              onRefitScale={refitTimelineScale}
               playheadMs={playheadMs}
               playing={timelinePlaying}
               getDurationRange={(animation) => {
@@ -1472,7 +1517,7 @@ function App() {
                   : undefined;
               }}
               onResizeDuration={(animationId, durationMs) => {
-                const animation = detectedAnimations.find(
+                const animation = displayedAnimations.find(
                   (candidate) => candidate.instanceId === animationId
                 );
                 if (!animation) return;
@@ -1488,7 +1533,7 @@ function App() {
                 ]);
               }}
               onMoveStart={(animationId, delayMs) => {
-                const animation = detectedAnimations.find(
+                const animation = displayedAnimations.find(
                   (candidate) => candidate.instanceId === animationId
                 );
                 if (!animation) return;
@@ -1499,7 +1544,7 @@ function App() {
                 ]);
               }}
               onResizeStart={(animationId, delayMs, durationMs) => {
-                const animation = detectedAnimations.find(
+                const animation = displayedAnimations.find(
                   (candidate) => candidate.instanceId === animationId
                 );
                 if (!animation) return;
@@ -1546,6 +1591,36 @@ function App() {
       </section>
     </main>
   );
+}
+
+/**
+ * The latest burst for display: when it changes, the previously displayed animations that have not
+ * come back are merged in (see `mergeBurst`) so no row unmounts mid-replay; once it has stopped
+ * changing for `settleMs`, the burst itself is shown and rows that never returned go away.
+ */
+function useSettledBurst(
+  latest: RuntimeAnimationTrace[],
+  settleMs = 150
+): RuntimeAnimationTrace[] {
+  const [shown, setShown] = useState({ latest, displayed: latest });
+  let current = shown;
+  if (shown.latest !== latest) {
+    current = { latest, displayed: mergeBurst(shown.displayed, latest) };
+    setShown(current);
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShown((previous) =>
+        previous.latest === latest && previous.displayed !== latest
+          ? { latest, displayed: latest }
+          : previous
+      );
+    }, settleMs);
+    return () => clearTimeout(timer);
+  }, [latest, settleMs]);
+
+  return current.displayed;
 }
 
 function animationDisplayEnd(animation: RuntimeAnimationTrace): number {

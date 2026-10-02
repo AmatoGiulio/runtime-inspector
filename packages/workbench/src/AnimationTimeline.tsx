@@ -13,7 +13,10 @@ import {
   clamp,
   movedStartDelay,
   resizedDurationMs,
-  resizedFromStart
+  resizedFromStart,
+  resolvePendingPreview,
+  PENDING_PREVIEW_TTL_MS,
+  type PendingPreview
 } from "./timeline-model";
 
 /** Pointer travel below this many pixels is a click, not a drag. */
@@ -22,6 +25,10 @@ const DRAG_THRESHOLD_PX = 4;
 export interface AnimationTimelineProps {
   animations: RuntimeAnimationTrace[];
   selectedAnimationId?: string;
+  /** Lower bound of the ruler length; lets the parent keep the scale from shrinking between replays. */
+  minDurationMs?: number;
+  /** Fired by a double-click on the ruler: reset the scale to fit the current content. */
+  onRefitScale?(): void;
   playheadMs: number;
   /** True while a replay's animations are expected to be running; drives the self-running playhead. */
   playing?: boolean;
@@ -48,7 +55,12 @@ interface ResizeState {
   durationMs: number;
 }
 
-interface ResizeSession extends ResizeState {
+/** Stable row key (call site) the session was started on; a pending preview is stored under it. */
+interface SessionRow {
+  rowKey: string;
+}
+
+interface ResizeSession extends ResizeState, SessionRow {
   startMs: number;
   currentDurationMs: number | undefined;
   range: { min: number; max: number; step: number };
@@ -65,7 +77,7 @@ interface EditState {
   durationMs?: number;
 }
 
-interface EditSession extends EditState {
+interface EditSession extends EditState, SessionRow {
   startClientX: number;
   laneWidth: number;
   startMs: number;
@@ -79,6 +91,8 @@ interface EditSession extends EditState {
 export function AnimationTimeline({
   animations,
   selectedAnimationId,
+  minDurationMs,
+  onRefitScale,
   playheadMs,
   playing = false,
   onSelectAnimation,
@@ -89,7 +103,10 @@ export function AnimationTimeline({
   onMoveStart,
   onResizeStart
 }: AnimationTimelineProps) {
-  const model = useMemo(() => buildTimelineModel(animations), [animations]);
+  const model = useMemo(
+    () => buildTimelineModel(animations, { minDurationMs }),
+    [animations, minDurationMs]
+  );
   const dragRef = useRef(false);
   const resizeRef = useRef<ResizeSession | undefined>(undefined);
   const [resize, setResize] = useState<ResizeState | undefined>(undefined);
@@ -97,6 +114,10 @@ export function AnimationTimeline({
   const [edit, setEdit] = useState<EditState | undefined>(undefined);
   /** Set when a move drag ended: the click the browser fires after it must not select again. */
   const suppressClickRef = useRef(false);
+  /** Released edits shown at their new position until the runtime's replay confirms them (by row key). */
+  const [pendingPreviews, setPendingPreviews] = useState<
+    ReadonlyMap<string, PendingPreview>
+  >(() => new Map());
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
@@ -109,6 +130,75 @@ export function AnimationTimeline({
   const onPlayheadChangeRef = useRef(onPlayheadChange);
   onPlayheadChangeRef.current = onPlayheadChange;
   const hasAnimations = animations.length > 0;
+
+  // A replay gives every animation a new instance id: a preview or session keyed by an id that
+  // is gone would stay stuck, so drop it.
+  useEffect(() => {
+    const ids = new Set(animations.map((animation) => animation.instanceId));
+    if (resizeRef.current && !ids.has(resizeRef.current.instanceId)) {
+      resizeRef.current = undefined;
+    }
+    if (editRef.current && !ids.has(editRef.current.instanceId)) {
+      editRef.current = undefined;
+    }
+    setResize((current) =>
+      current && !ids.has(current.instanceId) ? undefined : current
+    );
+    setEdit((current) =>
+      current && !ids.has(current.instanceId) ? undefined : current
+    );
+  }, [animations]);
+
+  // Drop pending previews whose row is gone or has a new instance (the replay arrived). Rendering
+  // already ignores them in that same pass; this releases the state.
+  useEffect(() => {
+    setPendingPreviews((current) => {
+      if (current.size === 0) return current;
+      const instanceByKey = new Map<string, string>();
+      for (const group of model.groups) {
+        for (const row of group.rows) {
+          instanceByKey.set(row.key, row.animation.instanceId);
+        }
+      }
+      const now = performance.now();
+      const next = new Map<string, PendingPreview>();
+      for (const [key, pending] of current) {
+        const instanceId = instanceByKey.get(key);
+        if (
+          instanceId !== undefined &&
+          resolvePendingPreview(pending, { key, instanceId }, now)
+        ) {
+          next.set(key, pending);
+        }
+      }
+      return next.size === current.size ? current : next;
+    });
+  }, [model]);
+
+  // A released edit the runtime never confirmed goes back to the truth after the time-to-live.
+  useEffect(() => {
+    if (pendingPreviews.size === 0) return;
+    const now = performance.now();
+    const earliest = Math.min(
+      ...Array.from(pendingPreviews.values(), (pending) => pending.createdAtMs)
+    );
+    const timer = setTimeout(
+      () => {
+        const at = performance.now();
+        setPendingPreviews((current) => {
+          const next = new Map<string, PendingPreview>();
+          for (const [key, pending] of current) {
+            if (resolvePendingPreview(pending, pending, at)) {
+              next.set(key, pending);
+            }
+          }
+          return next.size === current.size ? current : next;
+        });
+      },
+      Math.max(0, earliest + PENDING_PREVIEW_TTL_MS - now) + 1
+    );
+    return () => clearTimeout(timer);
+  }, [pendingPreviews]);
 
   useEffect(() => {
     if (!playing || !hasAnimations) return;
@@ -201,6 +291,7 @@ export function AnimationTimeline({
   function handleResizePointerDown(
     event: ReactPointerEvent<HTMLElement>,
     animation: RuntimeAnimationTrace,
+    rowKey: string,
     startMs: number,
     currentDurationMs: number | undefined,
     range: { min: number; max: number; step: number }
@@ -208,9 +299,11 @@ export function AnimationTimeline({
     event.stopPropagation();
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    dropPendingPreview(rowKey);
     onSelectAnimation(animation.instanceId);
     const initial = currentDurationMs ?? range.min;
     resizeRef.current = {
+      rowKey,
       instanceId: animation.instanceId,
       durationMs: initial,
       startMs,
@@ -249,6 +342,11 @@ export function AnimationTimeline({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (session.durationMs !== session.currentDurationMs) {
+      storePendingPreview(session, {
+        mode: "resize-end",
+        shiftMs: 0,
+        durationMs: session.durationMs
+      });
       onResizeDuration?.(session.instanceId, session.durationMs);
     }
   }
@@ -261,6 +359,28 @@ export function AnimationTimeline({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+  }
+
+  function dropPendingPreview(rowKey: string) {
+    setPendingPreviews((current) => {
+      if (!current.has(rowKey)) return current;
+      const next = new Map(current);
+      next.delete(rowKey);
+      return next;
+    });
+  }
+
+  function storePendingPreview(
+    session: SessionRow & { instanceId: string },
+    preview: Pick<PendingPreview, "mode" | "shiftMs" | "durationMs">
+  ) {
+    const pending: PendingPreview = {
+      key: session.rowKey,
+      instanceId: session.instanceId,
+      createdAtMs: performance.now(),
+      ...preview
+    };
+    setPendingPreviews((current) => new Map(current).set(pending.key, pending));
   }
 
   function laneWidthOf(element: Element): number {
@@ -276,6 +396,7 @@ export function AnimationTimeline({
   function handleBarPointerDown(
     event: ReactPointerEvent<HTMLElement>,
     animation: RuntimeAnimationTrace,
+    rowKey: string,
     startMs: number,
     startRange: { min: number; max: number; step: number; value: number }
   ) {
@@ -283,7 +404,9 @@ export function AnimationTimeline({
     suppressClickRef.current = false;
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    dropPendingPreview(rowKey);
     editRef.current = {
+      rowKey,
       instanceId: animation.instanceId,
       mode: "move",
       baseDelayMs: startRange.value,
@@ -336,6 +459,10 @@ export function AnimationTimeline({
     if (!session.dragging) return;
     suppressClickRef.current = true;
     if (session.delayMs !== session.baseDelayMs) {
+      storePendingPreview(session, {
+        mode: "move",
+        shiftMs: session.delayMs - session.baseDelayMs
+      });
       onSelectAnimation(session.instanceId);
       onMoveStart?.(session.instanceId, session.delayMs);
     }
@@ -352,6 +479,7 @@ export function AnimationTimeline({
   function handleStartEdgePointerDown(
     event: ReactPointerEvent<HTMLElement>,
     animation: RuntimeAnimationTrace,
+    rowKey: string,
     startMs: number,
     startRange: { min: number; max: number; step: number; value: number },
     durationRange: { min: number; max: number; step: number },
@@ -360,8 +488,10 @@ export function AnimationTimeline({
     event.stopPropagation();
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
+    dropPendingPreview(rowKey);
     const baseDurationMs = currentDurationMs ?? durationRange.min;
     editRef.current = {
+      rowKey,
       instanceId: animation.instanceId,
       mode: "resize-start",
       baseDelayMs: startRange.value,
@@ -435,6 +565,11 @@ export function AnimationTimeline({
       (session.delayMs !== session.baseDelayMs ||
         session.durationMs !== session.baseDurationMs)
     ) {
+      storePendingPreview(session, {
+        mode: "resize-start",
+        shiftMs: session.delayMs - session.baseDelayMs,
+        durationMs: session.durationMs
+      });
       onSelectAnimation(session.instanceId);
       onResizeStart?.(session.instanceId, session.delayMs, session.durationMs);
     }
@@ -475,7 +610,11 @@ export function AnimationTimeline({
 
         <div className="motion-ruler-row dialkit-timeline-row">
           <div className="motion-ruler-label dialkit-timeline-label" />
-          <div className="motion-ruler dialkit-timeline-ruler" {...scrubHandlers}>
+          <div
+            className="motion-ruler dialkit-timeline-ruler"
+            onDoubleClick={onRefitScale}
+            {...scrubHandlers}
+          >
             {fineTicks.map((tick) => (
               <div
                 className="dialkit-timeline-tick dialkit-timeline-tick-fine"
@@ -582,6 +721,12 @@ export function AnimationTimeline({
                     const moving = editing?.mode === "move";
                     const baseEndMs =
                       animationDisplayEnd(animation) - model.originMs;
+                    // The released edit stays put until the replay confirms it (not "dragging").
+                    const pending = resolvePendingPreview(
+                      pendingPreviews.get(row.key),
+                      { key: row.key, instanceId: animation.instanceId },
+                      performance.now()
+                    );
                     let barStartMs = startMs;
                     let endMs = baseEndMs;
                     let displayDuration = row.durationMs;
@@ -597,8 +742,24 @@ export function AnimationTimeline({
                         endMs = barStartMs + editing.durationMs;
                         displayDuration = editing.durationMs;
                       }
+                    } else if (pending) {
+                      if (pending.mode === "resize-end") {
+                        if (pending.durationMs !== undefined) {
+                          endMs = startMs + pending.durationMs;
+                          displayDuration = pending.durationMs;
+                        }
+                      } else {
+                        barStartMs = startMs + pending.shiftMs;
+                        if (pending.mode === "move") {
+                          endMs = baseEndMs + pending.shiftMs;
+                        } else if (pending.durationMs !== undefined) {
+                          endMs = barStartMs + pending.durationMs;
+                          displayDuration = pending.durationMs;
+                        }
+                      }
                     }
                     const dragging = Boolean(resizing || editing);
+                    const previewing = dragging || Boolean(pending);
                     const selected =
                       animation.instanceId === selectedAnimationId;
 
@@ -611,7 +772,7 @@ export function AnimationTimeline({
                           dragging && "resizing"
                         )}
                         data-grouped=""
-                        key={animation.instanceId}
+                        key={row.key}
                       >
                         <button
                           className="motion-row-label dialkit-timeline-label"
@@ -624,7 +785,7 @@ export function AnimationTimeline({
                           <span className="motion-row-kind">· {row.kindLabel}</span>
                           <span className="motion-row-duration">
                             {displayDuration !== undefined
-                              ? `${row.estimated && !dragging ? "~" : ""}${formatTime(
+                              ? `${row.estimated && !previewing ? "~" : ""}${formatTime(
                                   displayDuration
                                 )}`
                               : "—"}
@@ -651,7 +812,7 @@ export function AnimationTimeline({
                               "motion-bar",
                               "dialkit-timeline-clip",
                               animation.animationKind === "spring" && "spring",
-                              row.estimated && !dragging && "estimated",
+                              row.estimated && !previewing && "estimated",
                               selected && "selected",
                               movable && "movable",
                               moving && "moving"
@@ -677,6 +838,7 @@ export function AnimationTimeline({
                                 ? handleBarPointerDown(
                                     event,
                                     animation,
+                                    row.key,
                                     startMs,
                                     startRange
                                   )
@@ -713,6 +875,7 @@ export function AnimationTimeline({
                                 handleStartEdgePointerDown(
                                   event,
                                   animation,
+                                  row.key,
                                   startMs,
                                   startRange,
                                   rawDurationRange,
@@ -739,6 +902,7 @@ export function AnimationTimeline({
                                 handleResizePointerDown(
                                   event,
                                   animation,
+                                  row.key,
                                   startMs,
                                   row.durationMs,
                                   durationRange

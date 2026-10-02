@@ -3,6 +3,11 @@ import type { PanelSchema } from "@runtime-inspector/protocol";
 
 export interface AnimationRow {
   animation: RuntimeAnimationTrace;
+  /**
+   * Stable React key across replays: the call site id, suffixed `#2`, `#3`... (input order) when
+   * the same call site ran more than once in the burst. Instance ids change on every replay.
+   */
+  key: string;
   /** Humanized property name, e.g. "Move X". */
   label: string;
   /** "Timing" | "Spring" */
@@ -53,14 +58,21 @@ export interface ControlRef {
 
 type ControlValues = Readonly<Record<string, Record<string, unknown> | undefined>>;
 
+export interface TimelineModelOptions {
+  /** The ruler never shows less than this (rounded up to its tick step); keeps the scale from shrinking. */
+  minDurationMs?: number;
+}
+
 export function buildTimelineModel(
-  animations: RuntimeAnimationTrace[]
+  animations: RuntimeAnimationTrace[],
+  options: TimelineModelOptions = {}
 ): TimelineModel {
   const originMs = timelineOriginMs(animations);
   const maxEndMs = Math.max(
     ...animations.map((animation) => animationDisplayEnd(animation))
   );
-  const rawDuration = Math.max(1, maxEndMs - originMs);
+  const contentDurationMs = Math.max(1, maxEndMs - originMs);
+  const rawDuration = Math.max(contentDurationMs, options.minDurationMs ?? 0);
   const tickStep = chooseTickStep(rawDuration);
   const durationMs = Math.max(
     tickStep,
@@ -86,21 +98,178 @@ export function buildTimelineModel(
   };
 }
 
-/** Groups in order of first appearance by start time; rows by start time, ties in original array order. */
+interface OrderedAnimation {
+  animation: RuntimeAnimationTrace;
+  /** Position in the input array. */
+  index: number;
+}
+
+function orderedEntries(animations: RuntimeAnimationTrace[]): OrderedAnimation[] {
+  const entries = animations.map((animation, index) => ({ animation, index }));
+  if (!animations.every((animation) => animation.source)) return entries;
+
+  return entries.sort((left, right) => {
+    const a = left.animation.source!;
+    const b = right.animation.source!;
+    return (
+      compareText(a.file, b.file) ||
+      a.line - b.line ||
+      a.column - b.column ||
+      left.index - right.index
+    );
+  });
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/**
+ * The display order of a burst, independent of timing so that moving a block never reshuffles
+ * the hierarchy. `animation.started` is emitted at call time, so the input order is already the
+ * order the app's code runs; when every animation carries a source location the order is made
+ * explicit: (file, line, column), input order breaking ties. Otherwise the input order is kept.
+ */
+export function orderAnimations(
+  animations: RuntimeAnimationTrace[]
+): RuntimeAnimationTrace[] {
+  return orderedEntries(animations).map((entry) => entry.animation);
+}
+
+/**
+ * The stable per-row key of each animation, in input order: its call site id, suffixed `#2`, `#3`...
+ * for repeats of the same call site. Instance ids change on every replay; this does not.
+ */
+export function animationKeys(animations: RuntimeAnimationTrace[]): string[] {
+  const seen = new Map<string, number>();
+  return animations.map((animation) => {
+    const count = (seen.get(animation.callsiteId) ?? 0) + 1;
+    seen.set(animation.callsiteId, count);
+    return count === 1 ? animation.callsiteId : `${animation.callsiteId}#${count}`;
+  });
+}
+
+/**
+ * The burst to show while a replay's events arrive one at a time: every `incoming` animation, plus
+ * each `displayed` animation whose key has not (yet) come back, rebased into the incoming time base
+ * so it stays where it was on screen. Rows keep the displayed order, so the hierarchy does not move
+ * and no row unmounts. Never mutates; kept animations are shallow copies.
+ */
+export function mergeBurst(
+  displayed: RuntimeAnimationTrace[],
+  incoming: RuntimeAnimationTrace[]
+): RuntimeAnimationTrace[] {
+  if (incoming.length === 0) return displayed;
+  if (displayed.length === 0) return incoming;
+
+  const incomingKeys = animationKeys(incoming);
+  const incomingByKey = new Map<string, RuntimeAnimationTrace>();
+  incoming.forEach((animation, index) =>
+    incomingByKey.set(incomingKeys[index]!, animation)
+  );
+  const incomingIds = new Set(incoming.map((animation) => animation.instanceId));
+  const shiftMs = timelineOriginMs(incoming) - timelineOriginMs(displayed);
+  const displayedKeys = animationKeys(displayed);
+  const used = new Set<RuntimeAnimationTrace>();
+  const merged: RuntimeAnimationTrace[] = [];
+
+  displayed.forEach((animation, index) => {
+    const replacement = incomingByKey.get(displayedKeys[index]!);
+    if (replacement) {
+      used.add(replacement);
+      merged.push(replacement);
+    } else if (incomingIds.has(animation.instanceId)) {
+      // Same instance, different key: the incoming copy is added below, unchanged.
+    } else {
+      merged.push({
+        ...animation,
+        startedAtRuntimeMs: animation.startedAtRuntimeMs + shiftMs,
+        ...(animation.endedAtRuntimeMs !== undefined
+          ? { endedAtRuntimeMs: animation.endedAtRuntimeMs + shiftMs }
+          : {})
+      });
+    }
+  });
+
+  for (const animation of incoming) {
+    if (!used.has(animation)) merged.push(animation);
+  }
+
+  return merged;
+}
+
+/** Identity of the set of animations on screen: the sorted, joined call site ids. */
+export function timelineSignature(animations: RuntimeAnimationTrace[]): string {
+  return animations
+    .map((animation) => animation.callsiteId)
+    .sort(compareText)
+    .join("|");
+}
+
+/**
+ * Sticky ruler length: while the same set of animations is on screen it only grows, so lengthening
+ * or moving one block does not rescale the others. A different set resets to its content duration.
+ */
+export function nextStickyDuration(
+  previous: { signature: string; durationMs: number } | undefined,
+  signature: string,
+  contentDurationMs: number
+): { signature: string; durationMs: number } {
+  if (previous && previous.signature === signature) {
+    return {
+      signature,
+      durationMs: Math.max(previous.durationMs, contentDurationMs)
+    };
+  }
+  return { signature, durationMs: contentDurationMs };
+}
+
+/** How long a released edit stays on screen waiting for the runtime's replay before it is dropped. */
+export const PENDING_PREVIEW_TTL_MS = 2000;
+
+/**
+ * A released drag/resize shown optimistically until the runtime confirms it. Keyed by the row's
+ * stable `key` (call site); `instanceId` is the instance it was made on.
+ */
+export interface PendingPreview {
+  key: string;
+  instanceId: string;
+  /** `performance.now()` at release. */
+  createdAtMs: number;
+  mode: "move" | "resize-start" | "resize-end";
+  /** Change of the start delay (bar start shift) in ms; 0 for an end resize. */
+  shiftMs: number;
+  /** Previewed duration for the resizes. */
+  durationMs?: number;
+}
+
+/**
+ * Whether a pending preview still applies to `row`: dropped when the row's instance differs (the
+ * replay arrived), when it belongs to another row, or after `ttlMs` without a new instance.
+ */
+export function resolvePendingPreview(
+  pending: PendingPreview | undefined,
+  row: { key: string; instanceId: string },
+  nowMs: number,
+  ttlMs: number = PENDING_PREVIEW_TTL_MS
+): PendingPreview | undefined {
+  if (!pending) return undefined;
+  if (pending.key !== row.key) return undefined;
+  if (pending.instanceId !== row.instanceId) return undefined;
+  if (nowMs - pending.createdAtMs >= ttlMs) return undefined;
+  return pending;
+}
+
+/** Groups in order of the first row of each under `orderAnimations`; rows keep that order. */
 function groupAnimationRows(
   animations: RuntimeAnimationTrace[],
   originMs: number
 ): AnimationGroup[] {
-  const ordered = animations
-    .map((animation, index) => ({ animation, index }))
-    .sort(
-      (left, right) =>
-        left.animation.startedAtRuntimeMs - right.animation.startedAtRuntimeMs ||
-        left.index - right.index
-    );
+  // Keys are numbered in input order, so a repeated call site keeps its suffix whatever the sort.
+  const keys = animationKeys(animations);
   const groups = new Map<string, AnimationGroup>();
 
-  for (const { animation } of ordered) {
+  for (const { animation, index } of orderedEntries(animations)) {
     const { group: id, label } = splitAnimationTarget(animation.target);
     let group = groups.get(id);
     if (!group) {
@@ -115,6 +284,7 @@ function groupAnimationRows(
 
     group.rows.push({
       animation,
+      key: keys[index]!,
       label,
       kindLabel: animation.animationKind === "spring" ? "Spring" : "Timing",
       startMs: animation.startedAtRuntimeMs - originMs,

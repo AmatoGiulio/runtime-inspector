@@ -1096,6 +1096,21 @@ button {
   color: var(--wb-text);
 }
 
+/* One chevron, pointing down when open; collapsing turns it a quarter turn. Driven by data-open. */
+.motion-group-toggle svg {
+  transition: transform 140ms ease;
+}
+
+.motion-group-toggle[data-open="false"] svg {
+  transform: rotate(-90deg);
+}
+
+/* The label cell clips its overflow: draw the keyboard ring inside the button so it stays whole. */
+.motion-group-toggle:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -2px;
+}
+
 .motion-group-name {
   min-width: 0;
   overflow: hidden;
@@ -1212,6 +1227,26 @@ button {
 
 .motion-bar.spring:not([data-selected]):hover {
   background: color-mix(in srgb, var(--motion-clip-fill-hover) 86%, var(--wb-accent) 14%);
+}
+
+/*
+ * Between replays a bar moves and resizes smoothly (stable row keys keep the element alive).
+ * Never during a live drag: the row is `.resizing` then, and the preview must track the pointer.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .motion-row:not(.resizing) .motion-bar {
+    transition:
+      background-color 100ms ease,
+      left 160ms ease,
+      width 160ms ease;
+  }
+
+  .motion-row:not(.resizing) .motion-lead-in,
+  .motion-row:not(.resizing) .motion-bar-resize {
+    transition:
+      left 160ms ease,
+      width 160ms ease;
+  }
 }
 
 /* Delay lead-in: call time (dot) to bar start, under the bar. */
@@ -1364,6 +1399,8 @@ button {
   .wb-button,
   .simulator-select,
   .motion-bar,
+  .motion-bar-resize,
+  .motion-lead-in,
   .motion-bar-resize::after,
   .motion-group-toggle svg {
     transition: none;

@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
 import type { PanelSchema } from "@runtime-inspector/protocol";
 import {
+  PENDING_PREVIEW_TTL_MS,
+  animationKeys,
+  mergeBurst,
+  type PendingPreview,
   buildTimelineModel,
   latestAnimationBurst,
   movedStartDelay,
+  nextStickyDuration,
+  orderAnimations,
   parameterControl,
   resizedDurationMs,
   resizedFromStart,
+  resolvePendingPreview,
   resolveSliderControl,
   splitAnimationTarget,
   startControl,
   timelineOriginMs,
+  timelineSignature,
   timingDurationControl
 } from "./timeline-model";
 
@@ -136,7 +144,7 @@ describe("timingDurationControl", () => {
 });
 
 describe("buildTimelineModel", () => {
-  it("groups rows by element in order of first appearance by start time", () => {
+  it("groups rows by element in order of first appearance in the input", () => {
     const model = buildTimelineModel([
       trace({ instanceId: "b", target: "card.moveX", startedAtRuntimeMs: 1200 }),
       trace({ instanceId: "c", target: "badge.opacity", startedAtRuntimeMs: 1100 }),
@@ -145,27 +153,27 @@ describe("buildTimelineModel", () => {
       trace({ instanceId: "e", target: "progress", startedAtRuntimeMs: 1500 })
     ]);
     expect(model.groups.map((group) => group.id)).toEqual([
-      "badge",
       "card",
+      "badge",
       "screen.card",
       "progress"
     ]);
     expect(model.groups.map((group) => group.label)).toEqual([
-      "badge",
       "card",
+      "badge",
       "screen.card",
       "progress"
     ]);
-    expect(model.groups[1]?.rows.map((row) => row.animation.instanceId)).toEqual([
+    expect(model.groups[0]?.rows.map((row) => row.animation.instanceId)).toEqual([
       "b",
       "a"
     ]);
-    expect(model.groups[1]?.rows.map((row) => row.label)).toEqual(["Move X", "Opacity"]);
+    expect(model.groups[0]?.rows.map((row) => row.label)).toEqual(["Move X", "Opacity"]);
     expect(model.originMs).toBe(1100);
-    expect(model.groups[1]?.rows.map((row) => row.startMs)).toEqual([100, 200]);
+    expect(model.groups[0]?.rows.map((row) => row.startMs)).toEqual([100, 200]);
   });
 
-  it("orders a timing before the later spring of the same property", () => {
+  it("keeps input order for rows of one group whatever their start", () => {
     const model = buildTimelineModel([
       trace({
         instanceId: "spring",
@@ -178,16 +186,48 @@ describe("buildTimelineModel", () => {
     ]);
     expect(model.groups).toHaveLength(1);
     expect(model.groups[0]?.rows.map((row) => row.animation.instanceId)).toEqual([
-      "timing",
-      "spring"
+      "spring",
+      "timing"
     ]);
     expect(model.groups[0]?.rows.map((row) => row.kindLabel)).toEqual([
-      "Timing",
-      "Spring"
+      "Spring",
+      "Timing"
     ]);
   });
 
-  it("keeps original order for equal starts", () => {
+  it("does not reorder groups or rows when a block is moved later", () => {
+    const base = [
+      trace({ instanceId: "a", callsiteId: "c1", target: "card.moveX" }),
+      trace({ instanceId: "b", callsiteId: "c2", target: "badge.opacity" }),
+      trace({ instanceId: "c", callsiteId: "c3", target: "card.opacity" })
+    ];
+    const order = (animations: RuntimeAnimationTrace[]) => {
+      const model = buildTimelineModel(animations);
+      return {
+        groups: model.groups.map((group) => group.id),
+        rows: model.groups.flatMap((group) =>
+          group.rows.map((row) => row.animation.callsiteId)
+        )
+      };
+    };
+    const moved = base.map((animation, index) =>
+      index === 0
+        ? {
+            ...animation,
+            instanceId: "a2",
+            startedAtRuntimeMs: animation.startedAtRuntimeMs + 700,
+            startDelayMs: 700
+          }
+        : animation
+    );
+    expect(order(moved)).toEqual(order(base));
+    expect(order(base)).toEqual({
+      groups: ["card", "badge"],
+      rows: ["c1", "c3", "c2"]
+    });
+  });
+
+  it("keeps the input order for equal and unequal starts alike", () => {
     const model = buildTimelineModel([
       trace({ instanceId: "late", target: "card.scale", startedAtRuntimeMs: 1200 }),
       trace({ instanceId: "first", target: "card.moveX", startedAtRuntimeMs: 1000 }),
@@ -195,11 +235,36 @@ describe("buildTimelineModel", () => {
       trace({ instanceId: "third", target: "card.moveY", startedAtRuntimeMs: 1000 })
     ]);
     expect(model.groups[0]?.rows.map((row) => row.animation.instanceId)).toEqual([
+      "late",
       "first",
       "second",
-      "third",
-      "late"
+      "third"
     ]);
+  });
+
+  it("gives rows a key from the call site, suffixed for repeated call sites", () => {
+    const model = buildTimelineModel([
+      trace({ instanceId: "x1", callsiteId: "A:1:1", target: "card.moveX" }),
+      trace({ instanceId: "x2", callsiteId: "A:2:1", target: "card.opacity" }),
+      trace({ instanceId: "x3", callsiteId: "A:1:1", target: "card.moveX" }),
+      trace({ instanceId: "x4", callsiteId: "A:1:1", target: "card.moveX" })
+    ]);
+    expect(model.groups[0]?.rows.map((row) => row.key)).toEqual([
+      "A:1:1",
+      "A:2:1",
+      "A:1:1#2",
+      "A:1:1#3"
+    ]);
+    // A new replay (new instance ids) keeps the same keys.
+    const replay = buildTimelineModel([
+      trace({ instanceId: "y1", callsiteId: "A:1:1", target: "card.moveX" }),
+      trace({ instanceId: "y2", callsiteId: "A:2:1", target: "card.opacity" }),
+      trace({ instanceId: "y3", callsiteId: "A:1:1", target: "card.moveX" }),
+      trace({ instanceId: "y4", callsiteId: "A:1:1", target: "card.moveX" })
+    ]);
+    expect(replay.groups[0]?.rows.map((row) => row.key)).toEqual(
+      model.groups[0]?.rows.map((row) => row.key)
+    );
   });
 
   it("marks only unfinished spring estimates as estimated", () => {
@@ -258,6 +323,241 @@ describe("buildTimelineModel", () => {
     expect(model.durationMs).toBe(300);
     expect(model.ticks).toEqual([0, 50, 100, 150, 200, 250, 300]);
     expect(model.minorTicks).toEqual([25, 75, 125, 175, 225, 275]);
+  });
+});
+
+describe("buildTimelineModel minDurationMs", () => {
+  it("keeps the content duration when no minimum is given or the minimum is smaller", () => {
+    expect(buildTimelineModel([trace()]).durationMs).toBe(300);
+    expect(buildTimelineModel([trace()], { minDurationMs: 100 }).durationMs).toBe(300);
+    expect(buildTimelineModel([trace()], {}).ticks).toEqual([0, 50, 100, 150, 200, 250, 300]);
+  });
+
+  it("widens the ruler to the minimum, rounded up to the tick step of that duration", () => {
+    const model = buildTimelineModel([trace()], { minDurationMs: 1500 });
+    expect(model.durationMs).toBe(1600);
+    expect(model.ticks).toEqual([0, 200, 400, 600, 800, 1000, 1200, 1400, 1600]);
+    expect(model.minorTicks[0]).toBe(100);
+    expect(buildTimelineModel([trace()], { minDurationMs: 500 }).durationMs).toBe(500);
+  });
+
+  it("does not change the rows or origin", () => {
+    const plain = buildTimelineModel([trace()]);
+    const wide = buildTimelineModel([trace()], { minDurationMs: 2000 });
+    expect(wide.originMs).toBe(plain.originMs);
+    expect(wide.groups[0]?.rows[0]?.startMs).toBe(plain.groups[0]?.rows[0]?.startMs);
+  });
+});
+
+describe("orderAnimations", () => {
+  it("orders by source file, line, column when every animation has a source", () => {
+    const source = (file: string, line: number, column: number) => ({
+      file,
+      line,
+      column,
+      enclosure: [],
+      expression: ""
+    });
+    const ordered = orderAnimations([
+      trace({ instanceId: "d", source: source("b.tsx", 1, 1) }),
+      trace({ instanceId: "c", source: source("a.tsx", 20, 1) }),
+      trace({ instanceId: "b", source: source("a.tsx", 10, 9) }),
+      trace({ instanceId: "a", source: source("a.tsx", 10, 2) }),
+      trace({ instanceId: "e", source: source("b.tsx", 1, 1) })
+    ]);
+    expect(ordered.map((animation) => animation.instanceId)).toEqual([
+      "a",
+      "b",
+      "c",
+      "d",
+      "e"
+    ]);
+  });
+
+  it("falls back to input order when any source is missing", () => {
+    const withSource = { file: "a.tsx", line: 1, column: 1, enclosure: [], expression: "" };
+    const input = [
+      trace({ instanceId: "z", source: { ...withSource, line: 99 } }),
+      trace({ instanceId: "y" }),
+      trace({ instanceId: "x", source: { ...withSource, line: 1 } })
+    ];
+    expect(orderAnimations(input).map((animation) => animation.instanceId)).toEqual([
+      "z",
+      "y",
+      "x"
+    ]);
+  });
+
+  it("drives group and row order in the model, independent of start", () => {
+    const at = (line: number) => ({
+      file: "a.tsx",
+      line,
+      column: 1,
+      enclosure: [],
+      expression: ""
+    });
+    const model = buildTimelineModel([
+      trace({ instanceId: "p", target: "badge.opacity", source: at(30), startedAtRuntimeMs: 1000 }),
+      trace({ instanceId: "q", target: "card.moveX", source: at(10), startedAtRuntimeMs: 1500 }),
+      trace({ instanceId: "r", target: "badge.scale", source: at(20), startedAtRuntimeMs: 1200 })
+    ]);
+    expect(model.groups.map((group) => group.id)).toEqual(["card", "badge"]);
+    expect(model.groups[1]?.rows.map((row) => row.animation.instanceId)).toEqual(["r", "p"]);
+  });
+});
+
+describe("resolvePendingPreview", () => {
+  const pending: PendingPreview = {
+    key: "A:1:1",
+    instanceId: "run1",
+    createdAtMs: 10_000,
+    mode: "move",
+    shiftMs: 150
+  };
+  const row = { key: "A:1:1", instanceId: "run1" };
+
+  it("keeps the preview while the instance is the same and the time-to-live has not passed", () => {
+    expect(resolvePendingPreview(pending, row, 10_000)).toBe(pending);
+    expect(resolvePendingPreview(pending, row, 10_000 + PENDING_PREVIEW_TTL_MS - 1)).toBe(pending);
+  });
+
+  it("drops it once a new instance of the row arrives (the replay)", () => {
+    expect(resolvePendingPreview(pending, { ...row, instanceId: "run2" }, 10_100)).toBeUndefined();
+  });
+
+  it("drops it after the time-to-live without a new instance", () => {
+    expect(resolvePendingPreview(pending, row, 10_000 + PENDING_PREVIEW_TTL_MS)).toBeUndefined();
+    expect(resolvePendingPreview(pending, row, 10_000, 0)).toBeUndefined();
+  });
+
+  it("ignores a preview that belongs to another row, or none at all", () => {
+    expect(resolvePendingPreview(pending, { ...row, key: "B:2:2" }, 10_100)).toBeUndefined();
+    expect(resolvePendingPreview(undefined, row, 10_100)).toBeUndefined();
+  });
+});
+
+describe("animationKeys", () => {
+  it("is the call site id, suffixed in input order for repeats", () => {
+    expect(
+      animationKeys([
+        trace({ callsiteId: "a" }),
+        trace({ callsiteId: "b" }),
+        trace({ callsiteId: "a" }),
+        trace({ callsiteId: "a" })
+      ])
+    ).toEqual(["a", "b", "a#2", "a#3"]);
+  });
+});
+
+describe("mergeBurst", () => {
+  const displayed = [
+    trace({ instanceId: "o1", callsiteId: "c1", target: "card.moveX", startedAtRuntimeMs: 1000 }),
+    trace({
+      instanceId: "o2",
+      callsiteId: "c2",
+      target: "card.opacity",
+      startedAtRuntimeMs: 1100,
+      endedAtRuntimeMs: 1400
+    }),
+    trace({ instanceId: "o3", callsiteId: "c3", target: "badge.scale", startedAtRuntimeMs: 1300 })
+  ];
+
+  it("returns the other input when one side is empty", () => {
+    const incoming = [trace({ instanceId: "n1", callsiteId: "c1", startedAtRuntimeMs: 5000 })];
+    expect(mergeBurst(displayed, [])).toBe(displayed);
+    expect(mergeBurst([], incoming)).toBe(incoming);
+  });
+
+  it("keeps the rows that have not come back, at the same relative start", () => {
+    const incoming = [
+      trace({ instanceId: "n1", callsiteId: "c1", target: "card.moveX", startedAtRuntimeMs: 5000 })
+    ];
+    const merged = mergeBurst(displayed, incoming);
+    expect(merged.map((animation) => animation.instanceId)).toEqual(["n1", "o2", "o3"]);
+    // Rebased by 5000 - 1000: relative starts 0, 100, 300 as before.
+    expect(merged.map((animation) => animation.startedAtRuntimeMs)).toEqual([5000, 5100, 5300]);
+    expect(merged[1]!.endedAtRuntimeMs).toBe(5400);
+    const model = buildTimelineModel(merged);
+    expect(model.originMs).toBe(5000);
+    expect(model.groups.map((group) => group.id)).toEqual(["card", "badge"]);
+    expect(model.groups[0]!.rows.map((row) => row.startMs)).toEqual([0, 100]);
+    expect(model.groups[1]!.rows[0]!.startMs).toBe(300);
+  });
+
+  it("replaces everything when every key comes back", () => {
+    const incoming = displayed.map((animation, index) => ({
+      ...animation,
+      instanceId: `n${index}`,
+      startedAtRuntimeMs: animation.startedAtRuntimeMs + 4000
+    }));
+    const merged = mergeBurst(displayed, incoming);
+    expect(merged).toEqual(incoming);
+    expect(merged.every((animation, index) => animation === incoming[index])).toBe(true);
+  });
+
+  it("matches repeated call sites by their #n key", () => {
+    const twice = [
+      trace({ instanceId: "p1", callsiteId: "r", target: "card.moveX", startedAtRuntimeMs: 1000 }),
+      trace({ instanceId: "p2", callsiteId: "r", target: "card.moveX", startedAtRuntimeMs: 1200 })
+    ];
+    const incoming = [
+      trace({ instanceId: "q1", callsiteId: "r", target: "card.moveX", startedAtRuntimeMs: 3000 })
+    ];
+    const merged = mergeBurst(twice, incoming);
+    expect(merged.map((animation) => animation.instanceId)).toEqual(["q1", "p2"]);
+    expect(merged[1]!.startedAtRuntimeMs).toBe(3200);
+    expect(animationKeys(merged)).toEqual(["r", "r#2"]);
+  });
+
+  it("takes an already displayed instance from incoming unchanged", () => {
+    const incoming = [displayed[0]!, trace({ instanceId: "n9", callsiteId: "c9", startedAtRuntimeMs: 1050 })];
+    const merged = mergeBurst(displayed, incoming);
+    expect(merged[0]).toBe(displayed[0]);
+    expect(merged.filter((animation) => animation.instanceId === "o1")).toHaveLength(1);
+  });
+
+  it("does not mutate its inputs", () => {
+    const before = JSON.stringify(displayed);
+    const incoming = [trace({ instanceId: "n1", callsiteId: "c1", startedAtRuntimeMs: 5000 })];
+    const incomingBefore = JSON.stringify(incoming);
+    const merged = mergeBurst(displayed, incoming);
+    expect(JSON.stringify(displayed)).toBe(before);
+    expect(JSON.stringify(incoming)).toBe(incomingBefore);
+    expect(merged[1]).not.toBe(displayed[1]);
+  });
+});
+
+describe("timelineSignature", () => {
+  it("is the sorted, joined set of call site ids, independent of order and instance", () => {
+    const one = timelineSignature([
+      trace({ instanceId: "1", callsiteId: "b" }),
+      trace({ instanceId: "2", callsiteId: "a" })
+    ]);
+    const two = timelineSignature([
+      trace({ instanceId: "3", callsiteId: "a" }),
+      trace({ instanceId: "4", callsiteId: "b" })
+    ]);
+    expect(one).toBe("a|b");
+    expect(two).toBe(one);
+    expect(timelineSignature([trace({ callsiteId: "a" })])).not.toBe(one);
+  });
+});
+
+describe("nextStickyDuration", () => {
+  it("starts from the content duration", () => {
+    expect(nextStickyDuration(undefined, "s", 800)).toEqual({ signature: "s", durationMs: 800 });
+  });
+
+  it("grows but never shrinks for the same signature", () => {
+    const first = nextStickyDuration(undefined, "s", 800);
+    const grown = nextStickyDuration(first, "s", 1600);
+    expect(grown).toEqual({ signature: "s", durationMs: 1600 });
+    expect(nextStickyDuration(grown, "s", 400)).toEqual({ signature: "s", durationMs: 1600 });
+  });
+
+  it("resets for a different signature", () => {
+    const previous = { signature: "s", durationMs: 1600 };
+    expect(nextStickyDuration(previous, "t", 400)).toEqual({ signature: "t", durationMs: 400 });
   });
 });
 
