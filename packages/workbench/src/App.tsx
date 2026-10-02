@@ -1009,7 +1009,10 @@ function App() {
 
         <div className="timeline-body">
           {detectedAnimations.length > 0 ? (
-            <DetectedAnimationTracks animations={detectedAnimations} />
+            <DetectedAnimationTracks
+              animations={detectedAnimations}
+              interactionScoped={replayBaseline !== undefined}
+            />
           ) : null}
           <div className="track">
             <div className="track-label">
@@ -1031,9 +1034,11 @@ interface AnimationPropertyTrack {
 }
 
 function DetectedAnimationTracks({
-  animations
+  animations,
+  interactionScoped
 }: {
   animations: RuntimeAnimationTrace[];
+  interactionScoped: boolean;
 }) {
   const tracks = groupAnimationsByTarget(animations);
   const starts = animations.map((animation) => animation.startedAtRuntimeMs);
@@ -1045,7 +1050,7 @@ function DetectedAnimationTracks({
   return (
     <div className="detected-animations">
       <div className="detected-animations-title">
-        <span>Latest interaction · auto-detected</span>
+        <span>{interactionScoped ? "Current replay" : "Latest interaction"} · auto-detected</span>
         <strong>
           {tracks.length} {tracks.length === 1 ? "property" : "properties"} · {animations.length} spans
         </strong>
