@@ -15,6 +15,7 @@ import {
   type SourceApplyResultEntry,
   type RecordingSample,
   type RuntimeAnimationCompleted,
+  type RuntimeAnimationConfig,
   type RuntimeAnimationStarted,
   type RuntimeProbeDescriptor,
   type SpringValue,
@@ -22,6 +23,7 @@ import {
   type TriggerControl
 } from "@runtime-inspector/protocol";
 
+import { sampleSpringCurve } from "./spring-curve";
 export { sampleSpringCurve, type SpringCurve } from "./spring-curve";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected" | "rejected";
@@ -58,6 +60,11 @@ export interface RuntimeAnimationTrace extends RuntimeAnimationStarted {
   endedAtRuntimeMs?: number;
   finished?: boolean;
   current?: RuntimeAnimationCompleted["current"];
+  /** Config resolved from build-time literals plus a live Runtime Inspector control when available. */
+  resolvedConfig: RuntimeAnimationConfig;
+  /** Expected visual span. This is not claimed as an observed completion timestamp. */
+  expectedDurationMs?: number;
+  durationBasis?: "declared" | "spring-estimate";
 }
 
 export interface PanelState {
@@ -527,10 +534,85 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function applyAnimationStarted(message: RuntimeAnimationStarted) {
-    const next = [...state.runtimeAnimations, { ...message }];
+    const resolvedConfig = resolveAnimationConfig(message);
+    const duration = expectedAnimationDuration(message.animationKind, resolvedConfig);
+    const trace: RuntimeAnimationTrace = {
+      ...message,
+      resolvedConfig,
+      ...(duration
+        ? {
+            expectedDurationMs: duration.ms,
+            durationBasis: duration.basis
+          }
+        : {})
+    };
+    const next = [...state.runtimeAnimations, trace];
     setState({
       runtimeAnimations: next.length > 200 ? next.slice(next.length - 200) : next
     });
+  }
+
+  function resolveAnimationConfig(
+    message: RuntimeAnimationStarted
+  ): RuntimeAnimationConfig {
+    const resolved: RuntimeAnimationConfig = { ...message.config };
+
+    if (!message.schemaId || !message.configControlId) {
+      return resolved;
+    }
+
+    const controlValue = state.values[message.schemaId]?.[message.configControlId];
+    if (!controlValue || typeof controlValue !== "object" || Array.isArray(controlValue)) {
+      return resolved;
+    }
+
+    for (const [key, value] of Object.entries(controlValue)) {
+      if (
+        typeof value === "number" ||
+        typeof value === "string" ||
+        typeof value === "boolean"
+      ) {
+        resolved[key] = value;
+      }
+    }
+
+    return resolved;
+  }
+
+  function expectedAnimationDuration(
+    kind: RuntimeAnimationStarted["animationKind"],
+    config: RuntimeAnimationConfig
+  ): { ms: number; basis: "declared" | "spring-estimate" } | undefined {
+    if (
+      kind === "timing" &&
+      typeof config.duration === "number" &&
+      Number.isFinite(config.duration) &&
+      config.duration >= 0
+    ) {
+      return { ms: config.duration, basis: "declared" };
+    }
+
+    if (
+      kind === "spring" &&
+      typeof config.damping === "number" &&
+      typeof config.stiffness === "number" &&
+      Number.isFinite(config.damping) &&
+      Number.isFinite(config.stiffness)
+    ) {
+      const spring: SpringValue = {
+        damping: config.damping,
+        stiffness: config.stiffness,
+        ...(typeof config.mass === "number" && Number.isFinite(config.mass)
+          ? { mass: config.mass }
+          : {})
+      };
+      return {
+        ms: sampleSpringCurve(spring).duration * 1000,
+        basis: "spring-estimate"
+      };
+    }
+
+    return undefined;
   }
 
   function applyAnimationCompleted(message: RuntimeAnimationCompleted) {
