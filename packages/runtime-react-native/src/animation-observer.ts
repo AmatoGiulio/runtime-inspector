@@ -56,7 +56,9 @@ export function reportAnimationStarted(
     target: meta.target,
     animationKind: meta.animationKind,
     startedAtRuntimeMs,
-    config: {},
+    toValue: meta.toValue,
+    config: meta.config ?? {},
+    configControlId: meta.configControlId,
     source: meta.source
   });
 }
