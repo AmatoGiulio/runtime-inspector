@@ -1066,3 +1066,354 @@ button {
 .detected-animation-span.estimated {
   border-style: dashed;
 }
+
+/* Timeline-first motion workspace */
+
+.timeline-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #55555b;
+  font-size: 11px;
+}
+
+.motion-timeline {
+  min-width: 760px;
+  border-bottom: 1px solid #29292c;
+  background: #151517;
+}
+
+.motion-timeline-head {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid #202023;
+  color: #717177;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.motion-timeline-head strong {
+  color: #8f8f95;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.motion-ruler-row,
+.motion-property-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.motion-ruler-row {
+  height: 30px;
+  border-bottom: 1px solid #29292c;
+}
+
+.motion-ruler-label {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-right: 1px solid #29292c;
+  color: #b9b9be;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.motion-ruler {
+  position: relative;
+  min-width: 0;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.motion-ruler-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #2b2b2f;
+}
+
+.motion-ruler-tick > span {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  color: #626268;
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.motion-property-row {
+  min-height: 38px;
+  border-bottom: 1px solid #202023;
+}
+
+.motion-property-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 12px;
+  border-right: 1px solid #29292c;
+}
+
+.motion-property-label strong {
+  overflow: hidden;
+  color: #d0d0d4;
+  font-size: 10px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-property-lane {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.motion-grid-line {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.045);
+  pointer-events: none;
+}
+
+.motion-span {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  min-width: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(145, 128, 255, 0.78);
+  border-radius: 4px;
+  padding: 0 7px;
+  color: rgba(239, 236, 255, 0.92);
+  background: rgba(108, 88, 218, 0.34);
+  font: inherit;
+  font-size: 8px;
+  font-weight: 580;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.motion-span > span {
+  display: block;
+  overflow: hidden;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.motion-span.spring {
+  border-color: rgba(76, 177, 126, 0.78);
+  color: rgba(217, 249, 232, 0.92);
+  background: rgba(47, 131, 91, 0.3);
+}
+
+.motion-span.estimated {
+  border-style: dashed;
+}
+
+.motion-span:hover {
+  filter: brightness(1.12);
+}
+
+.motion-span.selected {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 3px 12px rgba(0, 0, 0, 0.28);
+}
+
+.motion-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 1px;
+  background: #ff4f70;
+  pointer-events: none;
+}
+
+.motion-playhead-cap {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px 1px 4px 4px;
+  background: #ff4f70;
+  transform: translateX(-50%);
+}
+
+.motion-ruler .motion-playhead {
+  bottom: -1px;
+}
+
+.animation-inspector {
+  padding: 12px;
+}
+
+.animation-inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #252528;
+}
+
+.animation-inspector-name {
+  color: #ededf0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.animation-inspector-kind {
+  margin-top: 3px;
+  color: #7b70d8;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.animation-playhead-state {
+  padding: 3px 6px;
+  border: 1px solid #343438;
+  border-radius: 999px;
+  color: #77777d;
+  background: #202023;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.animation-playhead-state.active {
+  border-color: #55496f;
+  color: #c9c1ff;
+  background: #29233a;
+}
+
+.animation-inspector-section {
+  padding: 10px 0;
+  border-bottom: 1px solid #252528;
+}
+
+.animation-inspector-section-title {
+  margin-bottom: 6px;
+  color: #5f5f65;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.animation-inspector-row {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 9px;
+}
+
+.animation-inspector-row span {
+  color: #727278;
+}
+
+.animation-inspector-row strong {
+  max-width: 68%;
+  overflow: hidden;
+  color: #c8c8cd;
+  font-weight: 520;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.animation-source-expression {
+  display: block;
+  max-height: 82px;
+  margin-top: 7px;
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid #29292d;
+  border-radius: 5px;
+  color: #9999a1;
+  background: #121214;
+  font-size: 8px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.animation-spring-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.animation-spring-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.animation-spring-field > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.animation-spring-field span {
+  color: #85858b;
+  font-size: 9px;
+}
+
+.animation-spring-field input[type="number"] {
+  width: 76px;
+  height: 24px;
+  border: 1px solid #343438;
+  border-radius: 5px;
+  padding: 0 6px;
+  outline: none;
+  color: #d7d7db;
+  background: #202023;
+  font: inherit;
+  font-size: 9px;
+  text-align: right;
+}
+
+.animation-spring-field input[type="range"] {
+  width: 100%;
+  accent-color: #65b98d;
+}
+
+.animation-spring-field input:disabled {
+  opacity: 0.45;
+}
+
+.animation-inspector-note {
+  margin-top: 8px;
+  color: #65656b;
+  font-size: 8px;
+  line-height: 1.45;
+}
