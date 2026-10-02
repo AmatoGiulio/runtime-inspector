@@ -400,6 +400,7 @@ describe("runtime animation observation protocol", () => {
         startedAtRuntimeMs: 1000,
         toValue: -110,
         config: { duration: 260 },
+        configControlId: "spring",
         source: {
           file: "src/Card.tsx",
           line: 20,
