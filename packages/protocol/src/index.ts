@@ -303,6 +303,52 @@ export interface RecordingComplete {
   complete: true;
 }
 
+export type RuntimeAnimationKind = "timing" | "spring";
+
+export interface RuntimeAnimationSource {
+  file: string;
+  line: number;
+  column: number;
+  enclosure: string[];
+  expression: string;
+}
+
+export type RuntimeAnimationConfig = Record<string, string | number | boolean>;
+
+export interface RuntimeAnimationMeta {
+  callsiteId: string;
+  schemaId?: string;
+  target: string;
+  animationKind: RuntimeAnimationKind;
+  source?: RuntimeAnimationSource;
+}
+
+export interface RuntimeAnimationStarted {
+  type: "animation.started";
+  instanceId: string;
+  callsiteId: string;
+  schemaId?: string;
+  target: string;
+  animationKind: RuntimeAnimationKind;
+  startedAtRuntimeMs: number;
+  toValue?: string | number | boolean | null;
+  config: RuntimeAnimationConfig;
+  source?: RuntimeAnimationSource;
+}
+
+export interface RuntimeAnimationCompleted {
+  type: "animation.completed";
+  instanceId: string;
+  callsiteId: string;
+  schemaId?: string;
+  target: string;
+  animationKind: RuntimeAnimationKind;
+  endedAtRuntimeMs: number;
+  finished: boolean;
+  current?: string | number | boolean | null;
+}
+
+
 export type RIPMessage =
   | HandshakeHello
   | HandshakeAccept
@@ -322,6 +368,8 @@ export type RIPMessage =
   | RecordingChunk
   | RecordingStop
   | RecordingComplete
+  | RuntimeAnimationStarted
+  | RuntimeAnimationCompleted
   | ErrorMessage;
 
 const roleSchema = z.union([z.literal("runtime"), z.literal("panel"), z.literal("workspace")]);
@@ -639,6 +687,52 @@ export const RecordingCompleteSchema = z.object({
   complete: z.literal(true)
 });
 
+const RuntimeAnimationKindSchema = z.union([
+  z.literal("timing"),
+  z.literal("spring")
+]);
+
+const RuntimeAnimationSourceSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().int().min(1),
+  column: z.number().int().min(0),
+  enclosure: z.array(z.string()),
+  expression: z.string()
+});
+
+const RuntimeAnimationConfigValueSchema = z.union([
+  z.string(),
+  finiteNumberSchema,
+  z.boolean()
+]);
+
+const RuntimeAnimationConfigSchema = z.record(RuntimeAnimationConfigValueSchema);
+
+export const RuntimeAnimationStartedSchema = z.object({
+  type: z.literal("animation.started"),
+  instanceId: z.string().min(1),
+  callsiteId: z.string().min(1),
+  schemaId: z.string().min(1).optional(),
+  target: z.string().min(1),
+  animationKind: RuntimeAnimationKindSchema,
+  startedAtRuntimeMs: finiteNumberSchema,
+  toValue: z.union([z.string(), finiteNumberSchema, z.boolean(), z.null()]).optional(),
+  config: RuntimeAnimationConfigSchema,
+  source: RuntimeAnimationSourceSchema.optional()
+});
+
+export const RuntimeAnimationCompletedSchema = z.object({
+  type: z.literal("animation.completed"),
+  instanceId: z.string().min(1),
+  callsiteId: z.string().min(1),
+  schemaId: z.string().min(1).optional(),
+  target: z.string().min(1),
+  animationKind: RuntimeAnimationKindSchema,
+  endedAtRuntimeMs: finiteNumberSchema,
+  finished: z.boolean(),
+  current: z.union([z.string(), finiteNumberSchema, z.boolean(), z.null()]).optional()
+});
+
 export const RIPMessageSchema = z.discriminatedUnion("type", [
   HandshakeHelloSchema,
   HandshakeAcceptSchema,
@@ -658,6 +752,8 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   RecordingChunkSchema,
   RecordingStopSchema,
   RecordingCompleteSchema,
+  RuntimeAnimationStartedSchema,
+  RuntimeAnimationCompletedSchema,
   ErrorMessageSchema
 ]);
 
