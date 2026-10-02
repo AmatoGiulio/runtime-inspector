@@ -320,6 +320,12 @@ export interface RuntimeAnimationMeta {
   schemaId?: string;
   target: string;
   animationKind: RuntimeAnimationKind;
+  /** Build-time-safe primitive parameters extracted without re-evaluating app expressions. */
+  config?: RuntimeAnimationConfig;
+  /** Control id supplying a dynamic config object, e.g. card.spring.value -> "spring". */
+  configControlId?: string;
+  /** Build-time-safe primitive target when it is a literal. */
+  toValue?: string | number | boolean | null;
   source?: RuntimeAnimationSource;
 }
 
@@ -333,6 +339,7 @@ export interface RuntimeAnimationStarted {
   startedAtRuntimeMs: number;
   toValue?: string | number | boolean | null;
   config: RuntimeAnimationConfig;
+  configControlId?: string;
   source?: RuntimeAnimationSource;
 }
 
@@ -718,6 +725,7 @@ export const RuntimeAnimationStartedSchema = z.object({
   startedAtRuntimeMs: finiteNumberSchema,
   toValue: z.union([z.string(), finiteNumberSchema, z.boolean(), z.null()]).optional(),
   config: RuntimeAnimationConfigSchema,
+  configControlId: z.string().min(1).optional(),
   source: RuntimeAnimationSourceSchema.optional()
 });
 
