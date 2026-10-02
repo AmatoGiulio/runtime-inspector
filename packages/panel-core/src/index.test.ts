@@ -630,6 +630,53 @@ describe("createPanelSession with multiple schemas sharing control ids", () => {
   });
 });
 
+describe("automatic animation observation state", () => {
+  it("collects a started animation and completes the matching span", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    socket.receive({
+      type: "animation.started",
+      instanceId: "anim-1",
+      callsiteId: "src/Card.tsx:20:4:timing:card.moveX",
+      schemaId: "demo",
+      target: "card.moveX",
+      animationKind: "timing",
+      startedAtRuntimeMs: 1000,
+      toValue: -110,
+      config: { duration: 260 }
+    });
+
+    expect(session.getState().runtimeAnimations).toHaveLength(1);
+    expect(session.getState().runtimeAnimations[0]).toMatchObject({
+      instanceId: "anim-1",
+      target: "card.moveX",
+      animationKind: "timing",
+      startedAtRuntimeMs: 1000
+    });
+
+    socket.receive({
+      type: "animation.completed",
+      instanceId: "anim-1",
+      callsiteId: "src/Card.tsx:20:4:timing:card.moveX",
+      schemaId: "demo",
+      target: "card.moveX",
+      animationKind: "timing",
+      endedAtRuntimeMs: 1262,
+      finished: true,
+      current: -110
+    });
+
+    expect(session.getState().runtimeAnimations[0]).toMatchObject({
+      endedAtRuntimeMs: 1262,
+      finished: true,
+      current: -110
+    });
+  });
+});
+
 describe("recording timeline state (RFC 0005 M0)", () => {
   it("publishes trace schemas, records ordered chunks, and completes", () => {
     const { session } = createSession({ clientId: "workbench-test" });
