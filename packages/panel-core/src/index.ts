@@ -14,6 +14,8 @@ import {
   type SourceApplyResult,
   type SourceApplyResultEntry,
   type RecordingSample,
+  type RuntimeAnimationCompleted,
+  type RuntimeAnimationStarted,
   type RuntimeProbeDescriptor,
   type SpringValue,
   type TraceSchemaPublish,
@@ -52,6 +54,12 @@ export interface RecordingTraceState {
   sampleCount?: number;
 }
 
+export interface RuntimeAnimationTrace extends RuntimeAnimationStarted {
+  endedAtRuntimeMs?: number;
+  finished?: boolean;
+  current?: RuntimeAnimationCompleted["current"];
+}
+
 export interface PanelState {
   status: ConnectionStatus;
   notice?: string;
@@ -65,6 +73,7 @@ export interface PanelState {
   staleSchemaIds: Record<string, boolean>;
   values: Record<string, Record<string, unknown>>;
   traceSchemas: Record<string, RuntimeProbeDescriptor[]>;
+  runtimeAnimations: RuntimeAnimationTrace[];
   recording?: RecordingTraceState;
   lastPatch?: LastPatchInfo;
   /** Results of the most recently received `source.applyResult`, keyed by nothing (single latest snapshot). */
@@ -143,6 +152,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     staleSchemaIds: {},
     values: {},
     traceSchemas: {},
+    runtimeAnimations: [],
     recording: undefined,
     lastPatch: undefined,
     compareSlots: {}
@@ -305,6 +315,12 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
             }
           });
         }
+      }
+      if (message.type === "animation.started") {
+        applyAnimationStarted(message);
+      }
+      if (message.type === "animation.completed") {
+        applyAnimationCompleted(message);
       }
       if (message.type === "control.patch") {
         applyIncomingValue(message.schemaId, message.controlId, message.value);
@@ -508,6 +524,29 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         incomplete: recording.incomplete || sequenceGap
       }
     });
+  }
+
+  function applyAnimationStarted(message: RuntimeAnimationStarted) {
+    const next = [...state.runtimeAnimations, { ...message }];
+    setState({
+      runtimeAnimations: next.length > 200 ? next.slice(next.length - 200) : next
+    });
+  }
+
+  function applyAnimationCompleted(message: RuntimeAnimationCompleted) {
+    const index = state.runtimeAnimations.findLastIndex(
+      (animation) => animation.instanceId === message.instanceId
+    );
+    if (index === -1) return;
+
+    const next = [...state.runtimeAnimations];
+    next[index] = {
+      ...next[index],
+      endedAtRuntimeMs: message.endedAtRuntimeMs,
+      finished: message.finished,
+      current: message.current
+    };
+    setState({ runtimeAnimations: next });
   }
 
   function applySourceResult(message: SourceApplyResult) {
