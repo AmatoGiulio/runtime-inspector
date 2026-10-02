@@ -14,10 +14,39 @@ import { parseDirectiveComment, type ParsedDirective } from "./directive";
 const HELPER_NAME = "__riInspect";
 const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
 const ANIMATION_CONFIG_HELPER_NAME = "__riAnimationConfig";
+const ANIMATION_DELAY_HELPER_NAME = "__riAnimationDelay";
+const ANIMATION_START_HELPER_NAME = "__riAnimationStart";
+const WITH_DELAY_LOCAL_NAME = "__riWithDelay";
 const AUTO_SCHEMA_ID = "auto";
-const TIMING_DURATION_MIN_MS = 0;
-const TIMING_DURATION_MAX_MS = 10000;
+const START_DELAY_MIN_MS = 0;
+const START_DELAY_MAX_MS = 10000;
 const SOURCE_MODULE = "@runtime-inspector/react-native";
+const REANIMATED_MODULE = "react-native-reanimated";
+
+type AnimationKind = "timing" | "spring";
+
+/** A config key whose numeric literal is backed by a slider control (RFC 0005 §3b/§3c). */
+interface LiteralParameterSpec {
+  key: string;
+  min: number;
+  max: number;
+  step: number;
+  unit?: string;
+}
+
+const LITERAL_PARAMETER_SPECS: Record<AnimationKind, readonly LiteralParameterSpec[]> = {
+  timing: [{ key: "duration", min: 0, max: 10000, step: 1, unit: "ms" }],
+  spring: [
+    { key: "damping", min: 0, max: 100, step: 0.1 },
+    { key: "stiffness", min: 1, max: 1000, step: 1 },
+    { key: "mass", min: 0.1, max: 10, step: 0.1 }
+  ]
+};
+
+interface LiteralParameterBinding {
+  spec: LiteralParameterSpec;
+  declared: number;
+}
 
 /**
  * Structural anchor for a captured declaration (RFC 0004, Part 1). Carried in
@@ -65,8 +94,10 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           _riInspectorSchemas?: Map<string, string>;
           _riAutoValueNames?: Set<string>;
           _riSkipAnimationInstrumentation?: boolean;
+          _riWithDelayImported?: boolean;
         };
         stateBag._riHelperImported = false;
+        stateBag._riWithDelayImported = false;
         stateBag._riRuntimeHelpers = new Set();
         stateBag._riInspectorSchemas = new Map();
         stateBag._riAutoValueNames = new Set();
@@ -144,56 +175,84 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         const right = path.node.right;
         if (right.type !== "CallExpression") return;
 
-        const animationKind = animationKindForCallee(right.callee);
-        if (!animationKind) return;
-
-        // First spike: preserve any user completion callback untouched. Reanimated's
-        // Babel plugin owns callback workletization, so calls with a third argument
-        // are deliberately left alone until callback composition is proven safe.
-        if (right.arguments.length > 2 || right.arguments.length === 0) return;
-        if (right.arguments.some((argument) => argument.type === "SpreadElement")) return;
+        const shape = animationAssignmentShape(right);
+        if (!shape) return;
 
         if (isInsideKnownWorkletContext(path)) return;
 
-        const built = buildAnimationMeta(path, state, target, animationKind, right, api);
+        const t = api.types;
+        const { animationKind, delayed } = shape;
+        const built = buildAnimationMeta(
+          path,
+          state,
+          target,
+          animationKind,
+          innerAnimationCall(right, delayed),
+          api
+        );
         if (!built) return;
         const { meta, callsiteId } = built;
 
         // Preserve the application's original Reanimated call exactly. Runtime
         // Inspector observes the animation object *after* Reanimated constructs it
         // and returns that same object unchanged.
-        const originalAnimationCall = api.types.cloneNode(right, true);
+        const transformed = t.cloneNode(right, true);
+        const animationCall = innerAnimationCall(transformed, delayed);
 
-        // RFC 0005 §3b: a timing call with a literal `duration` gets that duration
-        // backed by an ordinary slider control. Only the config argument is wrapped;
-        // the application still makes its own `withTiming` call.
-        const declaredDuration =
-          animationKind === "timing"
-            ? eligibleTimingDuration(originalAnimationCall.arguments[1])
-            : undefined;
-        if (declaredDuration !== undefined) {
-          const controlId = `${callsiteId}:duration`;
-          originalAnimationCall.arguments[1] = api.types.callExpression(
-            api.types.identifier(ANIMATION_CONFIG_HELPER_NAME),
+        // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
+        // slider control. Only the config argument is wrapped; the application still
+        // makes its own `withTiming` / `withSpring` call.
+        const bindings = literalParameterBindings(animationKind, animationCall.arguments[1]);
+        if (bindings.length > 0) {
+          animationCall.arguments[1] = t.callExpression(
+            t.identifier(ANIMATION_CONFIG_HELPER_NAME),
             [
-              originalAnimationCall.arguments[1],
-              api.types.arrayExpression([
-                durationBindingExpression(api.types, controlId, target.target, declaredDuration)
-              ])
+              animationCall.arguments[1],
+              t.arrayExpression(
+                bindings.map((binding) =>
+                  parameterBindingExpression(t, callsiteId, target.target, binding)
+                )
+              )
             ]
           );
-          meta.properties.push(durationParameterControlsProperty(api.types, controlId));
+          meta.properties.push(parameterControlsProperty(t, callsiteId, bindings));
+        }
+
+        // RFC 0005 §3c: the start is movable through a delay control. A delayed
+        // call gets its delay argument wrapped; a bare call is wrapped whole, and
+        // only when the module already imports Reanimated.
+        let observed: BabelTypesNamespace.Expression = transformed;
+        let startHelperName: string | undefined;
+        if (delayed) {
+          const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
+          transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
+            transformed.arguments[0],
+            startBindingExpression(t, callsiteId, target.target, declaredDelay)
+          ]);
+          if (declaredDelay !== undefined) {
+            meta.properties.push(startControlProperty(t, callsiteId));
+          }
+          startHelperName = ANIMATION_DELAY_HELPER_NAME;
+        } else if (hasReanimatedImport(path)) {
+          observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
+            transformed,
+            startBindingExpression(t, callsiteId, target.target, 0),
+            t.identifier(WITH_DELAY_LOCAL_NAME)
+          ]);
+          meta.properties.push(startControlProperty(t, callsiteId));
+          startHelperName = ANIMATION_START_HELPER_NAME;
+          ensureWithDelayImport(path, api);
         }
 
         path.get("right").replaceWith(
-          api.types.callExpression(api.types.identifier(ANIMATION_OBSERVER_HELPER_NAME), [
-            originalAnimationCall,
-            meta
-          ])
+          t.callExpression(t.identifier(ANIMATION_OBSERVER_HELPER_NAME), [observed, meta])
         );
         ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
-        if (declaredDuration !== undefined) {
+        if (bindings.length > 0) {
           ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
+        }
+        if (startHelperName) {
+          ensureRuntimeHelperImport(path, startHelperName, api);
         }
       }
     }
@@ -220,19 +279,65 @@ function isUseInspectorCallee(callee: Node): boolean {
   return false;
 }
 
-function animationKindForCallee(callee: Node): "timing" | "spring" | undefined {
-  const name =
-    callee.type === "Identifier"
-      ? callee.name
-      : callee.type === "MemberExpression" &&
-          !callee.computed &&
-          callee.property.type === "Identifier"
-        ? callee.property.name
-        : undefined;
+/** The called name of an `Identifier` or non-computed member callee. */
+function calleeName(callee: Node): string | undefined {
+  if (callee.type === "Identifier") return callee.name;
+  if (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
+  ) {
+    return callee.property.name;
+  }
+  return undefined;
+}
 
+function animationKindForCallee(callee: Node): AnimationKind | undefined {
+  const name = calleeName(callee);
   if (name === "withTiming") return "timing";
   if (name === "withSpring") return "spring";
   return undefined;
+}
+
+/** The kind of a direct `withTiming` / `withSpring` call that passes the argument guards. */
+function eligibleAnimationKind(call: CallExpression): AnimationKind | undefined {
+  const animationKind = animationKindForCallee(call.callee);
+  if (!animationKind) return undefined;
+
+  // First spike: preserve any user completion callback untouched. Reanimated's
+  // Babel plugin owns callback workletization, so calls with a third argument
+  // are deliberately left alone until callback composition is proven safe.
+  if (call.arguments.length > 2 || call.arguments.length === 0) return undefined;
+  if (call.arguments.some((argument) => argument.type === "SpreadElement")) return undefined;
+
+  return animationKind;
+}
+
+/**
+ * RFC 0005 §3c: the two discovered right-hand sides. Bare is a direct animation
+ * call; delayed is `withDelay(<delay>, <animation call>)` with exactly two
+ * arguments. Anything else returns `undefined` and is left untouched.
+ */
+function animationAssignmentShape(
+  right: CallExpression
+): { animationKind: AnimationKind; delayed: boolean } | undefined {
+  const bareKind = eligibleAnimationKind(right);
+  if (bareKind) return { animationKind: bareKind, delayed: false };
+
+  if (calleeName(right.callee) !== "withDelay") return undefined;
+  if (right.arguments.length !== 2) return undefined;
+  if (right.arguments.some((argument) => argument.type === "SpreadElement")) return undefined;
+
+  const inner = right.arguments[1];
+  if (inner.type !== "CallExpression") return undefined;
+
+  const delayedKind = eligibleAnimationKind(inner);
+  return delayedKind ? { animationKind: delayedKind, delayed: true } : undefined;
+}
+
+/** The `withTiming` / `withSpring` call of a shape accepted by `animationAssignmentShape`. */
+function innerAnimationCall(right: CallExpression, delayed: boolean): CallExpression {
+  return delayed ? (right.arguments[1] as CallExpression) : right;
 }
 
 function animationAssignmentTarget(
@@ -260,7 +365,7 @@ function buildAnimationMeta(
   path: NodePath<AssignmentExpression>,
   state: PluginPass,
   target: { target: string; root: string },
-  animationKind: "timing" | "spring",
+  animationKind: AnimationKind,
   animationCall: CallExpression,
   api: BabelAPI
 ) {
@@ -399,68 +504,147 @@ function staticConfigObject(
 }
 
 /**
- * RFC 0005 §3b eligibility: returns the declared duration when `node` is an
- * object literal with no spread and exactly one `duration` member, written as
- * a plain property whose value is a finite numeric literal within the slider
- * range. Anything else returns `undefined` and the call is left as in §3a.
+ * RFC 0005 §3b/§3c eligibility. `config` must be an object literal with no
+ * spread. A key is bound only when the object has exactly one member with that
+ * key, written as a plain property whose value is a finite numeric literal
+ * within the key's slider range. Keys that do not qualify are simply not bound.
  */
-function eligibleTimingDuration(node: Node | null | undefined): number | undefined {
-  if (!node || node.type !== "ObjectExpression") return undefined;
-  if (node.properties.some((property) => property.type === "SpreadElement")) return undefined;
+function literalParameterBindings(
+  animationKind: AnimationKind,
+  config: Node | null | undefined
+): LiteralParameterBinding[] {
+  if (!config || config.type !== "ObjectExpression") return [];
+  if (config.properties.some((property) => property.type === "SpreadElement")) return [];
 
-  const durationMembers = node.properties.filter(isDurationKeyedMember);
-  if (durationMembers.length !== 1) return undefined;
+  const bindings: LiteralParameterBinding[] = [];
+  for (const spec of LITERAL_PARAMETER_SPECS[animationKind]) {
+    const members = config.properties.filter((member) => isMemberKeyed(member, spec.key));
+    if (members.length !== 1) continue;
 
-  const [member] = durationMembers;
-  if (member.type !== "ObjectProperty" || member.computed) return undefined;
-  if (member.value.type !== "NumericLiteral") return undefined;
+    const [member] = members;
+    if (member.type !== "ObjectProperty" || member.computed) continue;
+    if (member.value.type !== "NumericLiteral") continue;
 
-  const declared = member.value.value;
-  if (!Number.isFinite(declared)) return undefined;
-  if (declared < TIMING_DURATION_MIN_MS || declared > TIMING_DURATION_MAX_MS) return undefined;
-  return declared;
+    const declared = member.value.value;
+    if (!Number.isFinite(declared)) continue;
+    if (declared < spec.min || declared > spec.max) continue;
+    bindings.push({ spec, declared });
+  }
+  return bindings;
 }
 
-function isDurationKeyedMember(
-  member: BabelTypesNamespace.ObjectExpression["properties"][number]
+function isMemberKeyed(
+  member: BabelTypesNamespace.ObjectExpression["properties"][number],
+  key: string
 ): member is BabelTypesNamespace.ObjectProperty | BabelTypesNamespace.ObjectMethod {
   if (member.type === "SpreadElement") return false;
-  if (member.key.type === "StringLiteral") return member.key.value === "duration";
-  return !member.computed && member.key.type === "Identifier" && member.key.name === "duration";
+  if (member.key.type === "StringLiteral") return member.key.value === key;
+  return !member.computed && member.key.type === "Identifier" && member.key.name === key;
 }
 
-/** The `__riAnimationConfig` binding descriptor for a literal timing duration. */
-function durationBindingExpression(
+/** The `__riAnimationConfig` binding descriptor for one literal parameter. */
+function parameterBindingExpression(
   t: BabelAPI["types"],
-  controlId: string,
+  callsiteId: string,
   target: string,
-  declared: number
+  { spec, declared }: LiteralParameterBinding
 ) {
-  return t.objectExpression([
-    t.objectProperty(t.identifier("key"), t.stringLiteral("duration")),
-    t.objectProperty(t.identifier("controlId"), t.stringLiteral(controlId)),
-    t.objectProperty(t.identifier("label"), t.stringLiteral(`${target} duration`)),
+  const properties = [
+    t.objectProperty(t.identifier("key"), t.stringLiteral(spec.key)),
+    t.objectProperty(t.identifier("controlId"), t.stringLiteral(`${callsiteId}:${spec.key}`)),
+    t.objectProperty(t.identifier("label"), t.stringLiteral(`${target} ${spec.key}`)),
     t.objectProperty(t.identifier("declared"), t.numericLiteral(declared)),
-    t.objectProperty(t.identifier("min"), t.numericLiteral(TIMING_DURATION_MIN_MS)),
-    t.objectProperty(t.identifier("max"), t.numericLiteral(TIMING_DURATION_MAX_MS)),
-    t.objectProperty(t.identifier("step"), t.numericLiteral(1)),
-    t.objectProperty(t.identifier("unit"), t.stringLiteral("ms"))
+    t.objectProperty(t.identifier("min"), t.numericLiteral(spec.min)),
+    t.objectProperty(t.identifier("max"), t.numericLiteral(spec.max)),
+    t.objectProperty(t.identifier("step"), t.numericLiteral(spec.step))
+  ];
+  if (spec.unit !== undefined) {
+    properties.push(t.objectProperty(t.identifier("unit"), t.stringLiteral(spec.unit)));
+  }
+  return t.objectExpression(properties);
+}
+
+/** A `{ schemaId: "auto", controlId }` reference to a control in the `auto` schema. */
+function autoControlReference(t: BabelAPI["types"], controlId: string) {
+  return t.objectExpression([
+    t.objectProperty(t.identifier("schemaId"), t.stringLiteral(AUTO_SCHEMA_ID)),
+    t.objectProperty(t.identifier("controlId"), t.stringLiteral(controlId))
   ]);
 }
 
-/** The `parameterControls` meta entry pointing at the duration's `auto` control. */
-function durationParameterControlsProperty(t: BabelAPI["types"], controlId: string) {
+/** The `parameterControls` meta entry pointing at each bound key's `auto` control. */
+function parameterControlsProperty(
+  t: BabelAPI["types"],
+  callsiteId: string,
+  bindings: readonly LiteralParameterBinding[]
+) {
   return t.objectProperty(
     t.identifier("parameterControls"),
-    t.objectExpression([
-      t.objectProperty(
-        t.identifier("duration"),
-        t.objectExpression([
-          t.objectProperty(t.identifier("schemaId"), t.stringLiteral(AUTO_SCHEMA_ID)),
-          t.objectProperty(t.identifier("controlId"), t.stringLiteral(controlId))
-        ])
+    t.objectExpression(
+      bindings.map(({ spec }) =>
+        t.objectProperty(
+          t.identifier(spec.key),
+          autoControlReference(t, `${callsiteId}:${spec.key}`)
+        )
       )
-    ])
+    )
+  );
+}
+
+/** RFC 0005 §3c: the declared delay when `node` is a finite numeric literal in range. */
+function eligibleDelayLiteral(node: Node | null | undefined): number | undefined {
+  if (!node || node.type !== "NumericLiteral") return undefined;
+  const declared = node.value;
+  if (!Number.isFinite(declared)) return undefined;
+  if (declared < START_DELAY_MIN_MS || declared > START_DELAY_MAX_MS) return undefined;
+  return declared;
+}
+
+/**
+ * The binding passed to `__riAnimationDelay` / `__riAnimationStart`. Without a
+ * `declared` delay it carries only the call site, so the applied delay can be
+ * observed but no control is created.
+ */
+function startBindingExpression(
+  t: BabelAPI["types"],
+  callsiteId: string,
+  target: string,
+  declared: number | undefined
+) {
+  const properties = [t.objectProperty(t.identifier("callsiteId"), t.stringLiteral(callsiteId))];
+  if (declared !== undefined) {
+    properties.push(
+      t.objectProperty(t.identifier("controlId"), t.stringLiteral(`${callsiteId}:delay`)),
+      t.objectProperty(t.identifier("label"), t.stringLiteral(`${target} delay`)),
+      t.objectProperty(t.identifier("declared"), t.numericLiteral(declared)),
+      t.objectProperty(t.identifier("min"), t.numericLiteral(START_DELAY_MIN_MS)),
+      t.objectProperty(t.identifier("max"), t.numericLiteral(START_DELAY_MAX_MS)),
+      t.objectProperty(t.identifier("step"), t.numericLiteral(1)),
+      t.objectProperty(t.identifier("unit"), t.stringLiteral("ms"))
+    );
+  }
+  return t.objectExpression(properties);
+}
+
+/** The `startControl` meta entry pointing at the call site's delay control. */
+function startControlProperty(t: BabelAPI["types"], callsiteId: string) {
+  return t.objectProperty(
+    t.identifier("startControl"),
+    autoControlReference(t, `${callsiteId}:delay`)
+  );
+}
+
+/** Whether the module has a non type-only import from `react-native-reanimated`. */
+function hasReanimatedImport(path: NodePath): boolean {
+  const program = path.findParent((candidate) => candidate.isProgram());
+  if (!program || !program.isProgram()) return false;
+
+  return program.node.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.source.value === REANIMATED_MODULE &&
+      statement.importKind !== "type" &&
+      statement.importKind !== "typeof"
   );
 }
 
@@ -598,6 +782,7 @@ function programState(path: NodePath) {
     _riInspectorSchemas?: Map<string, string>;
     _riAutoValueNames?: Set<string>;
     _riSkipAnimationInstrumentation?: boolean;
+    _riWithDelayImported?: boolean;
   };
 }
 
@@ -803,6 +988,29 @@ function ensureRuntimeHelperImport(
   }
 
   stateBag._riRuntimeHelpers.add(helperName);
+}
+
+/**
+ * Adds, once per file, a separate `import { withDelay as __riWithDelay }` from
+ * Reanimated so `__riAnimationStart` can delay a bare animation without the
+ * runtime package importing Reanimated itself.
+ */
+function ensureWithDelayImport(path: NodePath, api: BabelAPI): void {
+  const program = path.findParent((candidate) => candidate.isProgram());
+  if (!program || !program.isProgram()) return;
+
+  const stateBag = programState(path);
+  if (stateBag._riWithDelayImported) return;
+
+  const t = api.types;
+  program.unshiftContainer(
+    "body",
+    t.importDeclaration(
+      [t.importSpecifier(t.identifier(WITH_DELAY_LOCAL_NAME), t.identifier("withDelay"))],
+      t.stringLiteral(REANIMATED_MODULE)
+    )
+  );
+  stateBag._riWithDelayImported = true;
 }
 
 function ensureHelperImport(

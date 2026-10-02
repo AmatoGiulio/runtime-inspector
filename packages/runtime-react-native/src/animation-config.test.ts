@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PanelSchema, RIPMessage, RuntimeAnimationMeta } from "@runtime-inspector/protocol";
-import type { RuntimeAnimationConfigBinding } from "./animation-config";
+import type {
+  RuntimeAnimationConfigBinding,
+  RuntimeAnimationStartBinding,
+  RuntimeAnimationStartWrapBinding
+} from "./animation-config";
 import { FakeWebSocket } from "./test-utils";
 
 const DEBOUNCE_MS = 100;
@@ -230,5 +234,383 @@ describe("__riObserveAnimation parameterControls forwarding", () => {
 
     expect(emitted).toHaveLength(1);
     expect("parameterControls" in emitted[0]).toBe(false);
+  });
+});
+
+const DELAY_CALLSITE = "App.tsx:31:4:timing:titleY";
+const DELAY_CONTROL_ID = `${DELAY_CALLSITE}:delay`;
+
+function delayBinding(
+  overrides: Partial<RuntimeAnimationStartBinding> = {}
+): RuntimeAnimationStartBinding {
+  return {
+    callsiteId: DELAY_CALLSITE,
+    controlId: DELAY_CONTROL_ID,
+    label: "titleY delay",
+    declared: 120,
+    min: 0,
+    max: 10000,
+    step: 1,
+    unit: "ms",
+    ...overrides
+  };
+}
+
+function startBinding(
+  overrides: Partial<RuntimeAnimationStartWrapBinding> = {}
+): RuntimeAnimationStartWrapBinding {
+  return {
+    callsiteId: DELAY_CALLSITE,
+    controlId: DELAY_CONTROL_ID,
+    label: "titleY delay",
+    declared: 0,
+    min: 0,
+    max: 10000,
+    step: 1,
+    unit: "ms",
+    ...overrides
+  };
+}
+
+describe("movable start helpers (RFC 0005 3c)", () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    const { __resetAnimationConfigForTests } = await import("./animation-config");
+    const { __resetAnimationStartStateForTests } = await import("./animation-start-state");
+    const { __resetAutoRegistryForTests } = await import("./auto");
+    __resetAnimationConfigForTests();
+    __resetAnimationStartStateForTests();
+    __resetAutoRegistryForTests();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  describe("__riAnimationDelay", () => {
+    it("returns the declared literal until the control is patched, then the tuned value", async () => {
+      const { applyControlPatch } = await import("./index");
+      const { __riAnimationDelay } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+
+      expect(__riAnimationDelay(120, delayBinding())).toBe(120);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(120);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+      applyControlPatch({
+        type: "control.patch",
+        schemaId: "auto",
+        controlId: DELAY_CONTROL_ID,
+        value: 300
+      });
+
+      expect(__riAnimationDelay(120, delayBinding())).toBe(300);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(300);
+    });
+
+    it("publishes one slider with the given fields and does not re-register on repeat calls", async () => {
+      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const { __riAnimationDelay } = await import("./animation-config");
+
+      __riAnimationDelay(120, delayBinding());
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+      expect(definePanelSpy).toHaveBeenCalledTimes(1);
+      const schema = definePanelSpy.mock.calls.at(-1)![0];
+      expect(schema.id).toBe("auto");
+      expect(schema.groups[0].controls).toHaveLength(1);
+      expect(controlById(schema, DELAY_CONTROL_ID)).toMatchObject({
+        id: DELAY_CONTROL_ID,
+        kind: "slider",
+        label: "titleY delay",
+        defaultValue: 120,
+        min: 0,
+        max: 10000,
+        step: 1,
+        unit: "ms",
+        binding: `auto.${DELAY_CONTROL_ID}`
+      });
+
+      __riAnimationDelay(120, delayBinding());
+      __riAnimationDelay(120, delayBinding());
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS * 5);
+      expect(definePanelSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns the original argument and registers nothing for a binding without a control", async () => {
+      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
+      const { __riAnimationDelay } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+
+      expect(__riAnimationDelay(240, { callsiteId: DELAY_CALLSITE })).toBe(240);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(240);
+
+      const stagger = { valueOf: () => 7 };
+      expect(__riAnimationDelay(stagger, { callsiteId: DELAY_CALLSITE })).toBe(stagger);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(0);
+
+      expect(__riAnimationDelay(-5, { callsiteId: DELAY_CALLSITE })).toBe(-5);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(0);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      expect(definePanelSpy).not.toHaveBeenCalled();
+    });
+
+    it("is a no-op in production - returns the delay, registers and records nothing", async () => {
+      vi.stubGlobal("__DEV__", false);
+      const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
+      const { __riAnimationDelay } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+
+      expect(__riAnimationDelay(120, delayBinding())).toBe(120);
+
+      expect(registerSpy).not.toHaveBeenCalled();
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBeUndefined();
+    });
+
+    it("never throws into application code: returns the delay and warns once", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(await import("./auto"), "registerRuntimeValue").mockImplementation(() => {
+        throw new Error("registry exploded");
+      });
+      const { __riAnimationDelay } = await import("./animation-config");
+
+      expect(__riAnimationDelay(120, delayBinding())).toBe(120);
+      expect(__riAnimationDelay(120, delayBinding())).toBe(120);
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("[Runtime Inspector]"));
+    });
+  });
+
+  describe("__riAnimationStart", () => {
+    it("returns the same animation object and never calls withDelay while the control is 0", async () => {
+      const { __riAnimationStart } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+      const withDelay = vi.fn();
+      const animation = { marker: "animation" };
+
+      expect(__riAnimationStart(animation, startBinding(), withDelay)).toBe(animation);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+      expect(__riAnimationStart(animation, startBinding(), withDelay)).toBe(animation);
+
+      expect(withDelay).not.toHaveBeenCalled();
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(0);
+    });
+
+    it("publishes one slider declared at 0 with the given fields", async () => {
+      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const { __riAnimationStart } = await import("./animation-config");
+
+      __riAnimationStart({}, startBinding(), vi.fn());
+      __riAnimationStart({}, startBinding(), vi.fn());
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+      expect(definePanelSpy).toHaveBeenCalledTimes(1);
+      const schema = definePanelSpy.mock.calls.at(-1)![0];
+      expect(controlById(schema, DELAY_CONTROL_ID)).toMatchObject({
+        kind: "slider",
+        label: "titleY delay",
+        defaultValue: 0,
+        min: 0,
+        max: 10000,
+        step: 1,
+        unit: "ms"
+      });
+    });
+
+    it("delegates to the provided withDelay once the control is tuned above 0", async () => {
+      const { applyControlPatch } = await import("./index");
+      const { __riAnimationStart } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+      const animation = { marker: "animation" };
+      const delayed = { marker: "delayed" };
+      const withDelay = vi.fn(() => delayed);
+
+      __riAnimationStart(animation, startBinding(), withDelay);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+      consumeAppliedStartDelay(DELAY_CALLSITE);
+
+      applyControlPatch({
+        type: "control.patch",
+        schemaId: "auto",
+        controlId: DELAY_CONTROL_ID,
+        value: 150
+      });
+
+      expect(__riAnimationStart(animation, startBinding(), withDelay)).toBe(delayed);
+      expect(withDelay).toHaveBeenCalledTimes(1);
+      expect(withDelay).toHaveBeenCalledWith(150, animation);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(150);
+    });
+
+    it("returns the animation unchanged when withDelay is not a function", async () => {
+      const { applyControlPatch } = await import("./index");
+      const { __riAnimationStart } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+      const animation = { marker: "animation" };
+
+      __riAnimationStart(animation, startBinding(), undefined);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+      applyControlPatch({
+        type: "control.patch",
+        schemaId: "auto",
+        controlId: DELAY_CONTROL_ID,
+        value: 150
+      });
+
+      expect(__riAnimationStart(animation, startBinding(), undefined)).toBe(animation);
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBe(0);
+    });
+
+    it("is a no-op in production - returns the animation, registers and records nothing", async () => {
+      vi.stubGlobal("__DEV__", false);
+      const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
+      const { __riAnimationStart } = await import("./animation-config");
+      const { consumeAppliedStartDelay } = await import("./animation-start-state");
+      const withDelay = vi.fn();
+      const animation = {};
+
+      expect(__riAnimationStart(animation, startBinding(), withDelay)).toBe(animation);
+
+      expect(withDelay).not.toHaveBeenCalled();
+      expect(registerSpy).not.toHaveBeenCalled();
+      expect(consumeAppliedStartDelay(DELAY_CALLSITE)).toBeUndefined();
+    });
+
+    it("never throws into application code: returns the animation and warns once", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(await import("./auto"), "registerRuntimeValue").mockImplementation(() => {
+        throw new Error("registry exploded");
+      });
+      const { __riAnimationStart } = await import("./animation-config");
+      const animation = {};
+
+      expect(__riAnimationStart(animation, startBinding(), vi.fn())).toBe(animation);
+      expect(__riAnimationStart(animation, startBinding(), vi.fn())).toBe(animation);
+
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("[Runtime Inspector]"));
+    });
+
+    it("returns the animation when the provided withDelay throws", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { applyControlPatch } = await import("./index");
+      const { __riAnimationStart } = await import("./animation-config");
+      const animation = {};
+      const withDelay = vi.fn(() => {
+        throw new Error("withDelay exploded");
+      });
+
+      __riAnimationStart(animation, startBinding(), withDelay);
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+      applyControlPatch({
+        type: "control.patch",
+        schemaId: "auto",
+        controlId: DELAY_CONTROL_ID,
+        value: 150
+      });
+
+      expect(__riAnimationStart(animation, startBinding(), withDelay)).toBe(animation);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("__riObserveAnimation start reporting (RFC 0005 3c)", () => {
+  const startControl = { schemaId: "auto", controlId: DELAY_CONTROL_ID };
+  const meta: RuntimeAnimationMeta = {
+    callsiteId: DELAY_CALLSITE,
+    schemaId: "card-transition",
+    target: "titleY",
+    animationKind: "timing",
+    toValue: 0,
+    config: { duration: 380 },
+    startControl
+  };
+
+  afterEach(async () => {
+    const { __resetAnimationStartStateForTests } = await import("./animation-start-state");
+    __resetAnimationStartStateForTests();
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it("shifts startedAtRuntimeMs by the applied delay and reports startDelayMs", async () => {
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    const { __riObserveAnimation, setRuntimeAnimationEmitter } = await import(
+      "./animation-observer"
+    );
+    const { recordAppliedStartDelay } = await import("./animation-start-state");
+    const emitted: RIPMessage[] = [];
+    setRuntimeAnimationEmitter((_schemaId, message) => emitted.push(message));
+
+    recordAppliedStartDelay(DELAY_CALLSITE, 120);
+    const animation = {};
+    expect(__riObserveAnimation(animation, meta)).toBe(animation);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      type: "animation.started",
+      startedAtRuntimeMs: 1120,
+      startDelayMs: 120,
+      startControl
+    });
+  });
+
+  it("reports startDelayMs 0 when the start helper applied no delay", async () => {
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    const { __riObserveAnimation, setRuntimeAnimationEmitter } = await import(
+      "./animation-observer"
+    );
+    const { recordAppliedStartDelay } = await import("./animation-start-state");
+    const emitted: RIPMessage[] = [];
+    setRuntimeAnimationEmitter((_schemaId, message) => emitted.push(message));
+
+    recordAppliedStartDelay(DELAY_CALLSITE, 0);
+    __riObserveAnimation({}, meta);
+
+    expect(emitted[0]).toMatchObject({ startedAtRuntimeMs: 1000, startDelayMs: 0 });
+  });
+
+  it("omits startDelayMs and startControl when no start helper ran for the call site", async () => {
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    const { __riObserveAnimation, setRuntimeAnimationEmitter } = await import(
+      "./animation-observer"
+    );
+    const emitted: RIPMessage[] = [];
+    setRuntimeAnimationEmitter((_schemaId, message) => emitted.push(message));
+
+    const { startControl: _omitted, ...withoutStartControl } = meta;
+    __riObserveAnimation({}, withoutStartControl);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({ startedAtRuntimeMs: 1000 });
+    expect("startDelayMs" in emitted[0]).toBe(false);
+    expect("startControl" in emitted[0]).toBe(false);
+  });
+
+  it("consumes the applied delay so it is not reused by the next call", async () => {
+    vi.spyOn(performance, "now").mockReturnValue(1000);
+    const { __riObserveAnimation, setRuntimeAnimationEmitter } = await import(
+      "./animation-observer"
+    );
+    const { recordAppliedStartDelay } = await import("./animation-start-state");
+    const emitted: RIPMessage[] = [];
+    setRuntimeAnimationEmitter((_schemaId, message) => emitted.push(message));
+
+    recordAppliedStartDelay(DELAY_CALLSITE, 120);
+    __riObserveAnimation({}, meta);
+    __riObserveAnimation({}, meta);
+
+    expect(emitted[1]).toMatchObject({ startedAtRuntimeMs: 1000 });
+    expect("startDelayMs" in emitted[1]).toBe(false);
   });
 });

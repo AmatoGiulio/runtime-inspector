@@ -784,6 +784,111 @@ describe("automatic animation observation state", () => {
       parameterControls
     );
   });
+
+  it("exposes startControl and startDelayMs on the animation trace", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+
+    const startControl = { schemaId: "auto", controlId: "App.tsx:31:4:timing:titleY:delay" };
+    socket.receive({
+      type: "animation.started",
+      instanceId: "anim-delayed",
+      callsiteId: "App.tsx:31:4:timing:titleY",
+      schemaId: "demo",
+      target: "titleY",
+      animationKind: "timing",
+      startedAtRuntimeMs: 1120,
+      toValue: 0,
+      config: { duration: 380 },
+      startControl,
+      startDelayMs: 120
+    });
+
+    const animation = session.getState().runtimeAnimations.at(-1);
+    expect(animation?.startControl).toEqual(startControl);
+    expect(animation?.startDelayMs).toBe(120);
+    expect(animation?.startedAtRuntimeMs).toBe(1120);
+  });
+
+  it("resolves a literal spring config from its parameter controls and estimates its span", () => {
+    const dampingId = "App.tsx:32:4:spring:imageScale:damping";
+    const stiffnessId = "App.tsx:32:4:spring:imageScale:stiffness";
+    const springSchema: PanelSchema = {
+      id: "auto",
+      title: "Inspected values",
+      groups: [
+        {
+          id: "auto",
+          label: "Auto-inspected",
+          controls: [
+            {
+              id: dampingId,
+              kind: "slider",
+              label: "imageScale damping",
+              defaultValue: 14,
+              min: 0,
+              max: 100,
+              step: 0.1,
+              binding: `auto.${dampingId}`
+            },
+            {
+              id: stiffnessId,
+              kind: "slider",
+              label: "imageScale stiffness",
+              defaultValue: 160,
+              min: 1,
+              max: 1000,
+              step: 1,
+              binding: `auto.${stiffnessId}`
+            }
+          ]
+        }
+      ]
+    };
+    const springStarted = {
+      type: "animation.started" as const,
+      callsiteId: "App.tsx:32:4:spring:imageScale",
+      schemaId: "demo",
+      target: "imageScale",
+      animationKind: "spring" as const,
+      startedAtRuntimeMs: 1234.5,
+      toValue: 1,
+      config: { damping: 14, stiffness: 160 },
+      parameterControls: {
+        damping: { schemaId: "auto", controlId: dampingId },
+        stiffness: { schemaId: "auto", controlId: stiffnessId }
+      },
+      startControl: { schemaId: "auto", controlId: "App.tsx:32:4:spring:imageScale:delay" },
+      startDelayMs: 0
+    };
+
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket);
+    socket.receive({ type: "schema.publish", schema: springSchema });
+
+    socket.receive({ ...springStarted, instanceId: "spring-declared" });
+    const declared = session.getState().runtimeAnimations.at(-1);
+    expect(declared?.resolvedConfig).toEqual({ damping: 14, stiffness: 160 });
+    expect(declared?.durationBasis).toBe("spring-estimate");
+    expect(declared?.expectedDurationMs).toBeGreaterThan(0);
+
+    session.setValue("auto", dampingId, 40);
+    session.commitValue("auto", dampingId);
+    session.setValue("auto", stiffnessId, 500);
+    session.commitValue("auto", stiffnessId);
+
+    socket.receive({ ...springStarted, instanceId: "spring-tuned" });
+    const tuned = session.getState().runtimeAnimations.at(-1);
+    expect(tuned?.config).toEqual({ damping: 14, stiffness: 160 });
+    expect(tuned?.resolvedConfig).toEqual({ damping: 40, stiffness: 500 });
+    expect(tuned?.durationBasis).toBe("spring-estimate");
+    expect(tuned?.expectedDurationMs).toBeGreaterThan(0);
+    expect(tuned?.expectedDurationMs).not.toBe(declared?.expectedDurationMs);
+  });
 });
 
 describe("recording timeline state (RFC 0005 M0)", () => {

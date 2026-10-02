@@ -2,6 +2,7 @@ import type {
   RIPMessage,
   RuntimeAnimationMeta
 } from "@runtime-inspector/protocol";
+import { consumeAppliedStartDelay } from "./animation-start-state";
 
 type RuntimeAnimationEmitter = (
   schemaId: string | undefined,
@@ -31,10 +32,12 @@ export function __riObserveAnimation<T>(
   meta: RuntimeAnimationMeta
 ): T {
   try {
+    const applied = consumeAppliedStartDelay(meta.callsiteId);
     reportAnimationStarted(
       meta,
       runtimeAnimationInstanceId(meta.callsiteId),
-      nowMs()
+      nowMs() + (applied ?? 0),
+      applied
     );
   } catch {
     // Observation is strictly best-effort.
@@ -46,7 +49,8 @@ export function __riObserveAnimation<T>(
 export function reportAnimationStarted(
   meta: RuntimeAnimationMeta,
   instanceId: string,
-  startedAtRuntimeMs: number
+  startedAtRuntimeMs: number,
+  startDelayMs?: number
 ): void {
   emitRuntimeAnimation?.(meta.schemaId, {
     type: "animation.started",
@@ -62,6 +66,8 @@ export function reportAnimationStarted(
     ...(meta.parameterControls !== undefined
       ? { parameterControls: meta.parameterControls }
       : {}),
+    ...(meta.startControl !== undefined ? { startControl: meta.startControl } : {}),
+    ...(startDelayMs !== undefined ? { startDelayMs } : {}),
     source: meta.source
   });
 }

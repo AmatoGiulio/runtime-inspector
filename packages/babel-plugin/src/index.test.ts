@@ -224,7 +224,7 @@ describe("runtime-inspector babel plugin", () => {
 
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      "__riObserveAnimation(withTiming(-110, __riAnimationConfig({ duration: 260 }, ["
+      "__riObserveAnimation(__riAnimationStart(withTiming(-110, __riAnimationConfig({ duration: 260 }, ["
     );
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
@@ -250,7 +250,9 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     const normalized = code.replace(/\s+/g, " ");
-    expect(normalized).toContain("__riObserveAnimation(withSpring(0, { damping: 14, stiffness: 180 })");
+    expect(normalized).toContain(
+      "__riObserveAnimation(__riAnimationStart(withSpring(0, __riAnimationConfig({ damping: 14, stiffness: 180 }, ["
+    );
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "spring"');
@@ -295,10 +297,14 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     const normalized = code.replace(/\s+/g, " ");
-    expect(normalized).toContain("__riObserveAnimation(withSpring(card.$targets.moveX, spring)");
+    expect(normalized).toContain(
+      "__riObserveAnimation(__riAnimationStart(withSpring(card.$targets.moveX, spring), {"
+    );
     expect(normalized).toContain('configControlId: "spring"');
     expect(
-      normalized.match(/__riObserveAnimation\(withSpring\(card\.\$targets\.moveX, spring\)/g)
+      normalized.match(
+        /__riObserveAnimation\(__riAnimationStart\(withSpring\(card\.\$targets\.moveX, spring\)/g
+      )
     ).toHaveLength(1);
   });
 
@@ -377,7 +383,7 @@ describe("runtime-inspector babel plugin", () => {
       const controlId = "src/Card.tsx:9:6:timing:card.moveX:duration";
 
       expect(normalized).toContain(
-        "card.moveX.value = __riObserveAnimation(withTiming(-110, __riAnimationConfig({ duration: 260, easing }, [{ " +
+        "card.moveX.value = __riObserveAnimation(__riAnimationStart(withTiming(-110, __riAnimationConfig({ duration: 260, easing }, [{ " +
           `key: "duration", controlId: "${controlId}", label: "card.moveX duration", ` +
           'declared: 260, min: 0, max: 10000, step: 1, unit: "ms" }])), {'
       );
@@ -416,7 +422,7 @@ describe("runtime-inspector babel plugin", () => {
         "card.moveX.value = withSpring(0, { duration: 260, dampingRatio: 0.6 });"
       );
       expect(normalized).toContain(
-        "__riObserveAnimation(withSpring(0, { duration: 260, dampingRatio: 0.6 })"
+        "__riObserveAnimation(__riAnimationStart(withSpring(0, { duration: 260, dampingRatio: 0.6 }), {"
       );
       expect(normalized).not.toContain("__riAnimationConfig");
       expect(normalized).not.toContain("parameterControls");
@@ -431,7 +437,9 @@ describe("runtime-inspector babel plugin", () => {
     ])("observes but does not wrap %s", (_label, call) => {
       const normalized = transformAssignment(`card.moveX.value = ${call};`);
 
-      expect(normalized).toContain(`card.moveX.value = __riObserveAnimation(${call}, {`);
+      expect(normalized).toContain(
+        `card.moveX.value = __riObserveAnimation(__riAnimationStart(${call}, {`
+      );
       expect(normalized).not.toContain("__riAnimationConfig");
       expect(normalized).not.toContain("parameterControls");
     });
@@ -466,6 +474,308 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).not.toContain("__riAnimationConfig");
       expect(normalized).not.toContain("__riObserveAnimation");
       expect(normalized).not.toContain(SOURCE_IMPORT);
+    });
+  });
+
+  describe("movable start and literal spring parameters (RFC 0005 3c)", () => {
+    const CARD_OPTS = { filename: "/repo/src/Card.tsx", root: "/repo" };
+    const RN_IMPORT = 'import { useInspector } from "@runtime-inspector/react-native";';
+    const REANIMATED_IMPORT =
+      'import { withDelay, withSpring, withTiming } from "react-native-reanimated";';
+
+    function transformBody(
+      body: string,
+      options: { envName?: string; imports?: string } = {}
+    ): string {
+      return transformWithOpts(
+        `
+      ${RN_IMPORT}
+      ${options.imports ?? REANIMATED_IMPORT}
+      const stagger = 3;
+      const timing = { duration: 260 };
+      const spring = { damping: 14 };
+      const extra = { mass: 2 };
+      const card = useInspector("card-transition", { moveX: { value: 0, min: -120, max: 120 } });
+      ${body}
+    `,
+        { ...CARD_OPTS, envName: options.envName ?? "development" }
+      ).replace(/\s+/g, " ");
+    }
+
+    // The assignment under test is the first statement after the `card` declaration (line 9, col 6).
+    const CALLSITE = "src/Card.tsx:9:6:";
+
+    it("moves a delayed literal through a delay control", () => {
+      const callsiteId = `${CALLSITE}timing:card.moveX`;
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 }));"
+      );
+
+      expect(normalized).toContain(
+        "card.moveX.value = __riObserveAnimation(withDelay(__riAnimationDelay(120, { " +
+          `callsiteId: "${callsiteId}", controlId: "${callsiteId}:delay", label: "card.moveX delay", ` +
+          'declared: 120, min: 0, max: 10000, step: 1, unit: "ms" }), withTiming(-110, __riAnimationConfig({ duration: 260 }, ['
+      );
+      expect(normalized).toContain(
+        `startControl: { schemaId: "auto", controlId: "${callsiteId}:delay" }`
+      );
+      expect(normalized).toContain(
+        `parameterControls: { duration: { schemaId: "auto", controlId: "${callsiteId}:duration" } }`
+      );
+      expect(normalized).toContain(
+        'expression: "withDelay(120, withTiming(-110, { duration: 260 }))"'
+      );
+      expect(normalized).not.toContain("__riAnimationStart");
+      expect(normalized).not.toContain("__riWithDelay");
+
+      const runtimeImport = normalized.match(
+        /import \{[^}]*\} from "@runtime-inspector\/react-native"/g
+      );
+      expect(runtimeImport).toHaveLength(1);
+      expect(runtimeImport![0]).toContain("__riAnimationDelay");
+    });
+
+    it("observes a delayed non-literal delay without a start control", () => {
+      const callsiteId = `${CALLSITE}timing:card.moveX`;
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(stagger * 2, withTiming(-110, { duration: 260 }));"
+      );
+
+      expect(normalized).toContain(
+        `card.moveX.value = __riObserveAnimation(withDelay(__riAnimationDelay(stagger * 2, { callsiteId: "${callsiteId}" }), withTiming(`
+      );
+      expect(normalized).not.toContain("startControl");
+      expect(normalized).not.toContain(":delay");
+      expect(normalized).toContain("parameterControls");
+    });
+
+    it("does not bind an out-of-range literal delay", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(20000, withTiming(-110, timing));"
+      );
+
+      expect(normalized).toContain("__riAnimationDelay(20000, { callsiteId:");
+      expect(normalized).not.toContain("startControl");
+    });
+
+    it("leaves withDelay with three arguments untouched", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 }), 1);"
+      );
+
+      expect(normalized).toContain(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 }), 1);"
+      );
+      expect(normalized).not.toContain("__riObserveAnimation");
+    });
+
+    it("leaves a withDelay-wrapped animation that has an explicit callback untouched", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 }, () => {}));"
+      );
+
+      expect(normalized).not.toContain("__riObserveAnimation");
+    });
+
+    it("leaves withDelay around a non-animation untouched", () => {
+      const normalized = transformBody("card.moveX.value = withDelay(120, makeAnimation(-110));");
+
+      expect(normalized).toContain("card.moveX.value = withDelay(120, makeAnimation(-110));");
+      expect(normalized).not.toContain("__riObserveAnimation");
+      expect(normalized).not.toContain("__riAnimationDelay");
+    });
+
+    it("wraps a bare call with the start helper and one separate withDelay import", () => {
+      const callsiteId = `${CALLSITE}timing:card.moveX`;
+      const normalized = transformBody("card.moveX.value = withTiming(-110, timing);");
+
+      expect(normalized).toContain(
+        "card.moveX.value = __riObserveAnimation(__riAnimationStart(withTiming(-110, timing), { " +
+          `callsiteId: "${callsiteId}", controlId: "${callsiteId}:delay", label: "card.moveX delay", ` +
+          'declared: 0, min: 0, max: 10000, step: 1, unit: "ms" }, __riWithDelay), {'
+      );
+      expect(normalized).toContain(
+        `startControl: { schemaId: "auto", controlId: "${callsiteId}:delay" }`
+      );
+      expect(normalized).toContain(
+        'import { withDelay as __riWithDelay } from "react-native-reanimated";'
+      );
+      // The user's own Reanimated import is left alone (the TS preset elides its unused names).
+      expect(normalized).toContain('import { withTiming } from "react-native-reanimated";');
+    });
+
+    it("adds the withDelay import exactly once for several bare call sites", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withTiming(-110, timing); card.moveX.value = withSpring(0, spring);"
+      );
+
+      expect(normalized.match(/withDelay as __riWithDelay/g)).toHaveLength(1);
+      expect(normalized.match(/__riAnimationStart\(/g)).toHaveLength(2);
+      const runtimeImport = normalized.match(
+        /import \{[^}]*\} from "@runtime-inspector\/react-native"/g
+      );
+      expect(runtimeImport).toHaveLength(1);
+      expect(runtimeImport![0].match(/__riAnimationStart/g)).toHaveLength(1);
+    });
+
+    it("adds the withDelay import once across a delayed and a bare call site", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(120, withTiming(-110, timing)); card.moveX.value = withTiming(0, timing);"
+      );
+
+      expect(normalized.match(/withDelay as __riWithDelay/g)).toHaveLength(1);
+      expect(normalized.match(/__riAnimationStart\(/g)).toHaveLength(1);
+      expect(normalized.match(/__riAnimationDelay\(/g)).toHaveLength(1);
+    });
+
+    it("does not wrap the start of a bare call without a Reanimated import", () => {
+      const normalized = transformBody("card.moveX.value = withTiming(-110, { duration: 260 });", {
+        imports: 'import { withTiming } from "./my-animations";'
+      });
+
+      expect(normalized).toContain(
+        "card.moveX.value = __riObserveAnimation(withTiming(-110, __riAnimationConfig("
+      );
+      expect(normalized).not.toContain("__riAnimationStart");
+      expect(normalized).not.toContain("__riWithDelay");
+      expect(normalized).not.toContain("startControl");
+      expect(normalized).toContain("parameterControls");
+    });
+
+    it("does not count a type-only Reanimated import as a Reanimated import", () => {
+      const normalized = transformBody("card.moveX.value = withTiming(-110, timing);", {
+        imports:
+          'import type { SharedValue } from "react-native-reanimated"; import { withTiming } from "./my-animations";'
+      });
+
+      expect(normalized).toContain("__riObserveAnimation(withTiming(-110, timing), {");
+      expect(normalized).not.toContain("__riAnimationStart");
+      expect(normalized).not.toContain("__riWithDelay");
+    });
+
+    it("binds all three spring literals", () => {
+      const callsiteId = `${CALLSITE}spring:card.moveX`;
+      const normalized = transformBody(
+        "card.moveX.value = withSpring(0, { damping: 14, stiffness: 160, mass: 0.5 });"
+      );
+
+      expect(normalized).toContain(
+        "__riAnimationConfig({ damping: 14, stiffness: 160, mass: 0.5 }, [" +
+          `{ key: "damping", controlId: "${callsiteId}:damping", label: "card.moveX damping", declared: 14, min: 0, max: 100, step: 0.1 }, ` +
+          `{ key: "stiffness", controlId: "${callsiteId}:stiffness", label: "card.moveX stiffness", declared: 160, min: 1, max: 1000, step: 1 }, ` +
+          `{ key: "mass", controlId: "${callsiteId}:mass", label: "card.moveX mass", declared: 0.5, min: 0.1, max: 10, step: 0.1 }])`
+      );
+      expect(normalized).toContain(
+        "parameterControls: { " +
+          `damping: { schemaId: "auto", controlId: "${callsiteId}:damping" }, ` +
+          `stiffness: { schemaId: "auto", controlId: "${callsiteId}:stiffness" }, ` +
+          `mass: { schemaId: "auto", controlId: "${callsiteId}:mass" } }`
+      );
+      expect(normalized).toContain("config: { damping: 14, stiffness: 160, mass: 0.5 }");
+    });
+
+    it("binds only the spring keys that qualify", () => {
+      const callsiteId = `${CALLSITE}spring:card.moveX`;
+      const normalized = transformBody(
+        "card.moveX.value = withSpring(0, { damping: 140, stiffness: 160, mass: extra.mass });"
+      );
+
+      expect(normalized).toContain(`key: "stiffness", controlId: "${callsiteId}:stiffness"`);
+      expect(normalized).not.toContain('key: "damping"');
+      expect(normalized).not.toContain('key: "mass"');
+      expect(normalized).toContain(
+        `parameterControls: { stiffness: { schemaId: "auto", controlId: "${callsiteId}:stiffness" } }`
+      );
+    });
+
+    it.each([
+      ["a spread in the config object", "{ ...spring, damping: 14, stiffness: 160 }"],
+      ["a duplicated key", "{ damping: 14, damping: 20 }"],
+      ["a computed string-literal duplicate", '{ damping: 14, ["damping"]: 20 }'],
+      ["a method member", "{ damping() { return 14; } }"],
+      ["a computed key", '{ ["damping"]: 14 }'],
+      ["non-literal values", "{ damping: stagger, stiffness: 20 + 1 }"],
+      ["out-of-range values", "{ damping: 101, stiffness: 0, mass: 0.05 }"]
+    ])("binds no spring key for %s", (_label, config) => {
+      const normalized = transformBody(`card.moveX.value = withSpring(0, ${config});`);
+
+      expect(normalized).not.toContain("__riAnimationConfig(");
+      expect(normalized).not.toContain("parameterControls");
+      expect(normalized).toContain("__riObserveAnimation");
+    });
+
+    it("keeps an identifier spring config on the configControlId path", () => {
+      const normalized = transformWithOpts(
+        `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { withSpring } from "react-native-reanimated";
+      function Card() {
+        const card = useInspector("card-transition", {
+          moveX: { value: 0, min: -120, max: 120 },
+          spring: { damping: 14, stiffness: 180, mass: 1 }
+        });
+        const spring = card.spring.value;
+        card.moveX.value = withSpring(card.$targets.moveX, spring);
+        return card;
+      }
+    `,
+        CARD_OPTS
+      ).replace(/\s+/g, " ");
+
+      expect(normalized).toContain('configControlId: "spring"');
+      expect(normalized).not.toContain("__riAnimationConfig");
+      expect(normalized).not.toContain("parameterControls");
+      expect(normalized).toContain(
+        "__riAnimationStart(withSpring(card.$targets.moveX, spring), {"
+      );
+    });
+
+    it("keeps the timing duration binding identical inside a delayed call", () => {
+      const callsiteId = `${CALLSITE}timing:card.moveX`;
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(stagger, withTiming(-110, { duration: 260 }));"
+      );
+
+      expect(normalized).toContain(
+        "withTiming(-110, __riAnimationConfig({ duration: 260 }, [{ " +
+          `key: "duration", controlId: "${callsiteId}:duration", label: "card.moveX duration", ` +
+          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms" }]))'
+      );
+    });
+
+    it("leaves delayed and bare animations untouched in production env", () => {
+      const normalized = transformBody(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 })); card.moveX.value = withSpring(0, { damping: 14 });",
+        { envName: "production" }
+      );
+
+      expect(normalized).toContain(
+        "card.moveX.value = withDelay(120, withTiming(-110, { duration: 260 })); card.moveX.value = withSpring(0, { damping: 14 });"
+      );
+      expect(normalized).not.toContain("__ri");
+    });
+
+    it("leaves delayed and bare animations inside a known worklet context untouched", () => {
+      const normalized = transformWithOpts(
+        `
+      import { useAnimatedStyle, withDelay, withSpring, withTiming } from "react-native-reanimated";
+      function Card() {
+        const opacity = { value: 0 };
+        useAnimatedStyle(() => {
+          opacity.value = withDelay(120, withTiming(1, { duration: 180 }));
+          opacity.value = withSpring(1, { damping: 14 });
+          return { opacity: opacity.value };
+        });
+      }
+    `,
+        CARD_OPTS
+      ).replace(/\s+/g, " ");
+
+      expect(normalized).toContain(
+        "opacity.value = withDelay(120, withTiming(1, { duration: 180 }));"
+      );
+      expect(normalized).toContain("opacity.value = withSpring(1, { damping: 14 });");
+      expect(normalized).not.toContain("__ri");
     });
   });
 });

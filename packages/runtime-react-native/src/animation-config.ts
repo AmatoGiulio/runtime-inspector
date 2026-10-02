@@ -1,3 +1,4 @@
+import { recordAppliedStartDelay } from "./animation-start-state";
 import { registerRuntimeValue } from "./auto";
 
 declare const __DEV__: boolean | undefined;
@@ -5,6 +6,40 @@ declare const __DEV__: boolean | undefined;
 /** One literal config parameter the Babel plugin backs with an `auto` schema control. */
 export interface RuntimeAnimationConfigBinding {
   key: string;
+  controlId: string;
+  label: string;
+  declared: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+}
+
+/** The slider a call site's delay is backed by (RFC 0005 §3c). */
+export interface RuntimeAnimationStartBinding {
+  callsiteId: string;
+  controlId?: string;
+  label?: string;
+  declared?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+}
+
+/** Binding for `__riAnimationStart`: the control is always present and declared is 0. */
+export interface RuntimeAnimationStartWrapBinding {
+  callsiteId: string;
+  controlId: string;
+  label: string;
+  declared: number;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+}
+
+interface HolderBinding {
   controlId: string;
   label: string;
   declared: number;
@@ -65,12 +100,12 @@ export function __riAnimationConfig<T>(
 
     return { ...config, ...overrides };
   } catch (error) {
-    warnInternalFailureOnce(error);
+    warnInternalFailureOnce("__riAnimationConfig", "animation config", error);
     return config;
   }
 }
 
-function ensureHolder(binding: RuntimeAnimationConfigBinding): { value: number } {
+function ensureHolder(binding: HolderBinding): { value: number } {
   const existing = entries.get(binding.controlId);
   if (existing) {
     if (existing.declared === binding.declared) {
@@ -103,18 +138,101 @@ function ensureHolder(binding: RuntimeAnimationConfigBinding): { value: number }
   return holder;
 }
 
+/**
+ * Development-only seam injected by the Babel plugin around the delay argument of
+ * a discovered `withDelay(<delay>, <animation>)` (RFC 0005 §3c). With a literal
+ * delay the binding carries a control: the declared literal is returned until a
+ * developer tunes the control, then the tuned value. Otherwise the delay is
+ * returned untouched and only the applied delay is recorded for observation.
+ *
+ * No-op in production, and never throws into application code.
+ */
+export function __riAnimationDelay<T>(delay: T, binding: RuntimeAnimationStartBinding): T | number {
+  if (!isDev()) {
+    return delay;
+  }
+
+  try {
+    let result: T | number = delay;
+
+    if (
+      typeof binding.controlId === "string" &&
+      typeof binding.declared === "number" &&
+      Number.isFinite(binding.declared)
+    ) {
+      const holder = ensureHolder({
+        controlId: binding.controlId,
+        label: binding.label ?? binding.controlId,
+        declared: binding.declared,
+        min: binding.min ?? 0,
+        max: binding.max ?? 10000,
+        step: binding.step,
+        unit: binding.unit
+      });
+      const value = holder.value;
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value !== binding.declared) {
+        result = value;
+      }
+    }
+
+    recordAppliedStartDelay(
+      binding.callsiteId,
+      typeof result === "number" && Number.isFinite(result) && result >= 0 ? result : 0
+    );
+    return result;
+  } catch (error) {
+    warnInternalFailureOnce("__riAnimationDelay", "delay", error);
+    return delay;
+  }
+}
+
+/**
+ * Development-only seam injected by the Babel plugin around a bare
+ * `withTiming(...)` / `withSpring(...)` call in a module that imports Reanimated
+ * (RFC 0005 §3c). Registers a delay control declared at 0. While it is 0 the
+ * very same `animation` object is returned; once tuned above 0 the animation is
+ * delayed through the `withDelay` the instrumented module passed in, so this
+ * package never imports Reanimated.
+ *
+ * No-op in production, and never throws into application code.
+ */
+export function __riAnimationStart<T>(
+  animation: T,
+  binding: RuntimeAnimationStartWrapBinding,
+  withDelay: unknown
+): T {
+  if (!isDev()) {
+    return animation;
+  }
+
+  try {
+    const holder = ensureHolder(binding);
+    const value = holder.value;
+    if (typeof value === "number" && Number.isFinite(value) && value > 0 && typeof withDelay === "function") {
+      recordAppliedStartDelay(binding.callsiteId, value);
+      return withDelay(value, animation) as T;
+    }
+
+    recordAppliedStartDelay(binding.callsiteId, 0);
+    return animation;
+  } catch (error) {
+    warnInternalFailureOnce("__riAnimationStart", "animation", error);
+    return animation;
+  }
+}
+
 /** Test-only: clears module-level state between test runs. */
 export function __resetAnimationConfigForTests(): void {
   entries.clear();
   warnedInternalFailure = false;
 }
 
-function warnInternalFailureOnce(error: unknown): void {
+function warnInternalFailureOnce(helper: string, subject: string, error: unknown): void {
   if (warnedInternalFailure) return;
   warnedInternalFailure = true;
   const reason = error instanceof Error ? error.message : String(error);
   console.warn(
-    `[Runtime Inspector] __riAnimationConfig failed and returned the original animation config: ${reason}`
+    `[Runtime Inspector] ${helper} failed and returned the original ${subject}: ${reason}`
   );
 }
 
