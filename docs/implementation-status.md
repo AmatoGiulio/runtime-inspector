@@ -380,6 +380,18 @@ Known limits:
 - The playhead time pill is always centered on its line.
 - The timeline region is a DialKit surface too: it sits in a `dialkit-root` scope, uses DialKit's own timeline classes where their CSS fits a percentage-based layout (`dialkit-timeline-row`, `-label`, `-lane`, `-ruler`, `-tick*`, `-group-toggle`, `-clip`, `-time`) and `--dial-*` tokens everywhere else. DialKit's real `DialTimeline` dock was evaluated from its 2.0.2 source and rejected as the main timeline: it is a fixed body-level portal with no inline mode, it owns and quantizes timing in its own store (50 ms minimum, 10 ms steps, values preserved across config changes), it has no drag-end event or per-clip constraints, a marker clip cannot be selected, and its Play cannot be told apart from a scrub release. Selection follows DialKit's convention (a ring on the clip) plus a row tint.
 
+### M6d one design system
+
+**Implemented on `feat/runtime-workbench-desktop`; both themes checked in a browser on 2026-10-02, including a computed-style census of every visible text node.**
+
+Header, Outline, Inspector chrome, stage chrome and timeline now share one language, enforced by greps over `packages/workbench/src/styles.css`:
+
+- Typography is DialKit's: `system-ui` plus `Geist Mono` for numerals, and only these steps — title 13/600, body 13/500, small 11/500, label 11/600, mono 11/500, micro 10/500 (ruler ticks and playhead flag), display 20/600 (device placeholder title only). Every rule uses a `--wb-type-*` token; `font-size`, `font-weight` and `font-family` do not appear outside the token block. No uppercase transforms, no letter-spacing.
+- Neutrals are DialKit's values in every region: one surface, three text levels, one border.
+- One radius (8 px, 5 px for timeline bars) and one control height (28 px).
+- Three button variants (`.wb-button.primary | .secondary | .toggle`) and one status pill (`.wb-pill`).
+- One accent hue, used only for primary buttons (Play, attach), pressed toggles, the selected timeline bar and its row tint, the playhead, and focus rings. Green remains only as a status dot.
+
 Not done yet:
 
 1. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
