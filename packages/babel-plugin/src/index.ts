@@ -156,7 +156,7 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         const helperName =
           animationKind === "timing" ? TIMING_HELPER_NAME : SPRING_HELPER_NAME;
         const toValue = right.arguments[0];
-        if (!toValue || toValue.type === "JSXNamespacedName" || toValue.type === "ArgumentPlaceholder") {
+        if (!toValue || toValue.type === "ArgumentPlaceholder") {
           return;
         }
         const config =
