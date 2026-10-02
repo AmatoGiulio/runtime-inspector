@@ -29,6 +29,11 @@ import {
   setRuntimeTraceEmitter,
   stopRuntimeRecordingsForSchema
 } from "./recording";
+import {
+  __riWithSpring,
+  __riWithTiming,
+  setRuntimeAnimationEmitter
+} from "./animation-observer";
 
 declare const __DEV__: boolean | undefined;
 
@@ -85,6 +90,7 @@ const MAX_DISCOVERY_DELAY_MS = 10_000;
 let warnedUnreachable = false;
 
 setRuntimeTraceEmitter(sendRuntimeMessage);
+setRuntimeAnimationEmitter(sendRuntimeAnimationMessage);
 
 function getScriptUrl(): Array<string | undefined> {
   let fromNativeModules: string | undefined;
@@ -358,6 +364,8 @@ export type {
 export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
+export { __riWithSpring, __riWithTiming } from "./animation-observer";
+
 export { useRuntimeValue, useAction } from "./use-runtime-value";
 export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";
 
@@ -551,6 +559,30 @@ function sendRuntimeMessage(schemaId: string, message: RIPMessage) {
     socket.send(JSON.stringify(message));
   } catch {
     // best-effort trace delivery; recording chunks are not replayable
+  }
+}
+
+function sendRuntimeAnimationMessage(
+  schemaId: string | undefined,
+  message: RIPMessage
+) {
+  broadcastDirect(message);
+
+  const preferred = schemaId ? sessions.get(schemaId) : undefined;
+  const session =
+    preferred ??
+    Array.from(sessions.values()).find(
+      (candidate) =>
+        candidate.active && candidate.socket?.readyState === WebSocket.OPEN
+    );
+
+  const socket = session?.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+  try {
+    socket.send(JSON.stringify(message));
+  } catch {
+    // Best-effort observation only. Animation lifecycle events are never replayed.
   }
 }
 
