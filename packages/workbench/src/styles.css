@@ -40,11 +40,11 @@
   --wb-text-muted: rgba(0, 0, 0, 0.35);
 
   /* Accent */
-  --wb-accent: #015abe;
-  --wb-accent-hover: #014a9d;
+  --wb-accent: #f5430f;
+  --wb-accent-hover: #dc3a0b;
   --wb-accent-contrast: #ffffff;
-  --wb-accent-soft: rgba(1, 90, 190, 0.10);
-  --wb-accent-text: #015abe;
+  --wb-accent-soft: rgba(245, 67, 15, 0.10);
+  --wb-accent-text: #c9350a;
 
   /* Status dots */
   --wb-success: #1f9d57;
@@ -64,7 +64,7 @@
   --wb-device-border: #2b2b2d;
   --wb-device-outline: #505055;
   --wb-device-bg: #080809;
-  --wb-device-glow: rgba(1, 90, 190, 0.12);
+  --wb-device-glow: rgba(245, 67, 15, 0.12);
   --wb-device-shadow: rgba(0, 0, 0, 0.52);
   --wb-device-text: #f2f2f3;
   --wb-device-eyebrow: #73737a;
@@ -91,11 +91,11 @@
   --wb-text-muted: rgba(255, 255, 255, 0.4);
 
   /* Accent */
-  --wb-accent: #015abe;
-  --wb-accent-hover: #0a6bd8;
+  --wb-accent: #f5430f;
+  --wb-accent-hover: #ff5a2a;
   --wb-accent-contrast: #ffffff;
-  --wb-accent-soft: rgba(1, 90, 190, 0.24);
-  --wb-accent-text: #6fb0ff;
+  --wb-accent-soft: rgba(245, 67, 15, 0.20);
+  --wb-accent-text: #ff8a66;
 
   /* Status dots */
   --wb-success: #38c878;
@@ -460,42 +460,47 @@ button {
   position: relative;
   min-height: 0;
   overflow: hidden;
-}
-
-.runtime-surface.attached {
   display: grid;
   place-items: center;
   padding: 16px 18px;
 }
 
-.device-placeholder {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px 28px;
-  overflow: hidden;
+/*
+ * One persistent device frame for every framebuffer state (idle, launching, waiting for the first
+ * frame, live). The bezel is padding, not a border, so the screen's aspect ratio is exact and the
+ * outer geometry never changes when the Simulator attaches; only the screen content changes.
+ */
+.device-frame {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 7px;
+  border-radius: 38px;
+  background: var(--wb-device-border);
+  outline: 1px solid var(--wb-device-outline);
+  box-shadow: 0 30px 80px var(--wb-device-shadow);
 }
 
-.device-screen {
-  /* The full stage height (minus the surface's 16px padding); the width follows the aspect ratio. */
-  height: calc(100vh - var(--wb-timeline-h) - 44px - 32px);
+.device-frame-screen {
+  position: relative;
+  /* The full stage height (minus the surface's 16px padding and the bezel); the width follows the aspect ratio. */
+  height: calc(100vh - var(--wb-timeline-h) - 44px - 32px - 14px);
   max-width: 100%;
-  min-width: 230px;
   overflow: hidden;
   aspect-ratio: 9 / 19.5;
-  border-radius: 38px;
-  border: 7px solid var(--wb-device-border);
-  outline: 1px solid var(--wb-device-outline);
+  border-radius: 31px;
   background:
     radial-gradient(circle at 50% 28%, var(--wb-device-glow), transparent 35%),
     var(--wb-device-bg);
-  box-shadow: 0 30px 80px var(--wb-device-shadow);
   padding: 44px 24px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.device-frame-screen.interactive {
+  cursor: default;
+  touch-action: none;
+  user-select: none;
 }
 
 .device-eyebrow {
@@ -543,33 +548,20 @@ button {
   background: var(--wb-video-bg);
 }
 
-.runtime-framebuffer-shell {
-  position: relative;
-  height: 100%;
-  max-height: calc(100vh - var(--wb-timeline-h) - 44px - 32px);
-  max-width: 100%;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid var(--wb-border);
-  border-radius: 34px;
-  background: var(--wb-video-bg);
-  box-shadow: 0 28px 80px var(--wb-shadow-lg);
-}
-
-.runtime-framebuffer-shell.interactive {
-  cursor: default;
-  touch-action: none;
-  user-select: none;
-}
-
 .runtime-framebuffer {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  opacity: 0;
+  transition: opacity 180ms ease;
   pointer-events: none;
   user-select: none;
+}
+
+.runtime-framebuffer.ready {
+  opacity: 1;
 }
 
 .framebuffer-loading {
@@ -578,11 +570,19 @@ button {
   display: grid;
   place-items: center;
   padding: 24px;
-  color: var(--wb-video-text);
-  background: var(--wb-video-bg);
+  color: var(--wb-device-copy);
+  background: transparent;
   font: var(--wb-type-small);
   text-align: center;
   pointer-events: none;
+  opacity: 0;
+  animation: framebuffer-loading-in 120ms ease 150ms forwards;
+}
+
+@keyframes framebuffer-loading-in {
+  to {
+    opacity: 1;
+  }
 }
 
 .runtime-video-shell.interactive {
@@ -1311,6 +1311,15 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .runtime-framebuffer {
+    transition: none;
+  }
+
+  .framebuffer-loading {
+    animation: none;
+    opacity: 1;
+  }
+
   .wb-button,
   .simulator-select,
   .motion-bar,

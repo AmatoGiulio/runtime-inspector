@@ -833,7 +833,10 @@ function App() {
         setFramebufferHasFrame(false);
         setRuntimeCapture({
           label: `${prepared.device.name} · ${prepared.device.runtime}`,
-          source: "framebuffer"
+          source: "framebuffer",
+          ...(prepared.bootstrapFrame
+            ? { width: prepared.bootstrapFrame.width, height: prepared.bootstrapFrame.height }
+            : {})
         });
         if (!prepared.input.ready) {
           setRuntimeCaptureError(prepared.input.error ?? "Simulator HID input is unavailable.");
@@ -980,6 +983,8 @@ function App() {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
   }
+
+  const isFramebuffer = runtimeCapture?.source === "framebuffer";
 
   return (
     <main
@@ -1194,13 +1199,27 @@ function App() {
         ) : null}
 
         <section className="runtime-stage">
-          <div className={runtimeCapture ? "runtime-surface attached" : "runtime-surface"}>
-            {runtimeCapture ? (
-              runtimeCapture.source === "framebuffer" ? (
+          <div className="runtime-surface">
+            {runtimeCapture?.source === "window" ? (
+              <div className="runtime-video-shell">
+                <video
+                  ref={runtimeVideoRef}
+                  className="runtime-video"
+                  autoPlay
+                  muted
+                  playsInline
+                />
+                <div className="runtime-video-caption">
+                  <span>{runtimeCapture.label}</span>
+                  <span>Window fallback · view only</span>
+                </div>
+              </div>
+            ) : (
+              <div className="device-frame">
                 <div
-                  className={`runtime-framebuffer-shell${inputReady ? " interactive" : ""}`}
+                  className={`device-frame-screen${isFramebuffer && inputReady ? " interactive" : ""}`}
                   style={
-                    runtimeCapture.width && runtimeCapture.height
+                    isFramebuffer && runtimeCapture?.width && runtimeCapture?.height
                       ? { aspectRatio: String(runtimeCapture.width / runtimeCapture.height) }
                       : undefined
                   }
@@ -1209,56 +1228,43 @@ function App() {
                   onPointerUp={handleRuntimePointerUp}
                   onPointerCancel={handleRuntimePointerUp}
                 >
-                  <canvas
-                    ref={framebufferCanvasRef}
-                    className="runtime-framebuffer"
-                    aria-label="Live iOS Simulator framebuffer"
-                  />
-                  {!framebufferHasFrame ? (
-                    <div className="framebuffer-loading">Connecting to Simulator framebuffer…</div>
+                  {isFramebuffer ? (
+                    <canvas
+                      ref={framebufferCanvasRef}
+                      className={`runtime-framebuffer${framebufferHasFrame ? " ready" : ""}`}
+                      aria-label="Live iOS Simulator framebuffer"
+                    />
                   ) : null}
-                </div>
-              ) : (
-                <div className="runtime-video-shell">
-                  <video
-                    ref={runtimeVideoRef}
-                    className="runtime-video"
-                    autoPlay
-                    muted
-                    playsInline
-                  />
-                  <div className="runtime-video-caption">
-                    <span>{runtimeCapture.label}</span>
-                    <span>Window fallback · view only</span>
-                  </div>
-                </div>
-              )
-            ) : (
-              <div className="device-placeholder">
-                <div className="device-screen">
-                  <div className="device-eyebrow">Real runtime</div>
-                  <div className="device-title">
-                    {window.runtimeDesktop
-                      ? "Launch the iOS Simulator"
-                      : "Attach the iOS Simulator"}
-                  </div>
-                  <div className="device-copy">
-                    {window.runtimeDesktop
-                      ? "Runtime Inspector boots the selected target and attaches directly to its iOS framebuffer."
-                      : "Choose the Simulator window in the macOS sharing picker. Browser capture is a view-only fallback."}
-                  </div>
-                  <button
-                    className="wb-button primary device-attach"
-                    type="button"
-                    onClick={attachRuntimeCapture}
-                    disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
-                  >
-                    {desktopBusy
-                      ? "Launching…"
-                      : window.runtimeDesktop
-                        ? "Launch & Attach"
-                        : "Attach Simulator"}
-                  </button>
+                  {!runtimeCapture ? (
+                    <>
+                      <div className="device-eyebrow">Real runtime</div>
+                      <div className="device-title">
+                        {window.runtimeDesktop
+                          ? "Launch the iOS Simulator"
+                          : "Attach the iOS Simulator"}
+                      </div>
+                      <div className="device-copy">
+                        {window.runtimeDesktop
+                          ? "Runtime Inspector boots the selected target and attaches directly to its iOS framebuffer."
+                          : "Choose the Simulator window in the macOS sharing picker. Browser capture is a view-only fallback."}
+                      </div>
+                      <button
+                        className="wb-button primary device-attach"
+                        type="button"
+                        onClick={attachRuntimeCapture}
+                        disabled={desktopBusy || (Boolean(window.runtimeDesktop) && simulators.length === 0)}
+                      >
+                        {desktopBusy
+                          ? "Launching…"
+                          : window.runtimeDesktop
+                            ? "Launch & Attach"
+                            : "Attach Simulator"}
+                      </button>
+                    </>
+                  ) : null}
+                  {isFramebuffer && !framebufferHasFrame ? (
+                    <div className="framebuffer-loading">Connecting to the Simulator…</div>
+                  ) : null}
                 </div>
               </div>
             )}
