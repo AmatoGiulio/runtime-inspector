@@ -1248,6 +1248,37 @@ button {
   filter: brightness(1.12);
 }
 
+.motion-span-resize {
+  position: absolute;
+  z-index: 5;
+  top: 8px;
+  bottom: 8px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.motion-span-resize::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.7);
+  opacity: 0;
+}
+
+.motion-span-resize:hover::after,
+.motion-span-resize.active::after {
+  opacity: 1;
+}
+
+.motion-span.resizing {
+  z-index: 4;
+  border-color: rgba(255, 255, 255, 0.95);
+}
+
 .motion-span.selected {
   border-color: rgba(255, 255, 255, 0.95);
   box-shadow:

@@ -1,9 +1,20 @@
 import {
+  Fragment,
   useMemo,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent
 } from "react";
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
+import {
+  activeAnimationAtTime,
+  animationDisplayEnd,
+  animationTargetLabel,
+  buildTimelineModel,
+  clamp,
+  resizedDurationMs,
+  type AnimationPropertyTrack
+} from "./timeline-model";
 
 export interface AnimationTimelineProps {
   animations: RuntimeAnimationTrace[];
@@ -12,12 +23,23 @@ export interface AnimationTimelineProps {
   playheadMs: number;
   onSelectAnimation(animationId: string): void;
   onPlayheadChange(ms: number): void;
+  /** Returns the editable range for a span's duration, or undefined when the span cannot be resized. */
+  getDurationRange?(
+    animation: RuntimeAnimationTrace
+  ): { min: number; max: number; step: number } | undefined;
+  /** Fired once, on pointer release, when a resize ended on a duration different from the current one. */
+  onResizeDuration?(animationId: string, durationMs: number): void;
 }
 
-interface AnimationPropertyTrack {
-  target: string;
-  label: string;
-  animations: RuntimeAnimationTrace[];
+interface ResizeState {
+  instanceId: string;
+  durationMs: number;
+}
+
+interface ResizeSession extends ResizeState {
+  startMs: number;
+  currentDurationMs: number | undefined;
+  range: { min: number; max: number; step: number };
 }
 
 export function AnimationTimeline({
@@ -26,10 +48,14 @@ export function AnimationTimeline({
   selectedAnimationId,
   playheadMs,
   onSelectAnimation,
-  onPlayheadChange
+  onPlayheadChange,
+  getDurationRange,
+  onResizeDuration
 }: AnimationTimelineProps) {
   const model = useMemo(() => buildTimelineModel(animations), [animations]);
   const dragRef = useRef(false);
+  const resizeRef = useRef<ResizeSession | undefined>(undefined);
+  const [resize, setResize] = useState<ResizeState | undefined>(undefined);
 
   if (animations.length === 0) return null;
 
@@ -84,6 +110,71 @@ export function AnimationTimeline({
     if (!dragRef.current) return;
     dragRef.current = false;
     update(event);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleResizePointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    animation: RuntimeAnimationTrace,
+    startMs: number,
+    currentDurationMs: number | undefined,
+    range: { min: number; max: number; step: number }
+  ) {
+    event.stopPropagation();
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onSelectAnimation(animation.instanceId);
+    const initial = currentDurationMs ?? range.min;
+    resizeRef.current = {
+      instanceId: animation.instanceId,
+      durationMs: initial,
+      startMs,
+      currentDurationMs,
+      range
+    };
+    setResize({ instanceId: animation.instanceId, durationMs: initial });
+  }
+
+  function handleResizePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const session = resizeRef.current;
+    if (!session) return;
+    event.stopPropagation();
+    const lane = event.currentTarget.closest(".motion-property-lane");
+    if (!lane) return;
+    const rect = lane.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+    const durationMs = resizedDurationMs({
+      startMs: session.startMs,
+      pointerMs: ratio * model.durationMs,
+      ...session.range
+    });
+    if (durationMs === session.durationMs) return;
+    session.durationMs = durationMs;
+    setResize({ instanceId: session.instanceId, durationMs });
+  }
+
+  function handleResizePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const session = resizeRef.current;
+    if (!session) return;
+    event.stopPropagation();
+    resizeRef.current = undefined;
+    setResize(undefined);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (session.durationMs !== session.currentDurationMs) {
+      onResizeDuration?.(session.instanceId, session.durationMs);
+    }
+  }
+
+  function handleResizePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (!resizeRef.current) return;
+    event.stopPropagation();
+    resizeRef.current = undefined;
+    setResize(undefined);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -172,8 +263,13 @@ export function AnimationTimeline({
                 {track.animations.map((animation) => {
                   const startMs =
                     animation.startedAtRuntimeMs - model.originMs;
-                  const endMs =
-                    animationDisplayEnd(animation) - model.originMs;
+                  const durationRange = onResizeDuration
+                    ? getDurationRange?.(animation)
+                    : undefined;
+                  const resizing =
+                    resize?.instanceId === animation.instanceId
+                      ? resize
+                      : undefined;
                   const actualDuration =
                     animation.endedAtRuntimeMs !== undefined
                       ? Math.max(
@@ -182,8 +278,14 @@ export function AnimationTimeline({
                             animation.startedAtRuntimeMs
                         )
                       : undefined;
-                  const displayDuration =
+                  const currentDuration =
                     actualDuration ?? animation.expectedDurationMs;
+                  const displayDuration =
+                    resizing?.durationMs ?? currentDuration;
+                  const endMs =
+                    resizing !== undefined
+                      ? startMs + resizing.durationMs
+                      : animationDisplayEnd(animation) - model.originMs;
                   const estimated =
                     actualDuration === undefined &&
                     animation.durationBasis === "spring-estimate";
@@ -191,16 +293,17 @@ export function AnimationTimeline({
                     animation.instanceId === selectedAnimationId;
 
                   return (
+                    <Fragment key={animation.instanceId}>
                     <button
                       className={[
                         "motion-span",
                         animation.animationKind,
                         estimated ? "estimated" : "",
-                        selected ? "selected" : ""
+                        selected ? "selected" : "",
+                        resizing ? "resizing" : ""
                       ]
                         .filter(Boolean)
                         .join(" ")}
-                      key={animation.instanceId}
                       type="button"
                       style={{
                         left: `${(startMs / model.durationMs) * 100}%`,
@@ -230,6 +333,34 @@ export function AnimationTimeline({
                           : ""}
                       </span>
                     </button>
+                    {durationRange ? (
+                      <span
+                        className={[
+                          "motion-span-resize",
+                          selected || resizing ? "active" : ""
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-hidden="true"
+                        style={{
+                          left: `calc(${(endMs / model.durationMs) * 100}% - 4px)`
+                        }}
+                        onPointerDown={(event) =>
+                          handleResizePointerDown(
+                            event,
+                            animation,
+                            startMs,
+                            currentDuration,
+                            durationRange
+                          )
+                        }
+                        onPointerMove={handleResizePointerMove}
+                        onPointerUp={handleResizePointerUp}
+                        onPointerCancel={handleResizePointerCancel}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </div>
@@ -247,95 +378,6 @@ function Playhead({ percent }: { percent: number }) {
       <span className="motion-playhead-cap" />
     </span>
   );
-}
-
-function buildTimelineModel(animations: RuntimeAnimationTrace[]) {
-  const tracks = groupAnimationsByTarget(animations);
-  const originMs = Math.min(
-    ...animations.map((animation) => animation.startedAtRuntimeMs)
-  );
-  const maxEndMs = Math.max(
-    ...animations.map((animation) => animationDisplayEnd(animation))
-  );
-  const rawDuration = Math.max(1, maxEndMs - originMs);
-  const tickStep = chooseTickStep(rawDuration);
-  const durationMs = Math.max(
-    tickStep,
-    Math.ceil(rawDuration / tickStep) * tickStep
-  );
-  const ticks: number[] = [];
-
-  for (let tick = 0; tick <= durationMs; tick += tickStep) {
-    ticks.push(tick);
-  }
-
-  return {
-    tracks,
-    originMs,
-    durationMs,
-    ticks
-  };
-}
-
-function groupAnimationsByTarget(
-  animations: RuntimeAnimationTrace[]
-): AnimationPropertyTrack[] {
-  const tracks = new Map<string, AnimationPropertyTrack>();
-
-  for (const animation of animations) {
-    const existing = tracks.get(animation.target);
-    if (existing) {
-      existing.animations.push(animation);
-      continue;
-    }
-
-    tracks.set(animation.target, {
-      target: animation.target,
-      label: animationTargetLabel(animation.target),
-      animations: [animation]
-    });
-  }
-
-  return Array.from(tracks.values()).map((track) => ({
-    ...track,
-    animations: [...track.animations].sort(
-      (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
-    )
-  }));
-}
-
-function activeAnimationAtTime(
-  animations: RuntimeAnimationTrace[],
-  originMs: number,
-  timeMs: number
-): RuntimeAnimationTrace | undefined {
-  return [...animations]
-    .filter((animation) => {
-      const startMs = animation.startedAtRuntimeMs - originMs;
-      const endMs = animationDisplayEnd(animation) - originMs;
-      return timeMs >= startMs && timeMs <= endMs;
-    })
-    .sort(
-      (left, right) => right.startedAtRuntimeMs - left.startedAtRuntimeMs
-    )[0];
-}
-
-function animationTargetLabel(target: string): string {
-  const leaf = target.split(".").at(-1) ?? target;
-  return leaf
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .replace(/^./, (character) => character.toUpperCase());
-}
-
-function animationDisplayEnd(animation: RuntimeAnimationTrace): number {
-  if (animation.endedAtRuntimeMs !== undefined) {
-    return animation.endedAtRuntimeMs;
-  }
-  if (animation.expectedDurationMs !== undefined) {
-    return animation.startedAtRuntimeMs + animation.expectedDurationMs;
-  }
-  return animation.startedAtRuntimeMs + 16;
 }
 
 function animationSpanTitle(
@@ -362,21 +404,8 @@ function animationSpanTitle(
     .join("\n");
 }
 
-function chooseTickStep(durationMs: number): number {
-  if (durationMs <= 450) return 50;
-  if (durationMs <= 800) return 100;
-  if (durationMs <= 1600) return 200;
-  if (durationMs <= 3500) return 500;
-  if (durationMs <= 7000) return 1000;
-  return 2000;
-}
-
 function formatTime(ms: number): string {
   return ms >= 1000
     ? `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`
     : `${Math.round(ms)}ms`;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
 import type { InspectorControl, SpringValue } from "@runtime-inspector/protocol";
 
@@ -10,6 +11,9 @@ interface AnimationInspectorProps {
   stale: boolean;
   onSetSpring?(value: SpringValue): void;
   onCommitSpring?(): void;
+  durationControl?: { min: number; max: number; step: number; value: number };
+  onSetDuration?(value: number): void;
+  onCommitDuration?(): void;
 }
 
 export function AnimationInspector({
@@ -20,7 +24,10 @@ export function AnimationInspector({
   springValue,
   stale,
   onSetSpring,
-  onCommitSpring
+  onCommitSpring,
+  durationControl,
+  onSetDuration,
+  onCommitDuration
 }: AnimationInspectorProps) {
   const startMs = animation.startedAtRuntimeMs - originMs;
   const durationMs =
@@ -40,6 +47,9 @@ export function AnimationInspector({
   const canTuneSpring =
     animation.animationKind === "spring" &&
     Boolean(springControl && springValue && onSetSpring && onCommitSpring);
+  const canTuneDuration =
+    animation.animationKind === "timing" &&
+    Boolean(durationControl && onSetDuration && onCommitDuration);
 
   return (
     <div className="animation-inspector">
@@ -77,9 +87,24 @@ export function AnimationInspector({
       {Object.keys(animation.resolvedConfig).length > 0 && !canTuneSpring ? (
         <div className="animation-inspector-section">
           <div className="animation-inspector-section-title">Parameters</div>
-          {Object.entries(animation.resolvedConfig).map(([key, value]) => (
-            <InspectorRow key={key} label={humanize(key)} value={String(value)} />
-          ))}
+          {Object.entries(animation.resolvedConfig)
+            .filter(([key]) => !(canTuneDuration && key === "duration"))
+            .map(([key, value]) => (
+              <InspectorRow key={key} label={humanize(key)} value={String(value)} />
+            ))}
+        </div>
+      ) : null}
+
+      {canTuneDuration && durationControl && onSetDuration && onCommitDuration ? (
+        <div className="animation-inspector-section">
+          <div className="animation-inspector-section-title">Timing</div>
+          <DurationField
+            control={durationControl}
+            disabled={stale}
+            onSet={onSetDuration}
+            onCommit={onCommitDuration}
+          />
+          <div className="animation-inspector-note">Applies on the next replay.</div>
         </div>
       ) : null}
 
@@ -205,6 +230,95 @@ function SpringFields({
       })}
     </div>
   );
+}
+
+function DurationField({
+  control,
+  disabled,
+  onSet,
+  onCommit
+}: {
+  control: { min: number; max: number; step: number; value: number };
+  disabled: boolean;
+  onSet(value: number): void;
+  onCommit(): void;
+}) {
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const dirtyRef = useRef(false);
+  const parsed = draft === undefined ? undefined : parseDraft(draft);
+  const invalid =
+    draft !== undefined &&
+    (parsed === undefined || parsed < control.min || parsed > control.max);
+  const rangeMax = Math.min(control.max, Math.max(2000, control.value * 2));
+
+  function commit() {
+    if (invalid || !dirtyRef.current) return;
+    dirtyRef.current = false;
+    setDraft(undefined);
+    onCommit();
+  }
+
+  return (
+    <div className="animation-spring-fields">
+      <label className="animation-spring-field">
+        <div>
+          <span>Duration</span>
+          <input
+            type="number"
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={draft ?? control.value}
+            disabled={disabled}
+            aria-invalid={invalid || undefined}
+            onChange={(event) => {
+              const text = event.target.value;
+              setDraft(text);
+              const value = parseDraft(text);
+              if (
+                value !== undefined &&
+                value >= control.min &&
+                value <= control.max
+              ) {
+                dirtyRef.current = true;
+                onSet(value);
+              }
+            }}
+            onBlur={commit}
+            onKeyUp={(event) => {
+              if (event.key === "Enter") commit();
+            }}
+          />
+        </div>
+        <input
+          type="range"
+          min={control.min}
+          max={rangeMax}
+          step={control.step}
+          value={control.value}
+          disabled={disabled}
+          onChange={(event) => {
+            setDraft(undefined);
+            dirtyRef.current = true;
+            onSet(Number(event.target.value));
+          }}
+          onPointerUp={commit}
+          onKeyUp={commit}
+        />
+      </label>
+      {invalid ? (
+        <div className="animation-inspector-note" role="alert">
+          Duration must be between {control.min} and {control.max} ms.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function parseDraft(text: string): number | undefined {
+  if (text.trim() === "") return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function InspectorRow({ label, value }: { label: string; value: string }) {

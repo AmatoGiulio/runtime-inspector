@@ -17,6 +17,7 @@ import type {
 } from "@runtime-inspector/protocol";
 import { AnimationInspector } from "./AnimationInspector";
 import { AnimationTimeline } from "./AnimationTimeline";
+import { timingDurationControl } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
 
@@ -407,6 +408,10 @@ function App() {
             selectedAnimationSpringControl.defaultValue
         )
       : undefined;
+
+  const selectedAnimationDuration = selectedAnimation
+    ? timingDurationControl(selectedAnimation, state.schemas, state.values)
+    : undefined;
 
   useEffect(() => {
     const pending = pendingAnimationSelectionRef.current;
@@ -1032,7 +1037,41 @@ function App() {
               playheadMs={playheadMs}
               springControl={selectedAnimationSpringControl}
               springValue={selectedAnimationSpringValue}
-              stale={selectedSchemaStale}
+              stale={
+                selectedSchemaStale ||
+                Boolean(
+                  selectedAnimationDuration &&
+                    state.staleSchemaIds[selectedAnimationDuration.schemaId]
+                )
+              }
+              durationControl={selectedAnimationDuration}
+              onSetDuration={
+                selectedAnimationDuration
+                  ? (value) =>
+                      session.setValue(
+                        selectedAnimationDuration.schemaId,
+                        selectedAnimationDuration.controlId,
+                        value
+                      )
+                  : undefined
+              }
+              onCommitDuration={
+                selectedAnimationDuration
+                  ? () => {
+                      if (selectedAnimation) {
+                        pendingAnimationSelectionRef.current = {
+                          target: selectedAnimation.target,
+                          animationKind: selectedAnimation.animationKind
+                        };
+                      }
+                      session.commitValue(
+                        selectedAnimationDuration.schemaId,
+                        selectedAnimationDuration.controlId
+                      );
+                      replay(true);
+                    }
+                  : undefined
+              }
               onSetSpring={
                 schemaId && selectedAnimationSpringControl
                   ? (value) =>
@@ -1132,6 +1171,35 @@ function App() {
               interactionScoped={replayBaseline !== undefined}
               selectedAnimationId={selectedAnimationId}
               playheadMs={playheadMs}
+              getDurationRange={(animation) => {
+                const c = timingDurationControl(
+                  animation,
+                  state.schemas,
+                  state.values
+                );
+                return c && !state.staleSchemaIds[c.schemaId]
+                  ? { min: c.min, max: c.max, step: c.step }
+                  : undefined;
+              }}
+              onResizeDuration={(animationId, durationMs) => {
+                const animation = detectedAnimations.find(
+                  (candidate) => candidate.instanceId === animationId
+                );
+                if (!animation) return;
+                const c = timingDurationControl(
+                  animation,
+                  state.schemas,
+                  state.values
+                );
+                if (!c) return;
+                pendingAnimationSelectionRef.current = {
+                  target: animation.target,
+                  animationKind: animation.animationKind
+                };
+                session.setValue(c.schemaId, c.controlId, durationMs);
+                session.commitValue(c.schemaId, c.controlId);
+                replay(true);
+              }}
               onPlayheadChange={setPlayheadMs}
               onSelectAnimation={(animationId) => {
                 setSelectedAnimationId(animationId);
