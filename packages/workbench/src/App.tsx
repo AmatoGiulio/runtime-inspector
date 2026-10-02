@@ -109,6 +109,10 @@ function App() {
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const replayAnimationBaselineRef = useRef<Record<string, number>>({});
+  const pendingAnimationSelectionRef = useRef<{
+    target: string;
+    animationKind: RuntimeAnimationTrace["animationKind"];
+  }>();
 
   useEffect(() => {
     if (schemaId || !schemaIds[0]) return;
@@ -380,11 +384,13 @@ function App() {
         (animation) => animation.instanceId === selectedAnimationId
       )
     : undefined;
+  const selectedAnimationConfigControlId =
+    selectedAnimation?.configControlId;
   const selectedAnimationConfigControl =
-    selectedAnimation?.configControlId && selectedControlSchema
+    selectedAnimationConfigControlId && selectedControlSchema
       ? selectedControlSchema.groups
           .flatMap((group) => group.controls)
-          .find((control) => control.id === selectedAnimation.configControlId)
+          .find((control) => control.id === selectedAnimationConfigControlId)
       : undefined;
   const selectedAnimationSpringControl =
     selectedAnimationConfigControl?.kind === "spring"
@@ -398,6 +404,27 @@ function App() {
             selectedAnimationSpringControl.defaultValue
         )
       : undefined;
+
+  useEffect(() => {
+    const pending = pendingAnimationSelectionRef.current;
+    if (!pending || detectedAnimations.length === 0) return;
+
+    const next = [...detectedAnimations]
+      .reverse()
+      .find(
+        (animation) =>
+          animation.target === pending.target &&
+          animation.animationKind === pending.animationKind
+      );
+    if (!next) return;
+
+    pendingAnimationSelectionRef.current = undefined;
+    setSelectedAnimationId(next.instanceId);
+    setInspectorMode("animation");
+    setPlayheadMs(
+      Math.max(0, next.startedAtRuntimeMs - detectedAnimationOriginMs)
+    );
+  }, [detectedAnimations, detectedAnimationOriginMs]);
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -994,7 +1021,8 @@ function App() {
 
         <aside className="inspector panel">
           <div className="panel-title">Inspector</div>
-          {inspectorMode === "animation" && selectedAnimation ? (
+          {inspectorMode === "animation" ? (
+            selectedAnimation ? (
             <AnimationInspector
               animation={selectedAnimation}
               originMs={detectedAnimationOriginMs}
@@ -1004,27 +1032,38 @@ function App() {
               stale={selectedSchemaStale}
               onSetSpring={
                 schemaId && selectedAnimationSpringControl
-                  ? (value) => {
-                      replayAnimationBaselineRef.current[schemaId] =
-                        schemaAnimations.length;
+                  ? (value) =>
                       session.setValue(
                         schemaId,
                         selectedAnimationSpringControl.id,
                         value
-                      );
-                    }
+                      )
                   : undefined
               }
               onCommitSpring={
                 schemaId && selectedAnimationSpringControl
-                  ? () =>
+                  ? () => {
+                      if (selectedAnimation) {
+                        pendingAnimationSelectionRef.current = {
+                          target: selectedAnimation.target,
+                          animationKind: selectedAnimation.animationKind
+                        };
+                      }
+                      replayAnimationBaselineRef.current[schemaId] =
+                        schemaAnimations.length;
+                      setSelectedAnimationId(undefined);
+                      setPlayheadMs(0);
                       session.commitValue(
                         schemaId,
                         selectedAnimationSpringControl.id
-                      )
+                      );
+                    }
                   : undefined
               }
             />
+            ) : (
+              <Empty text="Waiting for the next matching animation…" />
+            )
           ) : inspectorMode === "control" && selectedControl && schemaId ? (
             <ControlInspector
               control={selectedControl}
