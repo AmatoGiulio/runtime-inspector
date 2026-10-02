@@ -11,7 +11,12 @@ import {
   createPanelSession,
   type RuntimeAnimationTrace
 } from "@runtime-inspector/panel-core";
-import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
+import type {
+  RuntimeProbeDescriptor,
+  SpringValue
+} from "@runtime-inspector/protocol";
+import { AnimationInspector } from "./AnimationInspector";
+import { AnimationTimeline } from "./AnimationTimeline";
 import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
 
@@ -71,7 +76,10 @@ function App() {
   const [schemaId, setSchemaId] = useState<string>();
   const [probeId, setProbeId] = useState<string>();
   const [selectedControlId, setSelectedControlId] = useState<string>();
-  const [inspectorMode, setInspectorMode] = useState<"probe" | "control">("probe");
+  const [selectedAnimationId, setSelectedAnimationId] = useState<string>();
+  const [playheadMs, setPlayheadMs] = useState(0);
+  const [inspectorMode, setInspectorMode] =
+    useState<"probe" | "control" | "animation">("probe");
   const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
   const [runtimeCaptureError, setRuntimeCaptureError] = useState<string>();
   const [simulators, setSimulators] = useState<RuntimeDesktopSimulator[]>([]);
@@ -361,6 +369,35 @@ function App() {
     replayBaseline !== undefined
       ? schemaAnimations.slice(replayBaseline)
       : latestAnimationBurst(schemaAnimations);
+  const detectedAnimationOriginMs =
+    detectedAnimations.length > 0
+      ? Math.min(
+          ...detectedAnimations.map((animation) => animation.startedAtRuntimeMs)
+        )
+      : 0;
+  const selectedAnimation = selectedAnimationId
+    ? detectedAnimations.find(
+        (animation) => animation.instanceId === selectedAnimationId
+      )
+    : undefined;
+  const selectedAnimationConfigControl =
+    selectedAnimation?.configControlId && selectedControlSchema
+      ? selectedControlSchema.groups
+          .flatMap((group) => group.controls)
+          .find((control) => control.id === selectedAnimation.configControlId)
+      : undefined;
+  const selectedAnimationSpringControl =
+    selectedAnimationConfigControl?.kind === "spring"
+      ? selectedAnimationConfigControl
+      : undefined;
+  const selectedAnimationSpringValue =
+    schemaId && selectedAnimationSpringControl
+      ? asSpringValue(
+          state.values[schemaId]?.[selectedAnimationSpringControl.id] ??
+            selectedAnimationSpringControl.value ??
+            selectedAnimationSpringControl.defaultValue
+        )
+      : undefined;
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -426,6 +463,11 @@ function App() {
       );
     if (replayControl) {
       replayAnimationBaselineRef.current[schemaId] = schemaAnimations.length;
+      setSelectedAnimationId(undefined);
+      setPlayheadMs(0);
+      if (inspectorMode === "animation") {
+        setInspectorMode(probes[0] ? "probe" : "control");
+      }
       session.fireTrigger(schemaId, replayControl.id);
     }
   }
@@ -952,7 +994,38 @@ function App() {
 
         <aside className="inspector panel">
           <div className="panel-title">Inspector</div>
-          {inspectorMode === "control" && selectedControl && schemaId ? (
+          {inspectorMode === "animation" && selectedAnimation ? (
+            <AnimationInspector
+              animation={selectedAnimation}
+              originMs={detectedAnimationOriginMs}
+              playheadMs={playheadMs}
+              springControl={selectedAnimationSpringControl}
+              springValue={selectedAnimationSpringValue}
+              stale={selectedSchemaStale}
+              onSetSpring={
+                schemaId && selectedAnimationSpringControl
+                  ? (value) => {
+                      replayAnimationBaselineRef.current[schemaId] =
+                        schemaAnimations.length;
+                      session.setValue(
+                        schemaId,
+                        selectedAnimationSpringControl.id,
+                        value
+                      );
+                    }
+                  : undefined
+              }
+              onCommitSpring={
+                schemaId && selectedAnimationSpringControl
+                  ? () =>
+                      session.commitValue(
+                        schemaId,
+                        selectedAnimationSpringControl.id
+                      )
+                  : undefined
+              }
+            />
+          ) : inspectorMode === "control" && selectedControl && schemaId ? (
             <ControlInspector
               control={selectedControl}
               value={selectedControlValue}
@@ -965,7 +1038,7 @@ function App() {
           ) : selectedProbe ? (
             <ProbeInspector probe={selectedProbe} samples={samples} />
           ) : (
-            <Empty text="Select a runtime control or probe." />
+            <Empty text="Select a runtime control, probe, or timeline segment." />
           )}
         </aside>
       </section>
@@ -1003,175 +1076,45 @@ function App() {
               ? benchmarkSummary(viewportBenchmarkResult)
               : recording
                 ? `${recording.samples.length} samples · ${recording.sampleRateHz} Hz${recording.incomplete ? " · gap" : ""}`
-                : "No recording"}
+                : detectedAnimations.length > 0
+                  ? `Playhead ${formatTime(playheadMs)}`
+                  : "No interaction"}
           </div>
         </div>
 
         <div className="timeline-body">
           {detectedAnimations.length > 0 ? (
-            <DetectedAnimationTracks
+            <AnimationTimeline
               animations={detectedAnimations}
               interactionScoped={replayBaseline !== undefined}
+              selectedAnimationId={selectedAnimationId}
+              playheadMs={playheadMs}
+              onPlayheadChange={setPlayheadMs}
+              onSelectAnimation={(animationId) => {
+                const animation = detectedAnimations.find(
+                  (candidate) => candidate.instanceId === animationId
+                );
+                setSelectedAnimationId(animationId);
+                setInspectorMode("animation");
+                if (animation) {
+                  setPlayheadMs(
+                    Math.max(
+                      0,
+                      animation.startedAtRuntimeMs - detectedAnimationOriginMs
+                    )
+                  );
+                }
+              }}
             />
-          ) : null}
-          <div className="track">
-            <div className="track-label">
-              <strong>{selectedProbe?.label ?? probeId ?? "Probe"}</strong>
-              <span>{selectedProbe?.unit ?? ""}</span>
+          ) : (
+            <div className="timeline-empty">
+              Replay an interaction to reveal its motion in time.
             </div>
-            <TraceGraph samples={samples} />
-          </div>
+          )}
         </div>
       </section>
     </main>
   );
-}
-
-interface AnimationPropertyTrack {
-  target: string;
-  label: string;
-  animations: RuntimeAnimationTrace[];
-}
-
-function DetectedAnimationTracks({
-  animations,
-  interactionScoped
-}: {
-  animations: RuntimeAnimationTrace[];
-  interactionScoped: boolean;
-}) {
-  const tracks = groupAnimationsByTarget(animations);
-  const starts = animations.map((animation) => animation.startedAtRuntimeMs);
-  const ends = animations.map((animation) => animationDisplayEnd(animation));
-  const minTime = Math.min(...starts);
-  const maxTime = Math.max(...ends, minTime + 300);
-  const span = Math.max(1, maxTime - minTime);
-
-  return (
-    <div className="detected-animations">
-      <div className="detected-animations-title">
-        <span>{interactionScoped ? "Current replay" : "Latest interaction"} · auto-detected</span>
-        <strong>
-          {tracks.length} {tracks.length === 1 ? "property" : "properties"} · {animations.length} spans
-        </strong>
-      </div>
-      {tracks.map((track) => (
-        <div className="detected-animation-row" key={track.target}>
-          <div className="detected-animation-label">
-            <strong>{track.label}</strong>
-            <span>{track.animations.length} spans</span>
-          </div>
-          <div className="detected-animation-lane">
-            {track.animations.map((animation) => {
-              const startPercent =
-                ((animation.startedAtRuntimeMs - minTime) / span) * 100;
-              const endTime = animationDisplayEnd(animation);
-              const widthPercent = Math.max(
-                1.5,
-                ((endTime - animation.startedAtRuntimeMs) / span) * 100
-              );
-              const actualDuration =
-                animation.endedAtRuntimeMs !== undefined
-                  ? Math.max(
-                      0,
-                      animation.endedAtRuntimeMs - animation.startedAtRuntimeMs
-                    )
-                  : undefined;
-              const displayDuration =
-                actualDuration ?? animation.expectedDurationMs;
-              const estimated =
-                actualDuration === undefined &&
-                animation.durationBasis === "spring-estimate";
-
-              return (
-                <div
-                  className={`detected-animation-span ${animation.animationKind}${estimated ? " estimated" : ""}`}
-                  key={animation.instanceId}
-                  style={{
-                    left: `${startPercent}%`,
-                    width: `${widthPercent}%`
-                  }}
-                  title={animationSpanTitle(
-                    animation,
-                    displayDuration,
-                    estimated
-                  )}
-                >
-                  <span className="detected-animation-span-label">
-                    {animation.animationKind}
-                    {displayDuration !== undefined
-                      ? ` · ${estimated ? "~" : ""}${formatTime(displayDuration)}`
-                      : ""}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function groupAnimationsByTarget(
-  animations: RuntimeAnimationTrace[]
-): AnimationPropertyTrack[] {
-  const tracks = new Map<string, AnimationPropertyTrack>();
-
-  for (const animation of animations) {
-    const existing = tracks.get(animation.target);
-    if (existing) {
-      existing.animations.push(animation);
-      continue;
-    }
-
-    tracks.set(animation.target, {
-      target: animation.target,
-      label: animationTargetLabel(animation.target),
-      animations: [animation]
-    });
-  }
-
-  return Array.from(tracks.values()).map((track) => ({
-    ...track,
-    animations: [...track.animations].sort(
-      (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
-    )
-  }));
-}
-
-function animationTargetLabel(target: string): string {
-  const leaf = target.split(".").at(-1) ?? target;
-  return leaf
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[-_]+/g, " ")
-    .replace(/^./, (character) => character.toUpperCase());
-}
-
-function animationSpanTitle(
-  animation: RuntimeAnimationTrace,
-  duration: number | undefined,
-  estimated: boolean
-): string {
-  return [
-    animation.animationKind +
-      (duration !== undefined
-        ? ` · ${estimated ? "~" : ""}${formatTime(duration)}`
-        : ""),
-    animation.source
-      ? `${animation.source.file}:${animation.source.line}`
-      : animation.callsiteId,
-    animation.configControlId
-      ? `config: ${animation.configControlId}`
-      : undefined,
-    Object.keys(animation.resolvedConfig).length
-      ? Object.entries(animation.resolvedConfig)
-          .map(([key, value]) => `${key}=${String(value)}`)
-          .join(" · ")
-      : undefined
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 const ANIMATION_BURST_IDLE_GAP_MS = 450;
@@ -1247,42 +1190,22 @@ function Empty({ text }: { text: string }) {
   return <div className="empty">{text}</div>;
 }
 
-function TraceGraph({ samples }: { samples: Array<{ t: number; value: number }> }) {
-  if (samples.length < 2) {
-    return <div className="graph-empty">Record and replay the transition to draw the trace.</div>;
+function asSpringValue(value: unknown): SpringValue | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<SpringValue>;
+  if (
+    typeof candidate.damping !== "number" ||
+    typeof candidate.stiffness !== "number" ||
+    (candidate.mass !== undefined && typeof candidate.mass !== "number")
+  ) {
+    return undefined;
   }
 
-  const width = 1000;
-  const height = 180;
-  const minT = samples[0].t;
-  const maxT = samples.at(-1)!.t;
-  const values = samples.map((sample) => sample.value);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
-  const timeSpan = Math.max(1, maxT - minT);
-  const valueSpan = Math.max(0.0001, maxV - minV);
-
-  const points = samples
-    .map((sample) => {
-      const x = ((sample.t - minT) / timeSpan) * width;
-      const y = height - ((sample.value - minV) / valueSpan) * (height - 24) - 12;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-
-  return (
-    <div className="graph-wrap">
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="Runtime trace">
-        <line x1="0" y1={height / 2} x2={width} y2={height / 2} className="grid-line" />
-        <polyline points={points} className="trace-line" />
-      </svg>
-      <div className="graph-range">
-        <span>{formatValue(minV)}</span>
-        <span>{formatTime(maxT - minT)}</span>
-        <span>{formatValue(maxV)}</span>
-      </div>
-    </div>
-  );
+  return {
+    damping: candidate.damping,
+    stiffness: candidate.stiffness,
+    ...(candidate.mass !== undefined ? { mass: candidate.mass } : {})
+  };
 }
 
 function controlGlyph(kind: string) {
