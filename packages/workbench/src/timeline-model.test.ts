@@ -127,17 +127,107 @@ describe("timingDurationControl", () => {
 });
 
 describe("buildTimelineModel", () => {
-  it("builds one track per target with animations sorted by start", () => {
+  it("groups rows by element in order of first appearance by start time", () => {
     const model = buildTimelineModel([
       trace({ instanceId: "b", target: "card.moveX", startedAtRuntimeMs: 1200 }),
-      trace({ instanceId: "c", target: "card.opacity", startedAtRuntimeMs: 1100 }),
-      trace({ instanceId: "a", target: "card.moveX", startedAtRuntimeMs: 1000 })
+      trace({ instanceId: "c", target: "badge.opacity", startedAtRuntimeMs: 1100 }),
+      trace({ instanceId: "a", target: "card.opacity", startedAtRuntimeMs: 1300 }),
+      trace({ instanceId: "d", target: "screen.card.scale", startedAtRuntimeMs: 1400 }),
+      trace({ instanceId: "e", target: "progress", startedAtRuntimeMs: 1500 })
     ]);
-    expect(model.tracks.map((track) => track.target)).toEqual([
-      "card.moveX",
-      "card.opacity"
+    expect(model.groups.map((group) => group.id)).toEqual([
+      "badge",
+      "card",
+      "screen.card",
+      "progress"
     ]);
-    expect(model.tracks[0]?.animations.map((a) => a.instanceId)).toEqual(["a", "b"]);
-    expect(model.originMs).toBe(1000);
+    expect(model.groups.map((group) => group.label)).toEqual([
+      "badge",
+      "card",
+      "screen.card",
+      "progress"
+    ]);
+    expect(model.groups[1]?.rows.map((row) => row.animation.instanceId)).toEqual([
+      "b",
+      "a"
+    ]);
+    expect(model.groups[1]?.rows.map((row) => row.label)).toEqual(["Move X", "Opacity"]);
+    expect(model.originMs).toBe(1100);
+    expect(model.groups[1]?.rows.map((row) => row.startMs)).toEqual([100, 200]);
+  });
+
+  it("orders a timing before the later spring of the same property", () => {
+    const model = buildTimelineModel([
+      trace({
+        instanceId: "spring",
+        animationKind: "spring",
+        startedAtRuntimeMs: 1260,
+        expectedDurationMs: 986,
+        durationBasis: "spring-estimate"
+      }),
+      trace({ instanceId: "timing", startedAtRuntimeMs: 1000 })
+    ]);
+    expect(model.groups).toHaveLength(1);
+    expect(model.groups[0]?.rows.map((row) => row.animation.instanceId)).toEqual([
+      "timing",
+      "spring"
+    ]);
+    expect(model.groups[0]?.rows.map((row) => row.kindLabel)).toEqual([
+      "Timing",
+      "Spring"
+    ]);
+  });
+
+  it("keeps original order for equal starts", () => {
+    const model = buildTimelineModel([
+      trace({ instanceId: "late", target: "card.scale", startedAtRuntimeMs: 1200 }),
+      trace({ instanceId: "first", target: "card.moveX", startedAtRuntimeMs: 1000 }),
+      trace({ instanceId: "second", target: "card.opacity", startedAtRuntimeMs: 1000 }),
+      trace({ instanceId: "third", target: "card.moveY", startedAtRuntimeMs: 1000 })
+    ]);
+    expect(model.groups[0]?.rows.map((row) => row.animation.instanceId)).toEqual([
+      "first",
+      "second",
+      "third",
+      "late"
+    ]);
+  });
+
+  it("marks only unfinished spring estimates as estimated", () => {
+    const spring = {
+      animationKind: "spring" as const,
+      expectedDurationMs: 986,
+      durationBasis: "spring-estimate" as const
+    };
+    const model = buildTimelineModel([
+      trace({ instanceId: "timing" }),
+      trace({ instanceId: "running", target: "card.scale", ...spring }),
+      trace({
+        instanceId: "ended",
+        target: "card.opacity",
+        ...spring,
+        endedAtRuntimeMs: 1900
+      }),
+      trace({
+        instanceId: "unknown",
+        target: "card.rotate",
+        expectedDurationMs: undefined,
+        durationBasis: undefined
+      })
+    ]);
+    const rows = Object.fromEntries(
+      model.groups[0]!.rows.map((row) => [row.animation.instanceId, row])
+    );
+    expect(rows.timing).toMatchObject({ estimated: false, durationMs: 260 });
+    expect(rows.running).toMatchObject({ estimated: true, durationMs: 986 });
+    expect(rows.ended).toMatchObject({ estimated: false, durationMs: 900 });
+    expect(rows.unknown).toMatchObject({ estimated: false, durationMs: undefined });
+  });
+
+  it("places minor ticks at the midpoints between ticks", () => {
+    const model = buildTimelineModel([trace()]);
+    expect(model.durationMs).toBe(300);
+    expect(model.ticks).toEqual([0, 50, 100, 150, 200, 250, 300]);
+    expect(model.minorTicks).toEqual([25, 75, 125, 175, 225, 275]);
   });
 });

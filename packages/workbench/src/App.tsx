@@ -17,7 +17,7 @@ import type {
 } from "@runtime-inspector/protocol";
 import { AnimationInspector } from "./AnimationInspector";
 import { AnimationTimeline } from "./AnimationTimeline";
-import { timingDurationControl } from "./timeline-model";
+import { buildTimelineModel, timingDurationControl } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
 
@@ -79,6 +79,7 @@ function App() {
   const [selectedControlId, setSelectedControlId] = useState<string>();
   const [selectedAnimationId, setSelectedAnimationId] = useState<string>();
   const [playheadMs, setPlayheadMs] = useState(0);
+  const [timelinePlaying, setTimelinePlaying] = useState(false);
   const [inspectorMode, setInspectorMode] =
     useState<"probe" | "control" | "animation">("probe");
   const [runtimeCapture, setRuntimeCapture] = useState<RuntimeCaptureInfo>();
@@ -383,6 +384,14 @@ function App() {
           ...detectedAnimations.map((animation) => animation.startedAtRuntimeMs)
         )
       : 0;
+  // detectedAnimations is rebuilt every render; these are the inputs it is derived from.
+  const timelineDurationMs = useMemo(
+    () =>
+      detectedAnimations.length > 0
+        ? buildTimelineModel(detectedAnimations).durationMs
+        : undefined,
+    [state.runtimeAnimations, schemaId, replayBaseline]
+  );
   const selectedAnimation = selectedAnimationId
     ? detectedAnimations.find(
         (animation) => animation.instanceId === selectedAnimationId
@@ -429,9 +438,6 @@ function App() {
     pendingAnimationSelectionRef.current = undefined;
     setSelectedAnimationId(next.instanceId);
     setInspectorMode("animation");
-    setPlayheadMs(
-      Math.max(0, next.startedAtRuntimeMs - detectedAnimationOriginMs)
-    );
   }, [detectedAnimations, detectedAnimationOriginMs]);
 
   useEffect(() => {
@@ -504,6 +510,7 @@ function App() {
         setInspectorMode(probes[0] ? "probe" : "control");
       }
       session.fireTrigger(schemaId, replayControl.id);
+      setTimelinePlaying(true);
     }
   }
 
@@ -1123,54 +1130,74 @@ function App() {
 
       <section className="timeline">
         <div className="timeline-toolbar">
-          <button className={isRecording ? "record active" : "record"} onClick={toggleRecording}>
-            <span className="record-dot" />
-            {isRecording ? "Stop" : "Record"}
-          </button>
           <button
-            className="tool-button"
+            className="play-button"
+            type="button"
             onClick={() => replay()}
             disabled={!schemaId}
           >
-            ▶ Replay
+            ▶ Play
           </button>
-          <button
-            className="tool-button"
-            onClick={runViewportBenchmark}
-            disabled={
-              !schemaId ||
-              state.status !== "connected" ||
-              runtimeCapture?.source !== "framebuffer" ||
-              viewportBenchmarkBusy
-            }
-          >
-            {viewportBenchmarkBusy ? "Benchmarking…" : "Benchmark viewport"}
-          </button>
-          <button
-            className="tool-button"
-            onClick={() => session.clearRecording()}
-            disabled={isRecording || !recording}
-          >
-            Clear
-          </button>
+          <div className="timeline-time">
+            {timelineDurationMs !== undefined ? (
+              <>
+                <span>{formatTime(playheadMs)}</span>
+                <span className="timeline-time-total">
+                  {" / "}
+                  {formatTime(timelineDurationMs)}
+                </span>
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+          <div className="timeline-spacer" />
           <div className="timeline-meta">
             {viewportBenchmarkResult
               ? benchmarkSummary(viewportBenchmarkResult)
               : recording
                 ? `${recording.samples.length} samples · ${recording.sampleRateHz} Hz${recording.incomplete ? " · gap" : ""}`
                 : detectedAnimations.length > 0
-                  ? `Playhead ${formatTime(playheadMs)}`
+                  ? `${detectedAnimations.length} animations`
                   : "No interaction"}
           </div>
+          <details className="timeline-dev">
+            <summary>Developer</summary>
+            <div className="timeline-dev-menu">
+              <button className={isRecording ? "record active" : "record"} onClick={toggleRecording}>
+                <span className="record-dot" />
+                {isRecording ? "Stop" : "Record"}
+              </button>
+              <button
+                className="tool-button"
+                onClick={runViewportBenchmark}
+                disabled={
+                  !schemaId ||
+                  state.status !== "connected" ||
+                  runtimeCapture?.source !== "framebuffer" ||
+                  viewportBenchmarkBusy
+                }
+              >
+                {viewportBenchmarkBusy ? "Benchmarking…" : "Benchmark viewport"}
+              </button>
+              <button
+                className="tool-button"
+                onClick={() => session.clearRecording()}
+                disabled={isRecording || !recording}
+              >
+                Clear
+              </button>
+            </div>
+          </details>
         </div>
 
         <div className="timeline-body">
           {detectedAnimations.length > 0 ? (
             <AnimationTimeline
               animations={detectedAnimations}
-              interactionScoped={replayBaseline !== undefined}
               selectedAnimationId={selectedAnimationId}
               playheadMs={playheadMs}
+              playing={timelinePlaying}
               getDurationRange={(animation) => {
                 const c = timingDurationControl(
                   animation,
@@ -1200,7 +1227,10 @@ function App() {
                 session.commitValue(c.schemaId, c.controlId);
                 replay(true);
               }}
-              onPlayheadChange={setPlayheadMs}
+              onPlayheadChange={(ms) => {
+                setPlayheadMs(ms);
+                setTimelinePlaying(false);
+              }}
               onSelectAnimation={(animationId) => {
                 setSelectedAnimationId(animationId);
                 setInspectorMode("animation");
@@ -1208,7 +1238,7 @@ function App() {
             />
           ) : (
             <div className="timeline-empty">
-              Replay an interaction to reveal its motion in time.
+              Press Play to capture the interaction.
             </div>
           )}
         </div>

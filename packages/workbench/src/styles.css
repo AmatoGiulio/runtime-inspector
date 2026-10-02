@@ -27,7 +27,7 @@ button {
   height: 100vh;
   min-height: 620px;
   display: grid;
-  grid-template-rows: 46px minmax(0, 1fr) 280px;
+  grid-template-rows: 46px minmax(0, 1fr) minmax(300px, 44vh);
   overflow: hidden;
   background: #111113;
 }
@@ -79,7 +79,9 @@ button {
 .workspace {
   display: grid;
   grid-template-columns: 220px minmax(520px, 1fr) 230px;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  overflow: hidden;
 }
 
 .panel {
@@ -154,8 +156,10 @@ button {
 .runtime-stage {
   position: relative;
   display: grid;
-  grid-template-rows: 34px 1fr;
+  grid-template-rows: 34px minmax(0, 1fr);
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background:
     linear-gradient(#1a1a1d 1px, transparent 1px),
     linear-gradient(90deg, #1a1a1d 1px, transparent 1px),
@@ -266,14 +270,18 @@ button {
 .device-placeholder {
   width: 100%;
   height: 100%;
+  min-height: 0;
   display: grid;
   place-items: center;
   padding: 28px;
+  overflow: hidden;
 }
 
 .device-screen {
   width: min(290px, 42%);
   min-width: 230px;
+  max-height: 100%;
+  overflow: hidden;
   aspect-ratio: 9 / 19.5;
   border-radius: 38px;
   border: 7px solid #2b2b2d;
@@ -334,7 +342,7 @@ button {
 
 .runtime-video-shell.device-crop {
   height: 100%;
-  max-height: calc(100vh - 390px);
+  max-height: calc(100vh - max(300px, 44vh) - 110px);
   width: auto;
   border-radius: 32px;
   background: #000;
@@ -343,7 +351,7 @@ button {
 .runtime-video {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 390px);
+  max-height: calc(100vh - max(300px, 44vh) - 110px);
   object-fit: contain;
   background: #050506;
 }
@@ -351,7 +359,7 @@ button {
 .runtime-framebuffer-shell {
   position: relative;
   height: 100%;
-  max-height: calc(100vh - 390px);
+  max-height: calc(100vh - max(300px, 44vh) - 110px);
   max-width: 100%;
   display: grid;
   place-items: center;
@@ -504,15 +512,63 @@ button {
   border-top: 1px solid #2a2a2d;
   background: #161618;
   display: grid;
-  grid-template-rows: 42px 1fr;
+  grid-template-rows: 42px minmax(0, 1fr);
 }
 
 .timeline-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
   padding: 0 10px;
   border-bottom: 1px solid #29292c;
+}
+
+.play-button {
+  flex: 0 0 auto;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 14px;
+  color: #fff;
+  background: #7c5cff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.play-button:hover:not(:disabled) {
+  background: #8b6eff;
+}
+
+.play-button:focus-visible {
+  outline: 2px solid #b9a8ff;
+  outline-offset: 2px;
+}
+
+.play-button:disabled {
+  color: #6b6b71;
+  background: #2a2a2e;
+  cursor: default;
+}
+
+.timeline-time {
+  flex: 0 0 auto;
+  color: #e4e4e7;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.timeline-time-total {
+  color: #77777d;
+}
+
+.timeline-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .record,
@@ -552,9 +608,69 @@ button {
 }
 
 .timeline-meta {
-  margin-left: auto;
-  color: #68686d;
-  font-size: 10px;
+  min-width: 0;
+  overflow: hidden;
+  color: #77777d;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-dev {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.timeline-dev > summary {
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0 8px;
+  color: #77777d;
+  font-size: 11px;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.timeline-dev > summary::-webkit-details-marker {
+  display: none;
+}
+
+.timeline-dev > summary:hover,
+.timeline-dev[open] > summary {
+  border-color: #333338;
+  color: #bdbdc2;
+  background: #202023;
+}
+
+.timeline-dev > summary:focus-visible {
+  outline: 2px solid #7c5cff;
+  outline-offset: 1px;
+}
+
+.timeline-dev-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #29292c;
+  border-radius: 8px;
+  padding: 8px;
+  background: #18181a;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.timeline-dev-menu > button {
+  width: 100%;
+  text-align: left;
 }
 
 .track {
@@ -959,7 +1075,8 @@ button {
 
 .timeline-body {
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .detected-animations {
@@ -1073,69 +1190,63 @@ button {
   height: 100%;
   display: grid;
   place-items: center;
-  color: #55555b;
-  font-size: 11px;
+  color: #68686d;
+  font-size: 12px;
 }
 
 .motion-timeline {
-  min-width: 760px;
-  border-bottom: 1px solid #29292c;
+  --motion-label-width: 240px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: #151517;
 }
 
 .motion-timeline-grid {
   position: relative;
+  flex: 1 0 auto;
+  isolation: isolate;
 }
 
-.motion-playhead-overlay {
+/* Label/lane separator, drawn once so it also spans the area below the last row. */
+.motion-timeline-grid::before {
+  content: "";
   position: absolute;
-  z-index: 8;
+  z-index: 1;
   top: 0;
-  right: 0;
   bottom: 0;
-  left: 150px;
-  overflow: visible;
+  left: calc(var(--motion-label-width) - 1px);
+  width: 1px;
+  background: #29292c;
   pointer-events: none;
 }
 
-.motion-timeline-head {
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  border-bottom: 1px solid #202023;
-  color: #717177;
-  font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.motion-timeline-head strong {
-  color: #8f8f95;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
 .motion-ruler-row,
-.motion-property-row {
+.motion-group-row,
+.motion-row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
+  grid-template-columns: var(--motion-label-width) minmax(0, 1fr);
 }
+
+/* Ruler */
 
 .motion-ruler-row {
-  height: 30px;
+  position: sticky;
+  z-index: 10;
+  top: 0;
+  height: 32px;
   border-bottom: 1px solid #29292c;
+  background: #151517;
 }
 
 .motion-ruler-label {
+  min-width: 0;
   display: flex;
   align-items: center;
   padding: 0 12px;
   border-right: 1px solid #29292c;
-  color: #b9b9be;
-  font-size: 9px;
+  color: #e4e4e7;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1151,47 +1262,172 @@ button {
   position: absolute;
   top: 0;
   bottom: 0;
+  width: 0;
+  pointer-events: none;
+}
+
+.motion-ruler-tick::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
   width: 1px;
-  background: #2b2b2f;
+  height: 6px;
+  background: #3a3a3f;
 }
 
 .motion-ruler-tick > span {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  color: #626268;
-  font-size: 8px;
+  top: 50%;
+  left: 5px;
+  color: #77777d;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+/* Keep the final label inside the ruler instead of overflowing its right edge. */
+.motion-ruler-tick.last > span {
+  right: 5px;
+  left: auto;
+}
+
+.motion-ruler-dot {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: #3f3f45;
   pointer-events: none;
 }
 
-.motion-property-row {
-  min-height: 38px;
+/* Group header */
+
+.motion-group-row {
+  height: 30px;
   border-bottom: 1px solid #202023;
+  cursor: pointer;
 }
 
-.motion-property-label {
+.motion-group-label {
+  min-width: 0;
   display: flex;
   align-items: center;
-  min-width: 0;
-  padding: 0 12px;
-  border-right: 1px solid #29292c;
+  gap: 4px;
+  padding: 0 12px 0 6px;
 }
 
-.motion-property-label strong {
+.motion-group-toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: #8e8e95;
+  background: transparent;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.motion-group-row:hover .motion-group-toggle {
+  color: #e4e4e7;
+}
+
+.motion-group-name {
+  min-width: 0;
   overflow: hidden;
-  color: #d0d0d4;
-  font-size: 10px;
-  font-weight: 560;
+  color: #e4e4e7;
+  font-size: 12px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.motion-property-lane {
+.motion-group-lane,
+.motion-row-lane {
   position: relative;
   min-width: 0;
   overflow: hidden;
+}
+
+/* Animation row */
+
+.motion-row {
+  height: 34px;
+  border-bottom: 1px solid #1d1d20;
+}
+
+.motion-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.motion-row.selected {
+  background: rgba(124, 92, 255, 0.14);
+}
+
+.motion-row-label {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  padding: 0 12px 0 30px;
+  color: #d0d0d4;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.motion-row.selected .motion-row-label {
+  color: #fff;
+}
+
+.motion-row-label:focus-visible,
+.motion-group-toggle:focus-visible,
+.motion-bar:focus-visible {
+  outline: 2px solid #7c5cff;
+  outline-offset: -2px;
+}
+
+.motion-row-glyph {
+  flex: 0 0 auto;
+  color: #8e8e95;
+}
+
+.motion-row.selected .motion-row-glyph {
+  color: #a995ff;
+}
+
+.motion-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.motion-row-kind,
+.motion-row-duration {
+  flex: 0 0 auto;
+  color: #77777d;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.motion-row-duration {
+  margin-left: auto;
+  padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.motion-row-lane {
   cursor: crosshair;
   touch-action: none;
   user-select: none;
@@ -1205,59 +1441,45 @@ button {
   pointer-events: none;
 }
 
-.motion-span {
+.motion-bar {
   position: absolute;
   z-index: 2;
-  top: 8px;
-  bottom: 8px;
-  min-width: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(145, 128, 255, 0.78);
-  border-radius: 4px;
-  padding: 0 7px;
-  color: rgba(239, 236, 255, 0.92);
-  background: rgba(108, 88, 218, 0.34);
-  font: inherit;
-  font-size: 8px;
-  font-weight: 580;
-  text-align: left;
-  white-space: nowrap;
+  top: calc(50% - 9px);
+  height: 18px;
+  min-width: 6px;
+  border: 0;
+  border-radius: 5px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.16);
   cursor: pointer;
+  transition: background-color 100ms ease;
 }
 
-.motion-span > span {
-  display: block;
-  overflow: hidden;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
+.motion-bar:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
-.motion-span.spring {
-  border-color: rgba(76, 177, 126, 0.78);
-  color: rgba(217, 249, 232, 0.92);
-  background: rgba(47, 131, 91, 0.3);
+.motion-bar.selected,
+.motion-bar.selected:hover {
+  background: #7c5cff;
 }
 
-.motion-span.estimated {
-  border-style: dashed;
+/* The end of a spring is an estimate: fade the tail out instead of drawing a hard edge. */
+.motion-bar.estimated {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
 }
 
-.motion-span:hover {
-  filter: brightness(1.12);
-}
-
-.motion-span-resize {
+.motion-bar-resize {
   position: absolute;
-  z-index: 5;
-  top: 8px;
-  bottom: 8px;
+  z-index: 3;
+  top: calc(50% - 9px);
   width: 8px;
+  height: 18px;
   cursor: ew-resize;
 }
 
-.motion-span-resize::after {
+.motion-bar-resize::after {
   content: "";
   position: absolute;
   top: 4px;
@@ -1265,46 +1487,77 @@ button {
   left: 3px;
   width: 2px;
   border-radius: 1px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.85);
   opacity: 0;
+  transition: opacity 100ms ease;
 }
 
-.motion-span-resize:hover::after,
-.motion-span-resize.active::after {
+.motion-row:hover .motion-bar-resize::after,
+.motion-bar-resize.active::after {
   opacity: 1;
 }
 
-.motion-span.resizing {
-  z-index: 4;
-  border-color: rgba(255, 255, 255, 0.95);
-}
+/* Playhead: line over the rows (below the sticky ruler), line + time pill inside the ruler. */
 
-.motion-span.selected {
-  border-color: rgba(255, 255, 255, 0.95);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 3px 12px rgba(0, 0, 0, 0.28);
+.motion-playhead-overlay {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--motion-label-width);
+  pointer-events: none;
 }
 
 .motion-playhead {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 6;
   width: 1px;
-  background: #ff4f70;
+  background: #ff4d6a;
+}
+
+.motion-playhead-marker {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 0;
   pointer-events: none;
 }
 
-.motion-playhead-cap {
+.motion-playhead-marker::before {
+  content: "";
   position: absolute;
   top: 0;
-  left: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 1px 1px 4px 4px;
-  background: #ff4f70;
-  transform: translateX(-50%);
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: #ff4d6a;
+}
+
+.motion-playhead-pill {
+  position: absolute;
+  top: calc(50% - 9px);
+  left: 0;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 7px;
+  color: #fff;
+  background: #ff4d6a;
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-button,
+  .motion-bar,
+  .motion-bar-resize::after {
+    transition: none;
+  }
 }
 
 

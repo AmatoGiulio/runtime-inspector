@@ -1,5 +1,5 @@
 import {
-  Fragment,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -7,20 +7,19 @@ import {
 } from "react";
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
 import {
-  activeAnimationAtTime,
   animationDisplayEnd,
   animationTargetLabel,
   buildTimelineModel,
   clamp,
-  resizedDurationMs,
-  type AnimationPropertyTrack
+  resizedDurationMs
 } from "./timeline-model";
 
 export interface AnimationTimelineProps {
   animations: RuntimeAnimationTrace[];
-  interactionScoped: boolean;
   selectedAnimationId?: string;
   playheadMs: number;
+  /** True while a replay's animations are expected to be running; drives the self-running playhead. */
+  playing?: boolean;
   onSelectAnimation(animationId: string): void;
   onPlayheadChange(ms: number): void;
   /** Returns the editable range for a span's duration, or undefined when the span cannot be resized. */
@@ -44,9 +43,9 @@ interface ResizeSession extends ResizeState {
 
 export function AnimationTimeline({
   animations,
-  interactionScoped,
   selectedAnimationId,
   playheadMs,
+  playing = false,
   onSelectAnimation,
   onPlayheadChange,
   getDurationRange,
@@ -56,11 +55,59 @@ export function AnimationTimeline({
   const dragRef = useRef(false);
   const resizeRef = useRef<ResizeSession | undefined>(undefined);
   const [resize, setResize] = useState<ResizeState | undefined>(undefined);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
 
-  if (animations.length === 0) return null;
+  // Running playhead: local to this component so the parent is not re-rendered every frame.
+  const [runningMs, setRunningMs] = useState<number | undefined>(undefined);
+  const runFrameRef = useRef<number | undefined>(undefined);
+  const durationRef = useRef(model.durationMs);
+  durationRef.current = model.durationMs;
+  const onPlayheadChangeRef = useRef(onPlayheadChange);
+  onPlayheadChangeRef.current = onPlayheadChange;
+  const hasAnimations = animations.length > 0;
 
-  const clampedPlayhead = clamp(playheadMs, 0, model.durationMs);
-  const playheadPercent = (clampedPlayhead / Math.max(1, model.durationMs)) * 100;
+  useEffect(() => {
+    if (!playing || !hasAnimations) return;
+
+    const startedAtWallClock = performance.now();
+    const step = () => {
+      const elapsed = performance.now() - startedAtWallClock;
+      const durationMs = durationRef.current;
+      if (elapsed >= durationMs) {
+        runFrameRef.current = undefined;
+        setRunningMs(undefined);
+        onPlayheadChangeRef.current(durationMs);
+        return;
+      }
+      setRunningMs(elapsed);
+      runFrameRef.current = requestAnimationFrame(step);
+    };
+    step();
+
+    return () => {
+      if (runFrameRef.current !== undefined) {
+        cancelAnimationFrame(runFrameRef.current);
+        runFrameRef.current = undefined;
+      }
+      setRunningMs(undefined);
+    };
+  }, [playing, hasAnimations, model.originMs]);
+
+  if (!hasAnimations) return null;
+
+  const displayPlayheadMs = clamp(runningMs ?? playheadMs, 0, model.durationMs);
+  const playheadPercent = (displayPlayheadMs / Math.max(1, model.durationMs)) * 100;
+  const percentOf = (ms: number) => `${(ms / model.durationMs) * 100}%`;
+
+  function cancelRun() {
+    if (runFrameRef.current !== undefined) {
+      cancelAnimationFrame(runFrameRef.current);
+      runFrameRef.current = undefined;
+    }
+    setRunningMs(undefined);
+  }
 
   function pointerTime(event: ReactPointerEvent<HTMLElement>): number {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -69,50 +116,44 @@ export function AnimationTimeline({
     return ratio * model.durationMs;
   }
 
-  function updateRulerPlayhead(event: ReactPointerEvent<HTMLElement>) {
+  function updatePlayhead(event: ReactPointerEvent<HTMLElement>) {
     onPlayheadChange(pointerTime(event));
   }
 
-  function updateTrackPlayhead(
-    event: ReactPointerEvent<HTMLElement>,
-    track: AnimationPropertyTrack
-  ) {
-    const timeMs = pointerTime(event);
-    onPlayheadChange(timeMs);
-
-    const active = activeAnimationAtTime(track.animations, model.originMs, timeMs);
-    if (active && active.instanceId !== selectedAnimationId) {
-      onSelectAnimation(active.instanceId);
-    }
-  }
-
-  function handlePointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-    update: (event: ReactPointerEvent<HTMLElement>) => void
-  ) {
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    cancelRun();
     dragRef.current = true;
     event.currentTarget.setPointerCapture(event.pointerId);
-    update(event);
+    updatePlayhead(event);
   }
 
-  function handlePointerMove(
-    event: ReactPointerEvent<HTMLElement>,
-    update: (event: ReactPointerEvent<HTMLElement>) => void
-  ) {
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
     if (!dragRef.current || (event.buttons & 1) === 0) return;
-    update(event);
+    updatePlayhead(event);
   }
 
-  function handlePointerUp(
-    event: ReactPointerEvent<HTMLElement>,
-    update: (event: ReactPointerEvent<HTMLElement>) => void
-  ) {
+  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
     if (!dragRef.current) return;
     dragRef.current = false;
-    update(event);
+    updatePlayhead(event);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+  }
+
+  const scrubHandlers = {
+    onPointerDown: handlePointerDown,
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+    onPointerCancel: handlePointerUp
+  };
+
+  function toggleGroup(groupId: string) {
+    setCollapsedGroupIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(groupId)) next.add(groupId);
+      return next;
+    });
   }
 
   function handleResizePointerDown(
@@ -141,7 +182,7 @@ export function AnimationTimeline({
     const session = resizeRef.current;
     if (!session) return;
     event.stopPropagation();
-    const lane = event.currentTarget.closest(".motion-property-lane");
+    const lane = event.currentTarget.closest(".motion-row-lane");
     if (!lane) return;
     const rect = lane.getBoundingClientRect();
     if (rect.width <= 0) return;
@@ -180,190 +221,191 @@ export function AnimationTimeline({
     }
   }
 
+  const gridLines = model.ticks.map((tick) => (
+    <span
+      className="motion-grid-line"
+      key={tick}
+      style={{ left: percentOf(tick) }}
+    />
+  ));
+
   return (
     <div className="motion-timeline">
-      <div className="motion-timeline-head">
-        <span>
-          {interactionScoped ? "Current replay" : "Latest interaction"} · auto-detected
-        </span>
-        <strong>
-          {model.tracks.length} {model.tracks.length === 1 ? "property" : "properties"} ·{" "}
-          {animations.length} spans
-        </strong>
-      </div>
-
       <div className="motion-timeline-grid">
         <div className="motion-playhead-overlay" aria-hidden="true">
-          <Playhead percent={playheadPercent} />
+          <span
+            className="motion-playhead"
+            style={{ left: `${playheadPercent}%` }}
+          />
         </div>
 
         <div className="motion-ruler-row">
           <div className="motion-ruler-label">
-            <span>{formatTime(clampedPlayhead)}</span>
+            <span>{formatSeconds(displayPlayheadMs)}</span>
           </div>
-          <div
-            className="motion-ruler"
-            onPointerDown={(event) =>
-              handlePointerDown(event, updateRulerPlayhead)
-            }
-            onPointerMove={(event) =>
-              handlePointerMove(event, updateRulerPlayhead)
-            }
-            onPointerUp={(event) =>
-              handlePointerUp(event, updateRulerPlayhead)
-            }
-            onPointerCancel={(event) =>
-              handlePointerUp(event, updateRulerPlayhead)
-            }
-          >
-            {model.ticks.map((tick) => (
+          <div className="motion-ruler" {...scrubHandlers}>
+            {model.ticks.map((tick, index) => (
               <div
-                className="motion-ruler-tick"
+                className={classNames(
+                  "motion-ruler-tick",
+                  index > 0 && index === model.ticks.length - 1 && "last"
+                )}
                 key={tick}
-                style={{ left: `${(tick / model.durationMs) * 100}%` }}
+                style={{ left: percentOf(tick) }}
               >
                 <span>{formatTime(tick)}</span>
               </div>
             ))}
+            {model.minorTicks.map((tick) => (
+              <span
+                className="motion-ruler-dot"
+                key={tick}
+                style={{ left: percentOf(tick) }}
+              />
+            ))}
+            <span
+              className="motion-playhead-marker"
+              aria-hidden="true"
+              style={{ left: `${playheadPercent}%` }}
+            >
+              {/* Slides from left-aligned (0%) to right-aligned (100%) so the pill never leaves the ruler. */}
+              <span
+                className="motion-playhead-pill"
+                style={{ transform: `translateX(-${playheadPercent}%)` }}
+              >
+                {formatSeconds(displayPlayheadMs)}
+              </span>
+            </span>
           </div>
         </div>
 
-        {model.tracks.map((track) => {
-          const updateTrack = (event: ReactPointerEvent<HTMLElement>) =>
-            updateTrackPlayhead(event, track);
+        {model.groups.map((group) => {
+          const collapsed = collapsedGroupIds.has(group.id);
 
           return (
-            <div className="motion-property-row" key={track.target}>
-              <div className="motion-property-label">
-                <strong>{track.label}</strong>
-              </div>
+            <div className="motion-group" key={group.id}>
               <div
-                className="motion-property-lane"
-                onPointerDown={(event) =>
-                  handlePointerDown(event, updateTrack)
-                }
-                onPointerMove={(event) =>
-                  handlePointerMove(event, updateTrack)
-                }
-                onPointerUp={(event) =>
-                  handlePointerUp(event, updateTrack)
-                }
-                onPointerCancel={(event) =>
-                  handlePointerUp(event, updateTrack)
-                }
+                className="motion-group-row"
+                onClick={() => toggleGroup(group.id)}
               >
-                {model.ticks.map((tick) => (
-                  <span
-                    className="motion-grid-line"
-                    key={tick}
-                    style={{ left: `${(tick / model.durationMs) * 100}%` }}
-                  />
-                ))}
-
-                {track.animations.map((animation) => {
-                  const startMs =
-                    animation.startedAtRuntimeMs - model.originMs;
-                  const durationRange = onResizeDuration
-                    ? getDurationRange?.(animation)
-                    : undefined;
-                  const resizing =
-                    resize?.instanceId === animation.instanceId
-                      ? resize
-                      : undefined;
-                  const actualDuration =
-                    animation.endedAtRuntimeMs !== undefined
-                      ? Math.max(
-                          0,
-                          animation.endedAtRuntimeMs -
-                            animation.startedAtRuntimeMs
-                        )
-                      : undefined;
-                  const currentDuration =
-                    actualDuration ?? animation.expectedDurationMs;
-                  const displayDuration =
-                    resizing?.durationMs ?? currentDuration;
-                  const endMs =
-                    resizing !== undefined
-                      ? startMs + resizing.durationMs
-                      : animationDisplayEnd(animation) - model.originMs;
-                  const estimated =
-                    actualDuration === undefined &&
-                    animation.durationBasis === "spring-estimate";
-                  const selected =
-                    animation.instanceId === selectedAnimationId;
-
-                  return (
-                    <Fragment key={animation.instanceId}>
-                    <button
-                      className={[
-                        "motion-span",
-                        animation.animationKind,
-                        estimated ? "estimated" : "",
-                        selected ? "selected" : "",
-                        resizing ? "resizing" : ""
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                      type="button"
-                      style={{
-                        left: `${(startMs / model.durationMs) * 100}%`,
-                        width: `${Math.max(
-                          0.8,
-                          ((endMs - startMs) / model.durationMs) * 100
-                        )}%`
-                      }}
-                      title={animationSpanTitle(
-                        animation,
-                        displayDuration,
-                        estimated
-                      )}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onPlayheadChange(startMs);
-                        onSelectAnimation(animation.instanceId);
-                      }}
-                    >
-                      <span>
-                        {animation.animationKind}
-                        {displayDuration !== undefined
-                          ? ` · ${estimated ? "~" : ""}${formatTime(
-                              displayDuration
-                            )}`
-                          : ""}
-                      </span>
-                    </button>
-                    {durationRange ? (
-                      <span
-                        className={[
-                          "motion-span-resize",
-                          selected || resizing ? "active" : ""
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                        aria-hidden="true"
-                        style={{
-                          left: `calc(${(endMs / model.durationMs) * 100}% - 4px)`
-                        }}
-                        onPointerDown={(event) =>
-                          handleResizePointerDown(
-                            event,
-                            animation,
-                            startMs,
-                            currentDuration,
-                            durationRange
-                          )
-                        }
-                        onPointerMove={handleResizePointerMove}
-                        onPointerUp={handleResizePointerUp}
-                        onPointerCancel={handleResizePointerCancel}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    ) : null}
-                    </Fragment>
-                  );
-                })}
+                <div className="motion-group-label">
+                  {/* The row's click handler toggles; a keyboard activation of this button bubbles to it. */}
+                  <button
+                    className="motion-group-toggle"
+                    type="button"
+                    aria-expanded={!collapsed}
+                    aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.label}`}
+                  >
+                    {collapsed ? "▸" : "▾"}
+                  </button>
+                  <span className="motion-group-name">{group.label}</span>
+                </div>
+                <div className="motion-group-lane">{gridLines}</div>
               </div>
+
+              {collapsed
+                ? null
+                : group.rows.map((row) => {
+                    const { animation, startMs } = row;
+                    const durationRange = onResizeDuration
+                      ? getDurationRange?.(animation)
+                      : undefined;
+                    const resizing =
+                      resize?.instanceId === animation.instanceId
+                        ? resize
+                        : undefined;
+                    const displayDuration =
+                      resizing?.durationMs ?? row.durationMs;
+                    const endMs =
+                      resizing !== undefined
+                        ? startMs + resizing.durationMs
+                        : animationDisplayEnd(animation) - model.originMs;
+                    const selected =
+                      animation.instanceId === selectedAnimationId;
+
+                    return (
+                      <div
+                        className={classNames(
+                          "motion-row",
+                          selected && "selected",
+                          resizing && "resizing"
+                        )}
+                        key={animation.instanceId}
+                      >
+                        <button
+                          className="motion-row-label"
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => onSelectAnimation(animation.instanceId)}
+                        >
+                          <KindGlyph spring={animation.animationKind === "spring"} />
+                          <span className="motion-row-name">{row.label}</span>
+                          <span className="motion-row-kind">· {row.kindLabel}</span>
+                          <span className="motion-row-duration">
+                            {displayDuration !== undefined
+                              ? `${row.estimated && !resizing ? "~" : ""}${formatTime(
+                                  displayDuration
+                                )}`
+                              : "—"}
+                          </span>
+                        </button>
+                        <div className="motion-row-lane" {...scrubHandlers}>
+                          {gridLines}
+                          <button
+                            className={classNames(
+                              "motion-bar",
+                              row.estimated && !resizing && "estimated",
+                              selected && "selected"
+                            )}
+                            type="button"
+                            aria-label={`${row.label} · ${row.kindLabel}`}
+                            style={{
+                              left: percentOf(startMs),
+                              width: `${Math.max(
+                                0.8,
+                                ((endMs - startMs) / model.durationMs) * 100
+                              )}%`
+                            }}
+                            title={animationSpanTitle(
+                              animation,
+                              displayDuration,
+                              row.estimated
+                            )}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onSelectAnimation(animation.instanceId);
+                            }}
+                          />
+                          {durationRange ? (
+                            <span
+                              className={classNames(
+                                "motion-bar-resize",
+                                (selected || resizing) && "active"
+                              )}
+                              aria-hidden="true"
+                              style={{
+                                left: `calc(${percentOf(endMs)} - 4px)`
+                              }}
+                              onPointerDown={(event) =>
+                                handleResizePointerDown(
+                                  event,
+                                  animation,
+                                  startMs,
+                                  row.durationMs,
+                                  durationRange
+                                )
+                              }
+                              onPointerMove={handleResizePointerMove}
+                              onPointerUp={handleResizePointerUp}
+                              onPointerCancel={handleResizePointerCancel}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
             </div>
           );
         })}
@@ -372,12 +414,33 @@ export function AnimationTimeline({
   );
 }
 
-function Playhead({ percent }: { percent: number }) {
+function KindGlyph({ spring }: { spring: boolean }) {
   return (
-    <span className="motion-playhead" style={{ left: `${percent}%` }}>
-      <span className="motion-playhead-cap" />
-    </span>
+    <svg
+      className="motion-row-glyph"
+      viewBox="0 0 12 12"
+      width="12"
+      height="12"
+      aria-hidden="true"
+    >
+      <path
+        d={
+          spring
+            ? "M1 10 C2.5 10 2.5 2 4.5 2 S6 8 7.5 8 S8.5 5 9.5 5 H11"
+            : "M1 10 C5 10 7 2 11 2"
+        }
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
+}
+
+function classNames(...names: Array<string | false | undefined>): string {
+  return names.filter(Boolean).join(" ");
 }
 
 function animationSpanTitle(
@@ -408,4 +471,8 @@ function formatTime(ms: number): string {
   return ms >= 1000
     ? `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`
     : `${Math.round(ms)}ms`;
+}
+
+function formatSeconds(ms: number): string {
+  return `${(ms / 1000).toFixed(2)}s`;
 }

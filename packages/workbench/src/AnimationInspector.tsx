@@ -84,7 +84,9 @@ export function AnimationInspector({
         />
       </div>
 
-      {Object.keys(animation.resolvedConfig).length > 0 && !canTuneSpring ? (
+      {Object.keys(animation.resolvedConfig).some(
+        (key) => !(canTuneDuration && key === "duration")
+      ) && !canTuneSpring ? (
         <div className="animation-inspector-section">
           <div className="animation-inspector-section-title">Parameters</div>
           {Object.entries(animation.resolvedConfig)

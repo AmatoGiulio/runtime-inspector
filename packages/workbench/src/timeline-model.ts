@@ -1,10 +1,34 @@
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
 import type { PanelSchema } from "@runtime-inspector/protocol";
 
-export interface AnimationPropertyTrack {
-  target: string;
+export interface AnimationRow {
+  animation: RuntimeAnimationTrace;
+  /** Humanized property name, e.g. "Move X". */
   label: string;
-  animations: RuntimeAnimationTrace[];
+  /** "Timing" | "Spring" */
+  kindLabel: string;
+  /** Relative to the model's originMs. */
+  startMs: number;
+  /** Observed (ended - started) when the animation has ended, else the expected duration. */
+  durationMs: number | undefined;
+  /** No observed end, and the expected duration is a spring estimate. */
+  estimated: boolean;
+}
+
+export interface AnimationGroup {
+  /** Element id: the target up to (not including) its last dot segment; the whole target when it has no dot. */
+  id: string;
+  label: string;
+  rows: AnimationRow[];
+}
+
+export interface TimelineModel {
+  groups: AnimationGroup[];
+  originMs: number;
+  durationMs: number;
+  ticks: number[];
+  /** Midpoints between consecutive ticks. */
+  minorTicks: number[];
 }
 
 export interface TimingDurationControl {
@@ -17,8 +41,9 @@ export interface TimingDurationControl {
   value: number;
 }
 
-export function buildTimelineModel(animations: RuntimeAnimationTrace[]) {
-  const tracks = groupAnimationsByTarget(animations);
+export function buildTimelineModel(
+  animations: RuntimeAnimationTrace[]
+): TimelineModel {
   const originMs = Math.min(
     ...animations.map((animation) => animation.startedAtRuntimeMs)
   );
@@ -37,39 +62,65 @@ export function buildTimelineModel(animations: RuntimeAnimationTrace[]) {
     ticks.push(tick);
   }
 
+  const minorTicks: number[] = [];
+  for (let index = 1; index < ticks.length; index += 1) {
+    minorTicks.push((ticks[index - 1]! + ticks[index]!) / 2);
+  }
+
   return {
-    tracks,
+    groups: groupAnimationRows(animations, originMs),
     originMs,
     durationMs,
-    ticks
+    ticks,
+    minorTicks
   };
 }
 
-export function groupAnimationsByTarget(
-  animations: RuntimeAnimationTrace[]
-): AnimationPropertyTrack[] {
-  const tracks = new Map<string, AnimationPropertyTrack>();
+/** Groups in order of first appearance by start time; rows by start time, ties in original array order. */
+function groupAnimationRows(
+  animations: RuntimeAnimationTrace[],
+  originMs: number
+): AnimationGroup[] {
+  const ordered = animations
+    .map((animation, index) => ({ animation, index }))
+    .sort(
+      (left, right) =>
+        left.animation.startedAtRuntimeMs - right.animation.startedAtRuntimeMs ||
+        left.index - right.index
+    );
+  const groups = new Map<string, AnimationGroup>();
 
-  for (const animation of animations) {
-    const existing = tracks.get(animation.target);
-    if (existing) {
-      existing.animations.push(animation);
-      continue;
+  for (const { animation } of ordered) {
+    const id = animationElementId(animation.target);
+    let group = groups.get(id);
+    if (!group) {
+      group = { id, label: id, rows: [] };
+      groups.set(id, group);
     }
 
-    tracks.set(animation.target, {
-      target: animation.target,
+    const observedDurationMs =
+      animation.endedAtRuntimeMs !== undefined
+        ? Math.max(0, animation.endedAtRuntimeMs - animation.startedAtRuntimeMs)
+        : undefined;
+
+    group.rows.push({
+      animation,
       label: animationTargetLabel(animation.target),
-      animations: [animation]
+      kindLabel: animation.animationKind === "spring" ? "Spring" : "Timing",
+      startMs: animation.startedAtRuntimeMs - originMs,
+      durationMs: observedDurationMs ?? animation.expectedDurationMs,
+      estimated:
+        observedDurationMs === undefined &&
+        animation.durationBasis === "spring-estimate"
     });
   }
 
-  return Array.from(tracks.values()).map((track) => ({
-    ...track,
-    animations: [...track.animations].sort(
-      (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
-    )
-  }));
+  return Array.from(groups.values());
+}
+
+function animationElementId(target: string): string {
+  const lastDot = target.lastIndexOf(".");
+  return lastDot === -1 ? target : target.slice(0, lastDot);
 }
 
 export function activeAnimationAtTime(
