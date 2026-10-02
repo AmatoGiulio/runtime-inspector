@@ -109,10 +109,13 @@ function App() {
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const replayAnimationBaselineRef = useRef<Record<string, number>>({});
-  const pendingAnimationSelectionRef = useRef<{
-    target: string;
-    animationKind: RuntimeAnimationTrace["animationKind"];
-  }>();
+  const pendingAnimationSelectionRef = useRef<
+    | {
+        target: string;
+        animationKind: RuntimeAnimationTrace["animationKind"];
+      }
+    | undefined
+  >(undefined);
 
   useEffect(() => {
     if (schemaId || !schemaIds[0]) return;
