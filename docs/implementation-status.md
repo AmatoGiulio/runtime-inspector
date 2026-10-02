@@ -322,3 +322,25 @@ Manual validation checklist:
 5. Type 20000 in the Duration field: it is rejected with a reason and nothing is sent.
 6. Set a duration back to 260 ms: the app behaves as in step 1.
 
+### M6a timeline-first presentation
+
+**Implemented on `feat/runtime-workbench-desktop`; checked in a browser against the demo runtime on 2026-10-02, pending validation with the real Simulator**
+
+The timeline is the product surface, and it was unreadable: 8 px text, a timing and a spring span overlapping on one property row, and a toolbar of developer buttons. This milestone is presentation only — no protocol, `panel-core` or runtime change.
+
+- One row per discovered animation (`Move X · Timing`, `Move X · Spring`), grouped under its element (`card`), with the duration on the left. Spans no longer overlap, so every resize handle is reachable.
+- Neutral bars; the selected bar is accent-colored and its whole row is tinted. Selecting no longer moves the playhead, and scrubbing no longer changes the selection.
+- Estimated spring ends fade out instead of using a dashed border.
+- The playhead runs across the timeline while a replay plays, then rests at the end. It is a wall-clock indicator started when the first animation of the replay is reported; it does not rewind or seek the application.
+- One primary **Play** button and a time readout. Record, Benchmark viewport and Clear moved into a **Developer** disclosure with unchanged behavior.
+- The timeline region is taller (`minmax(300px, 44vh)`) and the stage no longer paints over it in short windows.
+
+`pnpm --filter @runtime-inspector/workbench demo:runtime` starts a development-only fake runtime that publishes the example's `card-transition` and `auto` schemas and emits the same eight animation events on Replay. It exists so the Workbench UI can be developed and screenshotted in a browser without a Simulator; it is not a product feature and holds no control state.
+
+Not done yet, in the order the reference timeline needs them:
+
+1. moving a block in time (needs a start/delay control behind each animation);
+2. resizing from the left edge (same dependency);
+3. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
+4. simplifying the Outline and Inspector panels around the selected animation.
+
