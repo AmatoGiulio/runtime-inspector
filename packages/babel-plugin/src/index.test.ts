@@ -223,7 +223,7 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     const normalized = code.replace(/\s+/g, " ");
-    expect(normalized).toContain("__riWithTiming");
+    expect(normalized).toContain("__riObserveAnimation(withTiming(-110, { duration: 260 })");
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "timing"');
@@ -246,7 +246,7 @@ describe("runtime-inspector babel plugin", () => {
     );
 
     const normalized = code.replace(/\s+/g, " ");
-    expect(normalized).toContain("__riWithSpring");
+    expect(normalized).toContain("__riObserveAnimation(withSpring(0, { damping: 14, stiffness: 180 })");
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "spring"');
@@ -265,7 +265,7 @@ describe("runtime-inspector babel plugin", () => {
 
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain("__riInspect");
-    expect(normalized).toContain("__riWithTiming");
+    expect(normalized).toContain("__riObserveAnimation");
     expect(normalized).toContain('schemaId: "auto"');
     expect(normalized).toContain('target: "opacity"');
   });
@@ -281,7 +281,7 @@ describe("runtime-inspector babel plugin", () => {
       { filename: "/repo/src/Card.tsx", root: "/repo" }
     );
 
-    expect(code).not.toContain("__riWithTiming");
+    expect(code).not.toContain("__riObserveAnimation");
     expect(code).toContain("withTiming(-110");
   });
 
@@ -297,7 +297,7 @@ describe("runtime-inspector babel plugin", () => {
       }
     );
 
-    expect(code).not.toContain("__riWithTiming");
+    expect(code).not.toContain("__riObserveAnimation");
   });
 });
 
