@@ -227,6 +227,8 @@ describe("runtime-inspector babel plugin", () => {
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "timing"');
+    expect(normalized).toContain("toValue: -110");
+    expect(normalized).toContain("config: { duration: 260 }");
     expect(normalized).toContain('file: "src/Card.tsx"');
     expect(normalized).toContain('expression: "withTiming(-110, { duration: 260 })"');
   });
@@ -250,6 +252,7 @@ describe("runtime-inspector babel plugin", () => {
     expect(normalized).toContain('schemaId: "card-transition"');
     expect(normalized).toContain('target: "card.moveX"');
     expect(normalized).toContain('animationKind: "spring"');
+    expect(normalized).toContain('configControlId: "spring"');
   });
 
   it("associates annotated shared values with the auto schema", () => {
@@ -268,6 +271,49 @@ describe("runtime-inspector babel plugin", () => {
     expect(normalized).toContain("__riObserveAnimation");
     expect(normalized).toContain('schemaId: "auto"');
     expect(normalized).toContain('target: "opacity"');
+  });
+
+  it("resolves an aliased inspector spring config without evaluating it twice", () => {
+    const code = transformWithOpts(
+      `
+      import { useInspector } from "@runtime-inspector/react-native";
+      import { withSpring } from "react-native-reanimated";
+      function Card() {
+        const card = useInspector("card-transition", {
+          moveX: { value: 0, min: -120, max: 120 },
+          spring: { damping: 14, stiffness: 180, mass: 1 }
+        });
+        const spring = card.spring.value;
+        card.moveX.value = withSpring(card.$targets.moveX, spring);
+        return card;
+      }
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain("__riObserveAnimation(withSpring(card.$targets.moveX, spring)");
+    expect(normalized).toContain('configControlId: "spring"');
+    expect(normalized.match(/withSpring\(card\.\$targets\.moveX, spring\)/g)).toHaveLength(1);
+  });
+
+  it("does not instrument assignments inside known UI-runtime callbacks", () => {
+    const code = transformWithOpts(
+      `
+      import { useAnimatedStyle, withTiming } from "react-native-reanimated";
+      function Card() {
+        const opacity = { value: 0 };
+        useAnimatedStyle(() => {
+          opacity.value = withTiming(1, { duration: 180 });
+          return { opacity: opacity.value };
+        });
+      }
+    `,
+      { filename: "/repo/src/Card.tsx", root: "/repo" }
+    );
+
+    expect(code).not.toContain("__riObserveAnimation");
+    expect(code).toContain("withTiming(1");
   });
 
   it("leaves animation calls with an explicit callback untouched in the first spike", () => {
