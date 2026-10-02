@@ -118,15 +118,28 @@ shared.value = withTiming(target, config);
 shared.value = withSpring(target, config);
 ```
 
-and wraps them with Runtime Inspector development helpers. The emitted lifecycle carries:
+and wraps only the **result** with a Runtime Inspector observation helper:
+
+```ts
+shared.value = __riObserveAnimation(
+  withTiming(target, config),
+  metadata
+);
+```
+
+The original Reanimated call therefore constructs the animation exactly as before. The observer returns that same object unchanged.
+
+The emitted start observation carries:
 
 - animation kind (`timing` / `spring`);
 - target expression;
-- runtime start/end timestamps;
-- serializable primitive target/current values;
-- selected timing/spring parameters;
+- runtime start timestamp;
+- build-time-safe primitive target/config literals;
+- a control id when a dynamic config can be resolved to an Inspector control;
 - source file, line, column, enclosure, and original animation expression;
 - schema id when the assignment target can be associated with a local `useInspector("schema-id", ...)` handle or an auto-inspected shared value.
+
+Timing duration is treated as declared span metadata when statically available. Spring duration is currently an explicitly **estimated** settling span derived from the live spring control when one can be resolved. Neither is an observed completion timestamp.
 
 The first spike deliberately does **not** instrument:
 
