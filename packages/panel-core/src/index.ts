@@ -534,9 +534,13 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function applyAnimationCompleted(message: RuntimeAnimationCompleted) {
-    const index = state.runtimeAnimations.findLastIndex(
-      (animation) => animation.instanceId === message.instanceId
-    );
+    let index = -1;
+    for (let candidate = state.runtimeAnimations.length - 1; candidate >= 0; candidate -= 1) {
+      if (state.runtimeAnimations[candidate].instanceId === message.instanceId) {
+        index = candidate;
+        break;
+      }
+    }
     if (index === -1) return;
 
     const next = [...state.runtimeAnimations];
