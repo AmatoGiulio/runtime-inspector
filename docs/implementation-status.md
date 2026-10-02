@@ -244,3 +244,24 @@ Selecting a control opens a contextual Inspector backed by the existing `panel-c
 Selecting a probe keeps the existing observational Inspector and timeline behavior. The timeline continues to follow the most recently selected probe even while a control is being tuned, so a developer can tune a parameter while watching the relevant runtime trace.
 
 No new RIP messages were introduced.
+
+### M5b experimental automatic Reanimated discovery
+
+**Implemented on `feat/runtime-workbench-desktop`, pending device validation**
+
+This spike tests the product-critical question: can the Workbench discover common Reanimated animations without requiring one manual probe declaration per animation?
+
+The existing dev-only Babel plugin now recognizes direct `.value = withTiming(...)` and `.value = withSpring(...)` assignments with no explicit completion callback. It derives the assignment target, source location and, where statically available, the owning `useInspector` schema id.
+
+The transformed call reports additive `animation.started` / `animation.completed` lifecycle messages through RIP. `panel-core` collects the spans and the Workbench renders the latest interaction burst as **Auto-detected animations** rows in the timeline.
+
+The initial example should automatically discover the four direct timing animations and the four return springs in `replayTransition()`. Nested `withSequence` / `withRepeat` / `withDelay` trees remain intentionally unsupported by this first proof.
+
+Acceptance for the spike is behavioral, not visual polish:
+
+1. existing tests and typecheck pass;
+2. Replay still behaves identically on the device;
+3. timing rows appear automatically with ~260 ms duration;
+4. return-spring rows appear automatically after the existing 220 ms delay;
+5. emitted rows carry the expected `card-transition` schema and `App.tsx` source location;
+6. no manual `useRuntimeProbe` declaration is required for those animation lifecycle rows.
