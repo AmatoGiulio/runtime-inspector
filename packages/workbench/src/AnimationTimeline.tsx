@@ -36,28 +36,54 @@ export function AnimationTimeline({
   const clampedPlayhead = clamp(playheadMs, 0, model.durationMs);
   const playheadPercent = (clampedPlayhead / Math.max(1, model.durationMs)) * 100;
 
-  function updatePlayheadFromPointer(event: ReactPointerEvent<HTMLElement>) {
+  function pointerTime(event: ReactPointerEvent<HTMLElement>): number {
     const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width <= 0) return;
+    if (rect.width <= 0) return 0;
     const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-    onPlayheadChange(ratio * model.durationMs);
+    return ratio * model.durationMs;
   }
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+  function updateRulerPlayhead(event: ReactPointerEvent<HTMLElement>) {
+    onPlayheadChange(pointerTime(event));
+  }
+
+  function updateTrackPlayhead(
+    event: ReactPointerEvent<HTMLElement>,
+    track: AnimationPropertyTrack
+  ) {
+    const timeMs = pointerTime(event);
+    onPlayheadChange(timeMs);
+
+    const active = activeAnimationAtTime(track.animations, model.originMs, timeMs);
+    if (active && active.instanceId !== selectedAnimationId) {
+      onSelectAnimation(active.instanceId);
+    }
+  }
+
+  function handlePointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    update: (event: ReactPointerEvent<HTMLElement>) => void
+  ) {
     dragRef.current = true;
     event.currentTarget.setPointerCapture(event.pointerId);
-    updatePlayheadFromPointer(event);
+    update(event);
   }
 
-  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+  function handlePointerMove(
+    event: ReactPointerEvent<HTMLElement>,
+    update: (event: ReactPointerEvent<HTMLElement>) => void
+  ) {
     if (!dragRef.current || (event.buttons & 1) === 0) return;
-    updatePlayheadFromPointer(event);
+    update(event);
   }
 
-  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+  function handlePointerUp(
+    event: ReactPointerEvent<HTMLElement>,
+    update: (event: ReactPointerEvent<HTMLElement>) => void
+  ) {
     if (!dragRef.current) return;
     dragRef.current = false;
-    updatePlayheadFromPointer(event);
+    update(event);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -75,106 +101,141 @@ export function AnimationTimeline({
         </strong>
       </div>
 
-      <div className="motion-ruler-row">
-        <div className="motion-ruler-label">
-          <span>{formatTime(clampedPlayhead)}</span>
-        </div>
-        <div
-          className="motion-ruler"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        >
-          {model.ticks.map((tick) => (
-            <div
-              className="motion-ruler-tick"
-              key={tick}
-              style={{ left: `${(tick / model.durationMs) * 100}%` }}
-            >
-              <span>{formatTime(tick)}</span>
-            </div>
-          ))}
+      <div className="motion-timeline-grid">
+        <div className="motion-playhead-overlay" aria-hidden="true">
           <Playhead percent={playheadPercent} />
         </div>
-      </div>
 
-      {model.tracks.map((track) => (
-        <div className="motion-property-row" key={track.target}>
-          <div className="motion-property-label">
-            <strong>{track.label}</strong>
+        <div className="motion-ruler-row">
+          <div className="motion-ruler-label">
+            <span>{formatTime(clampedPlayhead)}</span>
           </div>
           <div
-            className="motion-property-lane"
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            className="motion-ruler"
+            onPointerDown={(event) =>
+              handlePointerDown(event, updateRulerPlayhead)
+            }
+            onPointerMove={(event) =>
+              handlePointerMove(event, updateRulerPlayhead)
+            }
+            onPointerUp={(event) =>
+              handlePointerUp(event, updateRulerPlayhead)
+            }
+            onPointerCancel={(event) =>
+              handlePointerUp(event, updateRulerPlayhead)
+            }
           >
             {model.ticks.map((tick) => (
-              <span
-                className="motion-grid-line"
+              <div
+                className="motion-ruler-tick"
                 key={tick}
                 style={{ left: `${(tick / model.durationMs) * 100}%` }}
-              />
+              >
+                <span>{formatTime(tick)}</span>
+              </div>
             ))}
-
-            {track.animations.map((animation) => {
-              const startMs = animation.startedAtRuntimeMs - model.originMs;
-              const endMs = animationDisplayEnd(animation) - model.originMs;
-              const actualDuration =
-                animation.endedAtRuntimeMs !== undefined
-                  ? Math.max(
-                      0,
-                      animation.endedAtRuntimeMs - animation.startedAtRuntimeMs
-                    )
-                  : undefined;
-              const displayDuration = actualDuration ?? animation.expectedDurationMs;
-              const estimated =
-                actualDuration === undefined &&
-                animation.durationBasis === "spring-estimate";
-              const selected = animation.instanceId === selectedAnimationId;
-
-              return (
-                <button
-                  className={[
-                    "motion-span",
-                    animation.animationKind,
-                    estimated ? "estimated" : "",
-                    selected ? "selected" : ""
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  key={animation.instanceId}
-                  type="button"
-                  style={{
-                    left: `${(startMs / model.durationMs) * 100}%`,
-                    width: `${Math.max(
-                      0.8,
-                      ((endMs - startMs) / model.durationMs) * 100
-                    )}%`
-                  }}
-                  title={animationSpanTitle(animation, displayDuration, estimated)}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectAnimation(animation.instanceId);
-                  }}
-                >
-                  <span>
-                    {animation.animationKind}
-                    {displayDuration !== undefined
-                      ? ` · ${estimated ? "~" : ""}${formatTime(displayDuration)}`
-                      : ""}
-                  </span>
-                </button>
-              );
-            })}
-
-            <Playhead percent={playheadPercent} />
           </div>
         </div>
-      ))}
+
+        {model.tracks.map((track) => {
+          const updateTrack = (event: ReactPointerEvent<HTMLElement>) =>
+            updateTrackPlayhead(event, track);
+
+          return (
+            <div className="motion-property-row" key={track.target}>
+              <div className="motion-property-label">
+                <strong>{track.label}</strong>
+              </div>
+              <div
+                className="motion-property-lane"
+                onPointerDown={(event) =>
+                  handlePointerDown(event, updateTrack)
+                }
+                onPointerMove={(event) =>
+                  handlePointerMove(event, updateTrack)
+                }
+                onPointerUp={(event) =>
+                  handlePointerUp(event, updateTrack)
+                }
+                onPointerCancel={(event) =>
+                  handlePointerUp(event, updateTrack)
+                }
+              >
+                {model.ticks.map((tick) => (
+                  <span
+                    className="motion-grid-line"
+                    key={tick}
+                    style={{ left: `${(tick / model.durationMs) * 100}%` }}
+                  />
+                ))}
+
+                {track.animations.map((animation) => {
+                  const startMs =
+                    animation.startedAtRuntimeMs - model.originMs;
+                  const endMs =
+                    animationDisplayEnd(animation) - model.originMs;
+                  const actualDuration =
+                    animation.endedAtRuntimeMs !== undefined
+                      ? Math.max(
+                          0,
+                          animation.endedAtRuntimeMs -
+                            animation.startedAtRuntimeMs
+                        )
+                      : undefined;
+                  const displayDuration =
+                    actualDuration ?? animation.expectedDurationMs;
+                  const estimated =
+                    actualDuration === undefined &&
+                    animation.durationBasis === "spring-estimate";
+                  const selected =
+                    animation.instanceId === selectedAnimationId;
+
+                  return (
+                    <button
+                      className={[
+                        "motion-span",
+                        animation.animationKind,
+                        estimated ? "estimated" : "",
+                        selected ? "selected" : ""
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      key={animation.instanceId}
+                      type="button"
+                      style={{
+                        left: `${(startMs / model.durationMs) * 100}%`,
+                        width: `${Math.max(
+                          0.8,
+                          ((endMs - startMs) / model.durationMs) * 100
+                        )}%`
+                      }}
+                      title={animationSpanTitle(
+                        animation,
+                        displayDuration,
+                        estimated
+                      )}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectAnimation(animation.instanceId);
+                      }}
+                    >
+                      <span>
+                        {animation.animationKind}
+                        {displayDuration !== undefined
+                          ? ` · ${estimated ? "~" : ""}${formatTime(
+                              displayDuration
+                            )}`
+                          : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -242,6 +303,22 @@ function groupAnimationsByTarget(
   }));
 }
 
+function activeAnimationAtTime(
+  animations: RuntimeAnimationTrace[],
+  originMs: number,
+  timeMs: number
+): RuntimeAnimationTrace | undefined {
+  return [...animations]
+    .filter((animation) => {
+      const startMs = animation.startedAtRuntimeMs - originMs;
+      const endMs = animationDisplayEnd(animation) - originMs;
+      return timeMs >= startMs && timeMs <= endMs;
+    })
+    .sort(
+      (left, right) => right.startedAtRuntimeMs - left.startedAtRuntimeMs
+    )[0];
+}
+
 function animationTargetLabel(target: string): string {
   const leaf = target.split(".").at(-1) ?? target;
   return leaf
@@ -285,15 +362,18 @@ function animationSpanTitle(
 }
 
 function chooseTickStep(durationMs: number): number {
-  if (durationMs <= 500) return 100;
-  if (durationMs <= 1200) return 200;
-  if (durationMs <= 2500) return 500;
-  if (durationMs <= 6000) return 1000;
+  if (durationMs <= 450) return 50;
+  if (durationMs <= 800) return 100;
+  if (durationMs <= 1600) return 200;
+  if (durationMs <= 3500) return 500;
+  if (durationMs <= 7000) return 1000;
   return 2000;
 }
 
 function formatTime(ms: number): string {
-  return ms >= 1000 ? `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s` : `${Math.round(ms)}ms`;
+  return ms >= 1000
+    ? `${(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`
+    : `${Math.round(ms)}ms`;
 }
 
 function clamp(value: number, min: number, max: number): number {
