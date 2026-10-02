@@ -337,10 +337,42 @@ The timeline is the product surface, and it was unreadable: 8 px text, a timing 
 
 `pnpm --filter @runtime-inspector/workbench demo:runtime` starts a development-only fake runtime that publishes the example's `card-transition` and `auto` schemas and emits the same eight animation events on Replay. It exists so the Workbench UI can be developed and screenshotted in a browser without a Simulator; it is not a product feature and holds no control state.
 
-Not done yet, in the order the reference timeline needs them:
+### M6b arrangeable timeline and the recording demo
 
-1. moving a block in time (needs a start/delay control behind each animation);
-2. resizing from the left edge (same dependency);
-3. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
-4. simplifying the Outline and Inspector panels around the selected animation.
+**Implemented on `feat/runtime-workbench-desktop`; exercised in a browser against the demo runtime on 2026-10-02 (move, left-edge and right-edge resize, field edits, replay). Not yet validated with the real Simulator.**
+
+RFC 0005 §3c, same rule as §3b — a source literal becomes an ordinary control, no new command:
+
+- Discovery now also covers `shared.value = withDelay(<delay>, withTiming|withSpring(...))`. A numeric-literal delay becomes a slider; a non-literal delay is only observed.
+- A bare `withTiming` / `withSpring` in a module that imports Reanimated gets a start control defaulting to 0. At 0 the original animation object is returned untouched; above 0 it is wrapped with the module's own `withDelay`.
+- Spring configs written as object literals get sliders for `damping`, `stiffness` and `mass`.
+- `animation.started` carries additive `startControl` and `startDelayMs`. `startedAtRuntimeMs` is now the expected start of motion (call time plus applied delay), and the timeline origin is the earliest **call** time, so delaying the first animation does not shift every other row.
+- Workbench: a block can be dragged to move its start, resized from either edge (the left edge keeps the end fixed), and every backed parameter is an editable field in the Inspector. Each change goes through `setValue` / `commitValue` and replays the interaction.
+- The timeline shows the latest interaction across all schemas, grouped by element (`titleY` → group `title`, row `Y`). **Play** fires the first `replay` trigger found in any schema.
+- The Outline of raw controls is hidden by default behind a **Controls** toggle in the top bar.
+- The example app's default screen is now `ProductRevealDemo`: a staggered entrance written as plain Reanimated code (`useSharedValue`, `withDelay`, `withTiming`, `withSpring`, one `useAction("replay")`), with no Runtime Inspector declarations beyond that trigger. The previous test card moved to `CardTransitionLab` (`SCREEN = "lab"` in `App.tsx`; the viewport benchmark needs it).
+- The demo runtime imitates `ProductRevealDemo` and keeps the current value of every slider, so the whole edit → replay loop can be exercised without a Simulator.
+
+Manual validation checklist (Simulator):
+
+1. The new screen appears and its entrance plays on launch and on **Play album**.
+2. Workbench **Play**: eight rows in four groups (cover, title, details, button), starts at 0 / 140 / 240 / 380 ms.
+3. Drag the `title · Y` block to the right and release: the app replays and the title visibly enters later. Drag it back: original rhythm.
+4. Drag the `cover · Opacity` block (a bare call, delay 0) to the right: the cover fades in later.
+5. Select `cover · Scale`, raise Damping, commit: the spring settles with less bounce.
+6. With nothing tuned, the entrance is indistinguishable from the un-instrumented app.
+
+Known limits:
+
+- a start cannot be moved before the call itself, and stagger produced by `setTimeout` or state is invisible;
+- `withSequence` / `withRepeat`, completion callbacks and gesture-driven motion are not discovered;
+- tuned values are not written back to source (RFC 0004 gap);
+- spring span ends are still estimates;
+- the `spring`-control path (`configControlId`) still resolves its control in the Outline-selected schema.
+
+Not done yet:
+
+1. scrubbing the playhead with the stage following it (needs recorded frames or opt-in seeking; RFC 0005 decision 5 currently says video is live only);
+2. before/after comparison of two replays;
+3. reworking the Inspector around the selected animation.
 
