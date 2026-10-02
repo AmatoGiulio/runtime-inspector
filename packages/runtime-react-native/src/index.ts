@@ -30,8 +30,7 @@ import {
   stopRuntimeRecordingsForSchema
 } from "./recording";
 import {
-  __riWithSpring,
-  __riWithTiming,
+  __riObserveAnimation,
   setRuntimeAnimationEmitter
 } from "./animation-observer";
 
@@ -364,7 +363,7 @@ export type {
 export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
-export { __riWithSpring, __riWithTiming } from "./animation-observer";
+export { __riObserveAnimation } from "./animation-observer";
 
 export { useRuntimeValue, useAction } from "./use-runtime-value";
 export type { RuntimeValueOptions, RuntimeValueRangeOptions } from "./use-runtime-value";
