@@ -1031,7 +1031,7 @@ function DetectedAnimationTracks({
   return (
     <div className="detected-animations">
       <div className="detected-animations-title">
-        <span>Auto-detected animations</span>
+        <span>Latest interaction · auto-detected</span>
         <strong>{animations.length}</strong>
       </div>
       {animations.map((animation) => {
