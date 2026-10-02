@@ -20,6 +20,8 @@ interface ClientRecord {
   id: string;
   role?: RIPRole;
   socket: WebSocket;
+  /** Schema currently published by this runtime connection, if any. */
+  schemaId?: string;
 }
 
 export interface RuntimeInspectorBroker {
@@ -108,10 +110,14 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
       }
 
       if (message.type === "schema.publish" && record.role === "runtime") {
+        record.schemaId = message.schema.id;
         schemasByRuntime.set(record.id, message);
       }
 
       if (message.type === "schema.dispose" && record.role === "runtime") {
+        if (record.schemaId === message.schemaId) {
+          record.schemaId = undefined;
+        }
         schemasByRuntime.delete(record.id);
         traceSchemasByRuntime.delete(record.id);
       }
@@ -233,7 +239,39 @@ function routeMessage(
     return;
   }
 
+  // Runtime SDK currently opens one WebSocket session per published schema.
+  // Panel commands are schema-scoped and must reach only the runtime session
+  // that owns that schema. Broadcasting them to every runtime socket causes
+  // the same trigger/patch/recording command to execute once per schema.
+  if (sender.role === "panel") {
+    const schemaId = messageSchemaId(message);
+    if (schemaId) {
+      forwardToRuntimeSchema(clients, sender, message, schemaId);
+      return;
+    }
+  }
+
   forwardToOppositeRole(clients, sender, message);
+}
+
+function messageSchemaId(message: RIPMessage): string | undefined {
+  return "schemaId" in message && typeof message.schemaId === "string"
+    ? message.schemaId
+    : undefined;
+}
+
+function forwardToRuntimeSchema(
+  clients: Map<WebSocket, ClientRecord>,
+  sender: ClientRecord,
+  message: RIPMessage,
+  schemaId: string
+) {
+  for (const target of clients.values()) {
+    if (target.socket === sender.socket) continue;
+    if (target.role !== "runtime") continue;
+    if (target.schemaId !== schemaId) continue;
+    send(target.socket, message);
+  }
 }
 
 function forwardToOppositeRole(
