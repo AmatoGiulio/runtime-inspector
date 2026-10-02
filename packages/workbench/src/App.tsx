@@ -15,9 +15,15 @@ import type {
   RuntimeProbeDescriptor,
   SpringValue
 } from "@runtime-inspector/protocol";
-import { AnimationInspector } from "./AnimationInspector";
+import { AnimationInspector, type AnimationField } from "./AnimationInspector";
 import { AnimationTimeline } from "./AnimationTimeline";
-import { buildTimelineModel, timingDurationControl } from "./timeline-model";
+import {
+  buildTimelineModel,
+  latestAnimationBurst,
+  parameterControl,
+  startControl,
+  timelineOriginMs
+} from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
 
@@ -110,11 +116,12 @@ function App() {
     latencyMs: []
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const replayAnimationBaselineRef = useRef<Record<string, number>>({});
+  const [outlineVisible, setOutlineVisible] = useState(false);
   const pendingAnimationSelectionRef = useRef<
     | {
-        target: string;
-        animationKind: RuntimeAnimationTrace["animationKind"];
+        callsiteId: string;
+        /** Instance that was selected when the commit happened; the restored selection must be a newer run. */
+        excludeInstanceId: string;
       }
     | undefined
   >(undefined);
@@ -369,29 +376,34 @@ function App() {
     schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
   const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
-  const schemaAnimations = state.runtimeAnimations.filter(
-    (animation) => !schemaId || animation.schemaId === schemaId
+  const detectedAnimations = useMemo(
+    () => latestAnimationBurst(state.runtimeAnimations),
+    [state.runtimeAnimations]
   );
-  const replayBaseline =
-    schemaId !== undefined ? replayAnimationBaselineRef.current[schemaId] : undefined;
-  const detectedAnimations =
-    replayBaseline !== undefined
-      ? schemaAnimations.slice(replayBaseline)
-      : latestAnimationBurst(schemaAnimations);
-  const detectedAnimationOriginMs =
-    detectedAnimations.length > 0
-      ? Math.min(
-          ...detectedAnimations.map((animation) => animation.startedAtRuntimeMs)
-        )
-      : 0;
-  // detectedAnimations is rebuilt every render; these are the inputs it is derived from.
+  const detectedAnimationOriginMs = timelineOriginMs(detectedAnimations);
   const timelineDurationMs = useMemo(
     () =>
       detectedAnimations.length > 0
         ? buildTimelineModel(detectedAnimations).durationMs
         : undefined,
-    [state.runtimeAnimations, schemaId, replayBaseline]
+    [detectedAnimations]
   );
+  const replayTarget = useMemo(() => {
+    for (const schema of state.schemas) {
+      for (const group of schema.groups) {
+        for (const control of group.controls) {
+          if (
+            control.kind === "trigger" &&
+            (control.id.toLowerCase().includes("replay") ||
+              control.binding?.toLowerCase().includes("replay"))
+          ) {
+            return { schemaId: schema.id, controlId: control.id };
+          }
+        }
+      }
+    }
+    return undefined;
+  }, [state.schemas]);
   const selectedAnimation = selectedAnimationId
     ? detectedAnimations.find(
         (animation) => animation.instanceId === selectedAnimationId
@@ -418,9 +430,59 @@ function App() {
         )
       : undefined;
 
-  const selectedAnimationDuration = selectedAnimation
-    ? timingDurationControl(selectedAnimation, state.schemas, state.values)
-    : undefined;
+  const selectedAnimationFields: AnimationField[] = [];
+  let selectedAnimationFieldsStale = false;
+  if (selectedAnimation) {
+    const candidates = [
+      {
+        key: "delay",
+        label: "Delay",
+        unit: "ms" as string | undefined,
+        control: startControl(selectedAnimation, state.schemas, state.values)
+      },
+      ...(
+        [
+          ["duration", "Duration", "ms"],
+          ["damping", "Damping", undefined],
+          ["stiffness", "Stiffness", undefined],
+          ["mass", "Mass", undefined]
+        ] as const
+      ).map(([key, label, unit]) => ({
+        key: key as string,
+        label,
+        unit: unit as string | undefined,
+        control: parameterControl(
+          selectedAnimation,
+          key,
+          state.schemas,
+          state.values
+        )
+      }))
+    ];
+
+    for (const { key, label, unit, control } of candidates) {
+      if (!control) continue;
+      if (state.staleSchemaIds[control.schemaId]) {
+        selectedAnimationFieldsStale = true;
+      }
+      selectedAnimationFields.push({
+        key,
+        label,
+        unit,
+        min: control.min,
+        max: control.max,
+        step: control.step,
+        value: control.value,
+        onSet: (value) =>
+          session.setValue(control.schemaId, control.controlId, value),
+        onCommit: () => {
+          queueAnimationSelectionRestore(selectedAnimation);
+          session.commitValue(control.schemaId, control.controlId);
+          replay(true);
+        }
+      });
+    }
+  }
 
   useEffect(() => {
     const pending = pendingAnimationSelectionRef.current;
@@ -430,8 +492,8 @@ function App() {
       .reverse()
       .find(
         (animation) =>
-          animation.target === pending.target &&
-          animation.animationKind === pending.animationKind
+          animation.callsiteId === pending.callsiteId &&
+          animation.instanceId !== pending.excludeInstanceId
       );
     if (!next) return;
 
@@ -492,26 +554,35 @@ function App() {
   }
 
   function replay(preserveAnimationInspector = false) {
-    if (!schemaId) return;
-    const schema = state.schemas.find((item) => item.id === schemaId);
-    const replayControl = schema?.groups
-      .flatMap((group) => group.controls)
-      .find(
-        (control) =>
-          control.kind === "trigger" &&
-          (control.id.toLowerCase().includes("replay") ||
-            control.binding?.toLowerCase().includes("replay"))
-      );
-    if (replayControl) {
-      replayAnimationBaselineRef.current[schemaId] = schemaAnimations.length;
-      setSelectedAnimationId(undefined);
-      setPlayheadMs(0);
-      if (!preserveAnimationInspector && inspectorMode === "animation") {
-        setInspectorMode(probes[0] ? "probe" : "control");
-      }
-      session.fireTrigger(schemaId, replayControl.id);
-      setTimelinePlaying(true);
+    if (!replayTarget) return;
+    setSelectedAnimationId(undefined);
+    setPlayheadMs(0);
+    if (!preserveAnimationInspector && inspectorMode === "animation") {
+      setInspectorMode(probes[0] ? "probe" : "control");
     }
+    session.fireTrigger(replayTarget.schemaId, replayTarget.controlId);
+    setTimelinePlaying(true);
+  }
+
+  /** After the next replay, re-select the same call site (a newer run than `animation`). */
+  function queueAnimationSelectionRestore(animation: RuntimeAnimationTrace) {
+    pendingAnimationSelectionRef.current = {
+      callsiteId: animation.callsiteId,
+      excludeInstanceId: animation.instanceId
+    };
+  }
+
+  /** Every animation edit: set + commit the controls, then replay once. */
+  function commitAnimationControls(
+    animation: RuntimeAnimationTrace,
+    changes: Array<{ schemaId: string; controlId: string; value: number }>
+  ) {
+    queueAnimationSelectionRestore(animation);
+    for (const change of changes) {
+      session.setValue(change.schemaId, change.controlId, change.value);
+      session.commitValue(change.schemaId, change.controlId);
+    }
+    replay(true);
   }
 
   function runViewportBenchmark() {
@@ -782,6 +853,14 @@ function App() {
     <main className="workbench">
       <header className="topbar">
         <div className="brand">Runtime Inspector</div>
+        <button
+          type="button"
+          className="topbar-toggle"
+          aria-pressed={outlineVisible}
+          onClick={() => setOutlineVisible((visible) => !visible)}
+        >
+          Controls
+        </button>
         {state.notice && <div className="notice">{state.notice}</div>}
         <div className="connection" data-status={state.status}>
           <span className="dot" />
@@ -789,104 +868,108 @@ function App() {
         </div>
       </header>
 
-      <section className="workspace">
-        <aside className="outline panel">
-          <div className="panel-title">Outline</div>
-          {schemaIds.length === 0 ? (
-            <Empty text="No runtime semantics yet." />
-          ) : (
-            schemaIds.map((id) => {
-              const schema = state.schemas.find((item) => item.id === id);
-              const schemaProbes = state.traceSchemas[id] ?? [];
-              const controls =
-                schema?.groups.flatMap((group) =>
-                  group.controls.map((control) => ({ group, control }))
-                ) ?? [];
+      <section
+        className={outlineVisible ? "workspace" : "workspace no-outline"}
+      >
+        {outlineVisible ? (
+          <aside className="outline panel">
+            <div className="panel-title">Outline</div>
+            {schemaIds.length === 0 ? (
+              <Empty text="No runtime semantics yet." />
+            ) : (
+              schemaIds.map((id) => {
+                const schema = state.schemas.find((item) => item.id === id);
+                const schemaProbes = state.traceSchemas[id] ?? [];
+                const controls =
+                  schema?.groups.flatMap((group) =>
+                    group.controls.map((control) => ({ group, control }))
+                  ) ?? [];
 
-              return (
-                <div className="schema" key={id}>
-                  <button
-                    className={id === schemaId ? "schema-button active" : "schema-button"}
-                    onClick={() => {
-                      setSchemaId(id);
-                      if (schemaProbes[0]) {
-                        setProbeId(schemaProbes[0].id);
-                        setInspectorMode("probe");
-                      } else if (controls[0]) {
-                        setSelectedControlId(controls[0].control.id);
-                        setInspectorMode("control");
-                      }
-                    }}
-                  >
-                    {schema?.title ?? id}
-                  </button>
+                return (
+                  <div className="schema" key={id}>
+                    <button
+                      className={id === schemaId ? "schema-button active" : "schema-button"}
+                      onClick={() => {
+                        setSchemaId(id);
+                        if (schemaProbes[0]) {
+                          setProbeId(schemaProbes[0].id);
+                          setInspectorMode("probe");
+                        } else if (controls[0]) {
+                          setSelectedControlId(controls[0].control.id);
+                          setInspectorMode("control");
+                        }
+                      }}
+                    >
+                      {schema?.title ?? id}
+                    </button>
 
-                  {id === schemaId ? (
-                    <div className="outline-sections">
-                      {controls.length > 0 ? (
-                        <div className="outline-section">
-                          <div className="outline-section-label">Controls</div>
-                          {controls.map(({ group, control }) => (
-                            <button
-                              key={control.id}
-                              className={
-                                inspectorMode === "control" &&
-                                control.id === selectedControlId
-                                  ? "outline-item active"
-                                  : "outline-item"
-                              }
-                              onClick={() => {
-                                setSchemaId(id);
-                                setSelectedControlId(control.id);
-                                setInspectorMode("control");
-                              }}
-                              title={group.label}
-                            >
-                              <span className="outline-item-icon">
-                                {controlGlyph(control.kind)}
-                              </span>
-                              <span className="outline-item-copy">
-                                <span>{control.label}</span>
-                                <small>{control.kind}</small>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
+                    {id === schemaId ? (
+                      <div className="outline-sections">
+                        {controls.length > 0 ? (
+                          <div className="outline-section">
+                            <div className="outline-section-label">Controls</div>
+                            {controls.map(({ group, control }) => (
+                              <button
+                                key={control.id}
+                                className={
+                                  inspectorMode === "control" &&
+                                  control.id === selectedControlId
+                                    ? "outline-item active"
+                                    : "outline-item"
+                                }
+                                onClick={() => {
+                                  setSchemaId(id);
+                                  setSelectedControlId(control.id);
+                                  setInspectorMode("control");
+                                }}
+                                title={group.label}
+                              >
+                                <span className="outline-item-icon">
+                                  {controlGlyph(control.kind)}
+                                </span>
+                                <span className="outline-item-copy">
+                                  <span>{control.label}</span>
+                                  <small>{control.kind}</small>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
 
-                      {schemaProbes.length > 0 ? (
-                        <div className="outline-section">
-                          <div className="outline-section-label">Probes</div>
-                          {schemaProbes.map((probe) => (
-                            <button
-                              key={probe.id}
-                              className={
-                                inspectorMode === "probe" && probe.id === probeId
-                                  ? "outline-item active"
-                                  : "outline-item"
-                              }
-                              onClick={() => {
-                                setSchemaId(id);
-                                setProbeId(probe.id);
-                                setInspectorMode("probe");
-                              }}
-                            >
-                              <span className="outline-item-icon probe-icon">⌁</span>
-                              <span className="outline-item-copy">
-                                <span>{probe.label ?? probe.id}</span>
-                                <small>{probe.valueType}</small>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })
-          )}
-        </aside>
+                        {schemaProbes.length > 0 ? (
+                          <div className="outline-section">
+                            <div className="outline-section-label">Probes</div>
+                            {schemaProbes.map((probe) => (
+                              <button
+                                key={probe.id}
+                                className={
+                                  inspectorMode === "probe" && probe.id === probeId
+                                    ? "outline-item active"
+                                    : "outline-item"
+                                }
+                                onClick={() => {
+                                  setSchemaId(id);
+                                  setProbeId(probe.id);
+                                  setInspectorMode("probe");
+                                }}
+                              >
+                                <span className="outline-item-icon probe-icon">⌁</span>
+                                <span className="outline-item-copy">
+                                  <span>{probe.label ?? probe.id}</span>
+                                  <small>{probe.valueType}</small>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </aside>
+        ) : null}
 
         <section className="runtime-stage">
           <div className="stage-toolbar">
@@ -1045,40 +1128,11 @@ function App() {
               springControl={selectedAnimationSpringControl}
               springValue={selectedAnimationSpringValue}
               stale={
-                selectedSchemaStale ||
-                Boolean(
-                  selectedAnimationDuration &&
-                    state.staleSchemaIds[selectedAnimationDuration.schemaId]
-                )
+                selectedAnimationFieldsStale ||
+                (selectedAnimationSpringControl !== undefined &&
+                  selectedSchemaStale)
               }
-              durationControl={selectedAnimationDuration}
-              onSetDuration={
-                selectedAnimationDuration
-                  ? (value) =>
-                      session.setValue(
-                        selectedAnimationDuration.schemaId,
-                        selectedAnimationDuration.controlId,
-                        value
-                      )
-                  : undefined
-              }
-              onCommitDuration={
-                selectedAnimationDuration
-                  ? () => {
-                      if (selectedAnimation) {
-                        pendingAnimationSelectionRef.current = {
-                          target: selectedAnimation.target,
-                          animationKind: selectedAnimation.animationKind
-                        };
-                      }
-                      session.commitValue(
-                        selectedAnimationDuration.schemaId,
-                        selectedAnimationDuration.controlId
-                      );
-                      replay(true);
-                    }
-                  : undefined
-              }
+              fields={selectedAnimationFields}
               onSetSpring={
                 schemaId && selectedAnimationSpringControl
                   ? (value) =>
@@ -1093,10 +1147,7 @@ function App() {
                 schemaId && selectedAnimationSpringControl
                   ? () => {
                       if (selectedAnimation) {
-                        pendingAnimationSelectionRef.current = {
-                          target: selectedAnimation.target,
-                          animationKind: selectedAnimation.animationKind
-                        };
+                        queueAnimationSelectionRestore(selectedAnimation);
                       }
                       session.commitValue(
                         schemaId,
@@ -1134,7 +1185,7 @@ function App() {
             className="play-button"
             type="button"
             onClick={() => replay()}
-            disabled={!schemaId}
+            disabled={!replayTarget}
           >
             ▶ Play
           </button>
@@ -1199,8 +1250,10 @@ function App() {
               playheadMs={playheadMs}
               playing={timelinePlaying}
               getDurationRange={(animation) => {
-                const c = timingDurationControl(
+                if (animation.animationKind !== "timing") return undefined;
+                const c = parameterControl(
                   animation,
+                  "duration",
                   state.schemas,
                   state.values
                 );
@@ -1208,24 +1261,68 @@ function App() {
                   ? { min: c.min, max: c.max, step: c.step }
                   : undefined;
               }}
+              getStartRange={(animation) => {
+                const c = startControl(animation, state.schemas, state.values);
+                return c && !state.staleSchemaIds[c.schemaId]
+                  ? { min: c.min, max: c.max, step: c.step, value: c.value }
+                  : undefined;
+              }}
               onResizeDuration={(animationId, durationMs) => {
                 const animation = detectedAnimations.find(
                   (candidate) => candidate.instanceId === animationId
                 );
                 if (!animation) return;
-                const c = timingDurationControl(
+                const c = parameterControl(
                   animation,
+                  "duration",
                   state.schemas,
                   state.values
                 );
                 if (!c) return;
-                pendingAnimationSelectionRef.current = {
-                  target: animation.target,
-                  animationKind: animation.animationKind
-                };
-                session.setValue(c.schemaId, c.controlId, durationMs);
-                session.commitValue(c.schemaId, c.controlId);
-                replay(true);
+                commitAnimationControls(animation, [
+                  { schemaId: c.schemaId, controlId: c.controlId, value: durationMs }
+                ]);
+              }}
+              onMoveStart={(animationId, delayMs) => {
+                const animation = detectedAnimations.find(
+                  (candidate) => candidate.instanceId === animationId
+                );
+                if (!animation) return;
+                const c = startControl(animation, state.schemas, state.values);
+                if (!c) return;
+                commitAnimationControls(animation, [
+                  { schemaId: c.schemaId, controlId: c.controlId, value: delayMs }
+                ]);
+              }}
+              onResizeStart={(animationId, delayMs, durationMs) => {
+                const animation = detectedAnimations.find(
+                  (candidate) => candidate.instanceId === animationId
+                );
+                if (!animation) return;
+                const start = startControl(
+                  animation,
+                  state.schemas,
+                  state.values
+                );
+                const duration = parameterControl(
+                  animation,
+                  "duration",
+                  state.schemas,
+                  state.values
+                );
+                if (!start || !duration) return;
+                commitAnimationControls(animation, [
+                  {
+                    schemaId: start.schemaId,
+                    controlId: start.controlId,
+                    value: delayMs
+                  },
+                  {
+                    schemaId: duration.schemaId,
+                    controlId: duration.controlId,
+                    value: durationMs
+                  }
+                ]);
               }}
               onPlayheadChange={(ms) => {
                 setPlayheadMs(ms);
@@ -1245,30 +1342,6 @@ function App() {
       </section>
     </main>
   );
-}
-
-const ANIMATION_BURST_IDLE_GAP_MS = 450;
-
-function latestAnimationBurst(
-  animations: RuntimeAnimationTrace[]
-): RuntimeAnimationTrace[] {
-  if (animations.length === 0) return [];
-
-  const ordered = [...animations].sort(
-    (left, right) => left.startedAtRuntimeMs - right.startedAtRuntimeMs
-  );
-  let burstStart = 0;
-
-  for (let index = 1; index < ordered.length; index += 1) {
-    const gap =
-      ordered[index].startedAtRuntimeMs -
-      ordered[index - 1].startedAtRuntimeMs;
-    if (gap > ANIMATION_BURST_IDLE_GAP_MS) {
-      burstStart = index;
-    }
-  }
-
-  return ordered.slice(burstStart);
 }
 
 function animationDisplayEnd(animation: RuntimeAnimationTrace): number {

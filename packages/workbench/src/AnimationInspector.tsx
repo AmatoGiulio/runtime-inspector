@@ -11,9 +11,20 @@ interface AnimationInspectorProps {
   stale: boolean;
   onSetSpring?(value: SpringValue): void;
   onCommitSpring?(): void;
-  durationControl?: { min: number; max: number; step: number; value: number };
-  onSetDuration?(value: number): void;
-  onCommitDuration?(): void;
+  /** Editable numeric parameters (delay, duration, spring literals), in display order. */
+  fields?: AnimationField[];
+}
+
+export interface AnimationField {
+  key: string;
+  label: string;
+  unit?: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onSet(value: number): void;
+  onCommit(): void;
 }
 
 export function AnimationInspector({
@@ -25,9 +36,7 @@ export function AnimationInspector({
   stale,
   onSetSpring,
   onCommitSpring,
-  durationControl,
-  onSetDuration,
-  onCommitDuration
+  fields = []
 }: AnimationInspectorProps) {
   const startMs = animation.startedAtRuntimeMs - originMs;
   const durationMs =
@@ -47,9 +56,10 @@ export function AnimationInspector({
   const canTuneSpring =
     animation.animationKind === "spring" &&
     Boolean(springControl && springValue && onSetSpring && onCommitSpring);
-  const canTuneDuration =
-    animation.animationKind === "timing" &&
-    Boolean(durationControl && onSetDuration && onCommitDuration);
+  const editableKeys = new Set(fields.map((field) => field.key));
+  const readOnlyParameters = Object.entries(animation.resolvedConfig).filter(
+    ([key]) => !editableKeys.has(key)
+  );
 
   return (
     <div className="animation-inspector">
@@ -84,28 +94,27 @@ export function AnimationInspector({
         />
       </div>
 
-      {Object.keys(animation.resolvedConfig).some(
-        (key) => !(canTuneDuration && key === "duration")
-      ) && !canTuneSpring ? (
+      {readOnlyParameters.length > 0 && !canTuneSpring ? (
         <div className="animation-inspector-section">
           <div className="animation-inspector-section-title">Parameters</div>
-          {Object.entries(animation.resolvedConfig)
-            .filter(([key]) => !(canTuneDuration && key === "duration"))
-            .map(([key, value]) => (
-              <InspectorRow key={key} label={humanize(key)} value={String(value)} />
-            ))}
+          {readOnlyParameters.map(([key, value]) => (
+            <InspectorRow key={key} label={humanize(key)} value={String(value)} />
+          ))}
         </div>
       ) : null}
 
-      {canTuneDuration && durationControl && onSetDuration && onCommitDuration ? (
+      {fields.length > 0 ? (
         <div className="animation-inspector-section">
-          <div className="animation-inspector-section-title">Timing</div>
-          <DurationField
-            control={durationControl}
-            disabled={stale}
-            onSet={onSetDuration}
-            onCommit={onCommitDuration}
-          />
+          <div className="animation-inspector-section-title">Parameters</div>
+          <div className="animation-spring-fields">
+            {fields.map((field) => (
+              <NumberField
+                key={`${animation.instanceId}:${field.key}`}
+                field={field}
+                disabled={stale}
+              />
+            ))}
+          </div>
           <div className="animation-inspector-note">Applies on the next replay.</div>
         </div>
       ) : null}
@@ -234,24 +243,20 @@ function SpringFields({
   );
 }
 
-function DurationField({
-  control,
-  disabled,
-  onSet,
-  onCommit
+function NumberField({
+  field,
+  disabled
 }: {
-  control: { min: number; max: number; step: number; value: number };
+  field: AnimationField;
   disabled: boolean;
-  onSet(value: number): void;
-  onCommit(): void;
 }) {
+  const { label, unit, min, max, step, value, onSet, onCommit } = field;
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const dirtyRef = useRef(false);
   const parsed = draft === undefined ? undefined : parseDraft(draft);
   const invalid =
-    draft !== undefined &&
-    (parsed === undefined || parsed < control.min || parsed > control.max);
-  const rangeMax = Math.min(control.max, Math.max(2000, control.value * 2));
+    draft !== undefined && (parsed === undefined || parsed < min || parsed > max);
+  const rangeMax = unit === "ms" ? Math.min(max, Math.max(2000, value * 2)) : max;
 
   function commit() {
     if (invalid || !dirtyRef.current) return;
@@ -261,29 +266,25 @@ function DurationField({
   }
 
   return (
-    <div className="animation-spring-fields">
+    <>
       <label className="animation-spring-field">
         <div>
-          <span>Duration</span>
+          <span>{label}</span>
           <input
             type="number"
-            min={control.min}
-            max={control.max}
-            step={control.step}
-            value={draft ?? control.value}
+            min={min}
+            max={max}
+            step={step}
+            value={draft ?? value}
             disabled={disabled}
             aria-invalid={invalid || undefined}
             onChange={(event) => {
               const text = event.target.value;
               setDraft(text);
-              const value = parseDraft(text);
-              if (
-                value !== undefined &&
-                value >= control.min &&
-                value <= control.max
-              ) {
+              const next = parseDraft(text);
+              if (next !== undefined && next >= min && next <= max) {
                 dirtyRef.current = true;
-                onSet(value);
+                onSet(next);
               }
             }}
             onBlur={commit}
@@ -294,10 +295,10 @@ function DurationField({
         </div>
         <input
           type="range"
-          min={control.min}
+          min={min}
           max={rangeMax}
-          step={control.step}
-          value={control.value}
+          step={step}
+          value={value}
           disabled={disabled}
           onChange={(event) => {
             setDraft(undefined);
@@ -310,10 +311,11 @@ function DurationField({
       </label>
       {invalid ? (
         <div className="animation-inspector-note" role="alert">
-          Duration must be between {control.min} and {control.max} ms.
+          {label} must be between {min} and {max}
+          {unit ? ` ${unit}` : ""}.
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 

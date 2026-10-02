@@ -11,8 +11,13 @@ import {
   animationTargetLabel,
   buildTimelineModel,
   clamp,
-  resizedDurationMs
+  movedStartDelay,
+  resizedDurationMs,
+  resizedFromStart
 } from "./timeline-model";
+
+/** Pointer travel below this many pixels is a click, not a drag. */
+const DRAG_THRESHOLD_PX = 4;
 
 export interface AnimationTimelineProps {
   animations: RuntimeAnimationTrace[];
@@ -28,6 +33,14 @@ export interface AnimationTimelineProps {
   ): { min: number; max: number; step: number } | undefined;
   /** Fired once, on pointer release, when a resize ended on a duration different from the current one. */
   onResizeDuration?(animationId: string, durationMs: number): void;
+  /** Returns the editable range of a span's start delay, and its current value, or undefined when the span cannot be moved. */
+  getStartRange?(
+    animation: RuntimeAnimationTrace
+  ): { min: number; max: number; step: number; value: number } | undefined;
+  /** Fired once, on pointer release, when a move ended on a delay different from the current one. */
+  onMoveStart?(animationId: string, delayMs: number): void;
+  /** Fired once, on pointer release, when a left-edge drag changed the delay or duration. */
+  onResizeStart?(animationId: string, delayMs: number, durationMs: number): void;
 }
 
 interface ResizeState {
@@ -41,6 +54,28 @@ interface ResizeSession extends ResizeState {
   range: { min: number; max: number; step: number };
 }
 
+interface EditState {
+  instanceId: string;
+  mode: "move" | "resize-start";
+  /** Delay the control had when the drag began. */
+  baseDelayMs: number;
+  /** Previewed delay. */
+  delayMs: number;
+  /** Previewed duration; set for left-edge drags. */
+  durationMs?: number;
+}
+
+interface EditSession extends EditState {
+  startClientX: number;
+  laneWidth: number;
+  startMs: number;
+  /** Move only: the pointer travelled past the click threshold. */
+  dragging: boolean;
+  startRange: { min: number; max: number; step: number };
+  durationRange?: { min: number; max: number; step: number };
+  baseDurationMs?: number;
+}
+
 export function AnimationTimeline({
   animations,
   selectedAnimationId,
@@ -49,12 +84,19 @@ export function AnimationTimeline({
   onSelectAnimation,
   onPlayheadChange,
   getDurationRange,
-  onResizeDuration
+  onResizeDuration,
+  getStartRange,
+  onMoveStart,
+  onResizeStart
 }: AnimationTimelineProps) {
   const model = useMemo(() => buildTimelineModel(animations), [animations]);
   const dragRef = useRef(false);
   const resizeRef = useRef<ResizeSession | undefined>(undefined);
   const [resize, setResize] = useState<ResizeState | undefined>(undefined);
+  const editRef = useRef<EditSession | undefined>(undefined);
+  const [edit, setEdit] = useState<EditState | undefined>(undefined);
+  /** Set when a move drag ended: the click the browser fires after it must not select again. */
+  const suppressClickRef = useRef(false);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<ReadonlySet<string>>(
     () => new Set()
   );
@@ -221,6 +263,191 @@ export function AnimationTimeline({
     }
   }
 
+  function laneWidthOf(element: Element): number {
+    return element.closest(".motion-row-lane")?.getBoundingClientRect().width ?? 0;
+  }
+
+  function releaseCapture(event: ReactPointerEvent<HTMLElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleBarPointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    animation: RuntimeAnimationTrace,
+    startMs: number,
+    startRange: { min: number; max: number; step: number; value: number }
+  ) {
+    event.stopPropagation();
+    suppressClickRef.current = false;
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    editRef.current = {
+      instanceId: animation.instanceId,
+      mode: "move",
+      baseDelayMs: startRange.value,
+      delayMs: startRange.value,
+      startClientX: event.clientX,
+      laneWidth: laneWidthOf(event.currentTarget),
+      startMs,
+      dragging: false,
+      startRange
+    };
+  }
+
+  function handleBarPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const session = editRef.current;
+    if (!session || session.mode !== "move") return;
+    event.stopPropagation();
+    const travelPx = event.clientX - session.startClientX;
+    if (!session.dragging && Math.abs(travelPx) < DRAG_THRESHOLD_PX) return;
+    if (session.laneWidth <= 0) return;
+    const deltaMs = clamp(
+      (travelPx / session.laneWidth) * model.durationMs,
+      -session.startMs,
+      model.durationMs - session.startMs
+    );
+    const delayMs = movedStartDelay({
+      delay: session.baseDelayMs,
+      deltaMs,
+      ...session.startRange
+    });
+    const wasDragging = session.dragging;
+    session.dragging = true;
+    if (wasDragging && delayMs === session.delayMs) return;
+    session.delayMs = delayMs;
+    setEdit({
+      instanceId: session.instanceId,
+      mode: "move",
+      baseDelayMs: session.baseDelayMs,
+      delayMs
+    });
+  }
+
+  function handleBarPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const session = editRef.current;
+    if (!session || session.mode !== "move") return;
+    event.stopPropagation();
+    editRef.current = undefined;
+    setEdit(undefined);
+    releaseCapture(event);
+    // Below the threshold this is a click: the click event selects the span.
+    if (!session.dragging) return;
+    suppressClickRef.current = true;
+    if (session.delayMs !== session.baseDelayMs) {
+      onSelectAnimation(session.instanceId);
+      onMoveStart?.(session.instanceId, session.delayMs);
+    }
+  }
+
+  function handleBarPointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (editRef.current?.mode !== "move") return;
+    event.stopPropagation();
+    editRef.current = undefined;
+    setEdit(undefined);
+    releaseCapture(event);
+  }
+
+  function handleStartEdgePointerDown(
+    event: ReactPointerEvent<HTMLElement>,
+    animation: RuntimeAnimationTrace,
+    startMs: number,
+    startRange: { min: number; max: number; step: number; value: number },
+    durationRange: { min: number; max: number; step: number },
+    currentDurationMs: number | undefined
+  ) {
+    event.stopPropagation();
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const baseDurationMs = currentDurationMs ?? durationRange.min;
+    editRef.current = {
+      instanceId: animation.instanceId,
+      mode: "resize-start",
+      baseDelayMs: startRange.value,
+      delayMs: startRange.value,
+      durationMs: baseDurationMs,
+      baseDurationMs,
+      startClientX: event.clientX,
+      laneWidth: laneWidthOf(event.currentTarget),
+      startMs,
+      dragging: true,
+      startRange,
+      durationRange
+    };
+    setEdit({
+      instanceId: animation.instanceId,
+      mode: "resize-start",
+      baseDelayMs: startRange.value,
+      delayMs: startRange.value,
+      durationMs: baseDurationMs
+    });
+  }
+
+  function handleStartEdgePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const session = editRef.current;
+    if (
+      !session ||
+      session.mode !== "resize-start" ||
+      !session.durationRange ||
+      session.baseDurationMs === undefined ||
+      session.laneWidth <= 0
+    ) {
+      return;
+    }
+    event.stopPropagation();
+    const deltaMs = clamp(
+      ((event.clientX - session.startClientX) / session.laneWidth) *
+        model.durationMs,
+      -session.startMs,
+      model.durationMs - session.startMs
+    );
+    const next = resizedFromStart({
+      delay: session.baseDelayMs,
+      duration: session.baseDurationMs,
+      deltaMs,
+      delayRange: session.startRange,
+      durationRange: session.durationRange
+    });
+    if (next.delay === session.delayMs && next.duration === session.durationMs) {
+      return;
+    }
+    session.delayMs = next.delay;
+    session.durationMs = next.duration;
+    setEdit({
+      instanceId: session.instanceId,
+      mode: "resize-start",
+      baseDelayMs: session.baseDelayMs,
+      delayMs: next.delay,
+      durationMs: next.duration
+    });
+  }
+
+  function handleStartEdgePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    const session = editRef.current;
+    if (!session || session.mode !== "resize-start") return;
+    event.stopPropagation();
+    editRef.current = undefined;
+    setEdit(undefined);
+    releaseCapture(event);
+    if (
+      session.durationMs !== undefined &&
+      (session.delayMs !== session.baseDelayMs ||
+        session.durationMs !== session.baseDurationMs)
+    ) {
+      onSelectAnimation(session.instanceId);
+      onResizeStart?.(session.instanceId, session.delayMs, session.durationMs);
+    }
+  }
+
+  function handleStartEdgePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (editRef.current?.mode !== "resize-start") return;
+    event.stopPropagation();
+    editRef.current = undefined;
+    setEdit(undefined);
+    releaseCapture(event);
+  }
+
   const gridLines = model.ticks.map((tick) => (
     <span
       className="motion-grid-line"
@@ -307,19 +534,46 @@ export function AnimationTimeline({
                 ? null
                 : group.rows.map((row) => {
                     const { animation, startMs } = row;
+                    const rawDurationRange = getDurationRange?.(animation);
                     const durationRange = onResizeDuration
-                      ? getDurationRange?.(animation)
+                      ? rawDurationRange
                       : undefined;
+                    const startRange =
+                      onMoveStart || onResizeStart
+                        ? getStartRange?.(animation)
+                        : undefined;
+                    const movable = Boolean(startRange && onMoveStart);
+                    const startResizable = Boolean(
+                      startRange && rawDurationRange && onResizeStart
+                    );
                     const resizing =
                       resize?.instanceId === animation.instanceId
                         ? resize
                         : undefined;
-                    const displayDuration =
-                      resizing?.durationMs ?? row.durationMs;
-                    const endMs =
-                      resizing !== undefined
-                        ? startMs + resizing.durationMs
-                        : animationDisplayEnd(animation) - model.originMs;
+                    const editing =
+                      edit?.instanceId === animation.instanceId
+                        ? edit
+                        : undefined;
+                    const moving = editing?.mode === "move";
+                    const baseEndMs =
+                      animationDisplayEnd(animation) - model.originMs;
+                    let barStartMs = startMs;
+                    let endMs = baseEndMs;
+                    let displayDuration = row.durationMs;
+                    if (resizing) {
+                      endMs = startMs + resizing.durationMs;
+                      displayDuration = resizing.durationMs;
+                    } else if (editing) {
+                      const shiftMs = editing.delayMs - editing.baseDelayMs;
+                      barStartMs = startMs + shiftMs;
+                      if (editing.mode === "move") {
+                        endMs = baseEndMs + shiftMs;
+                      } else if (editing.durationMs !== undefined) {
+                        endMs = barStartMs + editing.durationMs;
+                        displayDuration = editing.durationMs;
+                      }
+                    }
+                    const dragging = Boolean(resizing || editing);
                     const selected =
                       animation.instanceId === selectedAnimationId;
 
@@ -328,7 +582,7 @@ export function AnimationTimeline({
                         className={classNames(
                           "motion-row",
                           selected && "selected",
-                          resizing && "resizing"
+                          dragging && "resizing"
                         )}
                         key={animation.instanceId}
                       >
@@ -343,7 +597,7 @@ export function AnimationTimeline({
                           <span className="motion-row-kind">· {row.kindLabel}</span>
                           <span className="motion-row-duration">
                             {displayDuration !== undefined
-                              ? `${row.estimated && !resizing ? "~" : ""}${formatTime(
+                              ? `${row.estimated && !dragging ? "~" : ""}${formatTime(
                                   displayDuration
                                 )}`
                               : "—"}
@@ -354,16 +608,18 @@ export function AnimationTimeline({
                           <button
                             className={classNames(
                               "motion-bar",
-                              row.estimated && !resizing && "estimated",
-                              selected && "selected"
+                              row.estimated && !dragging && "estimated",
+                              selected && "selected",
+                              movable && "movable",
+                              moving && "moving"
                             )}
                             type="button"
                             aria-label={`${row.label} · ${row.kindLabel}`}
                             style={{
-                              left: percentOf(startMs),
+                              left: percentOf(barStartMs),
                               width: `${Math.max(
                                 0.8,
-                                ((endMs - startMs) / model.durationMs) * 100
+                                ((endMs - barStartMs) / model.durationMs) * 100
                               )}%`
                             }}
                             title={animationSpanTitle(
@@ -371,17 +627,64 @@ export function AnimationTimeline({
                               displayDuration,
                               row.estimated
                             )}
-                            onPointerDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) =>
+                              startRange && onMoveStart
+                                ? handleBarPointerDown(
+                                    event,
+                                    animation,
+                                    startMs,
+                                    startRange
+                                  )
+                                : event.stopPropagation()
+                            }
+                            onPointerMove={
+                              movable ? handleBarPointerMove : undefined
+                            }
+                            onPointerUp={movable ? handleBarPointerUp : undefined}
+                            onPointerCancel={
+                              movable ? handleBarPointerCancel : undefined
+                            }
                             onClick={(event) => {
                               event.stopPropagation();
+                              if (suppressClickRef.current) {
+                                suppressClickRef.current = false;
+                                return;
+                              }
                               onSelectAnimation(animation.instanceId);
                             }}
                           />
+                          {startResizable && startRange && rawDurationRange ? (
+                            <span
+                              className={classNames(
+                                "motion-bar-resize",
+                                "start",
+                                (selected || dragging) && "active"
+                              )}
+                              aria-hidden="true"
+                              style={{
+                                left: `calc(${percentOf(barStartMs)} - 4px)`
+                              }}
+                              onPointerDown={(event) =>
+                                handleStartEdgePointerDown(
+                                  event,
+                                  animation,
+                                  startMs,
+                                  startRange,
+                                  rawDurationRange,
+                                  row.durationMs
+                                )
+                              }
+                              onPointerMove={handleStartEdgePointerMove}
+                              onPointerUp={handleStartEdgePointerUp}
+                              onPointerCancel={handleStartEdgePointerCancel}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          ) : null}
                           {durationRange ? (
                             <span
                               className={classNames(
                                 "motion-bar-resize",
-                                (selected || resizing) && "active"
+                                (selected || dragging) && "active"
                               )}
                               aria-hidden="true"
                               style={{

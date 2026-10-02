@@ -47,6 +47,33 @@ button {
   letter-spacing: -0.01em;
 }
 
+.topbar-toggle {
+  margin: 0 auto 0 14px;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 9px;
+  color: #8e8e93;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.topbar-toggle:hover {
+  color: #d0d0d4;
+}
+
+.topbar-toggle[aria-pressed="true"] {
+  color: #f2f2f4;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.topbar-toggle:focus-visible {
+  outline: 2px solid #7c5cff;
+  outline-offset: 1px;
+}
+
 .notice {
   max-width: 52vw;
   overflow: hidden;
@@ -78,10 +105,14 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: 220px minmax(520px, 1fr) 230px;
+  grid-template-columns: 220px minmax(520px, 1fr) 280px;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
+}
+
+.workspace.no-outline {
+  grid-template-columns: minmax(520px, 1fr) 280px;
 }
 
 .panel {
@@ -1459,6 +1490,15 @@ button {
   background: rgba(255, 255, 255, 0.24);
 }
 
+.motion-bar.movable {
+  cursor: grab;
+}
+
+.motion-bar.moving {
+  cursor: grabbing;
+  opacity: 0.85;
+}
+
 .motion-bar.selected,
 .motion-bar.selected:hover {
   background: #7c5cff;
@@ -1476,6 +1516,11 @@ button {
   top: calc(50% - 9px);
   width: 8px;
   height: 18px;
+  cursor: ew-resize;
+}
+
+.motion-bar-resize.start {
+  /* Positioned at the bar start by an inline `left`; same handle as the end. */
   cursor: ew-resize;
 }
 

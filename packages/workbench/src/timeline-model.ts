@@ -31,22 +31,30 @@ export interface TimelineModel {
   minorTicks: number[];
 }
 
-export interface TimingDurationControl {
+/** A slider control resolved from a schema reference, with its current value. */
+export interface AnimationControl {
   schemaId: string;
   controlId: string;
   min: number;
   max: number;
   step: number;
-  /** Current control value in ms. */
   value: number;
+  unit?: string;
 }
+
+export type TimingDurationControl = AnimationControl;
+
+export interface ControlRef {
+  schemaId: string;
+  controlId: string;
+}
+
+type ControlValues = Readonly<Record<string, Record<string, unknown> | undefined>>;
 
 export function buildTimelineModel(
   animations: RuntimeAnimationTrace[]
 ): TimelineModel {
-  const originMs = Math.min(
-    ...animations.map((animation) => animation.startedAtRuntimeMs)
-  );
+  const originMs = timelineOriginMs(animations);
   const maxEndMs = Math.max(
     ...animations.map((animation) => animationDisplayEnd(animation))
   );
@@ -91,7 +99,7 @@ function groupAnimationRows(
   const groups = new Map<string, AnimationGroup>();
 
   for (const { animation } of ordered) {
-    const id = animationElementId(animation.target);
+    const { group: id, label } = splitAnimationTarget(animation.target);
     let group = groups.get(id);
     if (!group) {
       group = { id, label: id, rows: [] };
@@ -105,7 +113,7 @@ function groupAnimationRows(
 
     group.rows.push({
       animation,
-      label: animationTargetLabel(animation.target),
+      label,
       kindLabel: animation.animationKind === "spring" ? "Spring" : "Timing",
       startMs: animation.startedAtRuntimeMs - originMs,
       durationMs: observedDurationMs ?? animation.expectedDurationMs,
@@ -118,9 +126,73 @@ function groupAnimationRows(
   return Array.from(groups.values());
 }
 
-function animationElementId(target: string): string {
+/**
+ * Splits a target into its element group and a property label.
+ * "card.moveX" -> card / "Move X"; "titleY" -> title / "Y"; "progress" -> progress / "Progress".
+ */
+export function splitAnimationTarget(target: string): {
+  group: string;
+  label: string;
+} {
   const lastDot = target.lastIndexOf(".");
-  return lastDot === -1 ? target : target.slice(0, lastDot);
+  if (lastDot !== -1) {
+    return {
+      group: target.slice(0, lastDot),
+      label: humanizeName(target.slice(lastDot + 1))
+    };
+  }
+
+  const boundary = /[a-z0-9](?=[A-Z])/.exec(target);
+  if (boundary) {
+    const split = boundary.index + 1;
+    return {
+      group: target.slice(0, split),
+      label: humanizeName(target.slice(split))
+    };
+  }
+
+  return { group: target, label: humanizeName(target) };
+}
+
+function humanizeName(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[-_]+/g, " ")
+    .replace(/^./, (character) => character.toUpperCase());
+}
+
+/** Time the animation's call happened: its start minus any delay already included in it. */
+export function animationCallTimeMs(animation: RuntimeAnimationTrace): number {
+  return animation.startedAtRuntimeMs - (animation.startDelayMs ?? 0);
+}
+
+/** Earliest call time of the animations; 0 for an empty list. */
+export function timelineOriginMs(animations: RuntimeAnimationTrace[]): number {
+  if (animations.length === 0) return 0;
+  return Math.min(...animations.map(animationCallTimeMs));
+}
+
+/**
+ * The animations of the last interaction: clusters by call time, a gap larger than
+ * `idleGapMs` between consecutive calls starts a new cluster. Original relative order is kept.
+ */
+export function latestAnimationBurst(
+  animations: RuntimeAnimationTrace[],
+  idleGapMs = 450
+): RuntimeAnimationTrace[] {
+  if (animations.length === 0) return [];
+
+  const callTimes = animations.map(animationCallTimeMs).sort((a, b) => a - b);
+  let burstStartMs = callTimes[0]!;
+  for (let index = 1; index < callTimes.length; index += 1) {
+    if (callTimes[index]! - callTimes[index - 1]! > idleGapMs) {
+      burstStartMs = callTimes[index]!;
+    }
+  }
+
+  return animations.filter(
+    (animation) => animationCallTimeMs(animation) >= burstStartMs
+  );
 }
 
 export function activeAnimationAtTime(
@@ -170,14 +242,12 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Resolves the slider control behind a timing span's duration, or undefined when the span is not tunable. */
-export function timingDurationControl(
-  animation: RuntimeAnimationTrace,
+/** Resolves a slider control reference against schema state; undefined when it is missing, not a slider or has no finite value. */
+export function resolveSliderControl(
+  ref: ControlRef | undefined,
   schemas: readonly PanelSchema[],
-  values: Readonly<Record<string, Record<string, unknown> | undefined>>
-): TimingDurationControl | undefined {
-  if (animation.animationKind !== "timing") return undefined;
-  const ref = animation.parameterControls?.duration;
+  values: ControlValues
+): AnimationControl | undefined {
   if (!ref) return undefined;
   const schema = schemas.find((candidate) => candidate.id === ref.schemaId);
   if (!schema) return undefined;
@@ -198,11 +268,54 @@ export function timingDurationControl(
         min: control.min,
         max: control.max,
         step: control.step ?? 1,
-        value
+        value,
+        ...(control.unit !== undefined ? { unit: control.unit } : {})
       };
     }
   }
   return undefined;
+}
+
+/** The control holding config parameter `key` (e.g. "duration", "damping") of an animation. */
+export function parameterControl(
+  animation: RuntimeAnimationTrace,
+  key: string,
+  schemas: readonly PanelSchema[],
+  values: ControlValues
+): AnimationControl | undefined {
+  return resolveSliderControl(animation.parameterControls?.[key], schemas, values);
+}
+
+/** The control holding the delay applied before the animation starts. */
+export function startControl(
+  animation: RuntimeAnimationTrace,
+  schemas: readonly PanelSchema[],
+  values: ControlValues
+): AnimationControl | undefined {
+  return resolveSliderControl(animation.startControl, schemas, values);
+}
+
+/** Resolves the slider control behind a timing span's duration, or undefined when the span is not tunable. */
+export function timingDurationControl(
+  animation: RuntimeAnimationTrace,
+  schemas: readonly PanelSchema[],
+  values: ControlValues
+): TimingDurationControl | undefined {
+  if (animation.animationKind !== "timing") return undefined;
+  return parameterControl(animation, "duration", schemas, values);
+}
+
+interface SliderRange {
+  min: number;
+  max: number;
+  step: number;
+}
+
+function snapToRange(value: number, range: SliderRange): number {
+  const step = range.step > 0 && Number.isFinite(range.step) ? range.step : 1;
+  const snapped = Number((Math.round(value / step) * step).toPrecision(12));
+  const bounded = clamp(snapped, range.min, range.max);
+  return Number.isFinite(bounded) ? bounded : range.min;
 }
 
 /** Duration implied by dragging a span's right edge to `pointerMs` (timeline time). Snapped to `step`, bounded to [min, max]. */
@@ -213,9 +326,45 @@ export function resizedDurationMs(input: {
   max: number;
   step: number;
 }): number {
-  const step = input.step > 0 && Number.isFinite(input.step) ? input.step : 1;
-  const raw = input.pointerMs - input.startMs;
-  const snapped = Math.round(raw / step) * step;
-  const bounded = clamp(snapped, input.min, input.max);
-  return Number.isFinite(bounded) ? bounded : input.min;
+  return snapToRange(input.pointerMs - input.startMs, input);
+}
+
+/** Delay implied by moving a span by `deltaMs`. Snapped to `step`, bounded to [min, max]. */
+export function movedStartDelay(input: {
+  delay: number;
+  deltaMs: number;
+  min: number;
+  max: number;
+  step: number;
+}): number {
+  return snapToRange(input.delay + input.deltaMs, input);
+}
+
+/**
+ * Dragging a span's left edge by `deltaMs` keeps its end fixed: the delay moves and the duration
+ * absorbs the delta. When a duration bound clips, the delay is re-derived to keep the end whenever
+ * the delay range allows it.
+ */
+export function resizedFromStart(input: {
+  delay: number;
+  duration: number;
+  deltaMs: number;
+  delayRange: SliderRange;
+  durationRange: SliderRange;
+}): { delay: number; duration: number } {
+  const { delayRange, durationRange } = input;
+  const endMs = input.delay + input.duration;
+  const delay = snapToRange(input.delay + input.deltaMs, delayRange);
+  const appliedDelta = delay - input.delay;
+  const unclipped = input.duration - appliedDelta;
+  const duration = snapToRange(unclipped, durationRange);
+
+  if (duration !== unclipped) {
+    const keepEnd = endMs - duration;
+    if (keepEnd >= delayRange.min && keepEnd <= delayRange.max) {
+      return { delay: snapToRange(keepEnd, delayRange), duration };
+    }
+  }
+
+  return { delay, duration };
 }
