@@ -398,11 +398,13 @@ Header, Outline, Inspector chrome, stage chrome and timeline now share one langu
 
 A design review found every element carrying the same visual weight. Within the M6d system:
 
-- **Accent** is now blue `#015ABE` (one hue, same five uses).
+- **Accent** is `#F5430F` (one hue, same five uses).
 - **The device is the subject.** The timeline height is a `--wb-timeline-h` variable (default `clamp(240px, 36vh, 520px)`), resizable by dragging the seam (`role="separator"`, keyboard arrows, double-click to reset, persisted in `localStorage`). The simulator surface uses the full stage height minus 16 px padding. The seam is a single subtle line with a grip that appears on hover.
 - **Header.** Capture diagnostics (resolution, fps, encode/decode, frame source) moved to the Developer menu and to the `title` of a small `Live` / `View only` pill. Connection and input state are the emphasized pills.
 - **Inspector.** The name appears once: `Cover · Scale`, then one summary line (`Spring · starts 0ms · ~986ms → 1`). The playhead-state badge and the Starts / Duration / At playhead / Target rows are gone. Springs written with literal parameters show DialKit's spring curve (`SpringPreview`, exported by `panel-dialkit`) above their sliders. Source is one `file:line` with the expression behind a `Code` disclosure. A control selected from the Outline shows its label once and a `Value` row.
 - **Timeline bars are told apart by shape.** A delayed animation shows a dashed lead-in from its call time to the bar; springs carry a slight accent tint and the fade-out tail; timings are solid neutral; only the selected bar is accent-filled.
+
+- **No pop on attach.** The stage shows one persistent phone-shaped device frame (`.device-frame` bezel around `.device-frame-screen`) in every desktop state. Attaching used to swap the placeholder for a different element that had no aspect ratio until the first frame was decoded, which produced a shape jump and a black flash. Now the frame keeps its geometry, the capture dimensions come from the bootstrap frame at attach time, and the live canvas fades in over 180 ms. Simulator pointer handlers sit on the screen element, not the bezel, so input mapping is unchanged. Geometry was checked in a browser; the attach itself can only be validated in the desktop app.
 
 Not done yet:
 
