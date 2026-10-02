@@ -292,3 +292,33 @@ The spring animation Inspector now has one editable parameter section instead of
 
 The earlier broker routing regression is also fixed: schema-scoped panel commands are delivered only to the runtime WebSocket that published that schema, preventing one Replay from firing once per active runtime schema.
 
+### M5e editable timing duration
+
+**Implemented on `feat/runtime-workbench-desktop`, covered by unit tests, pending manual validation on the Simulator**
+
+Timing spans were read-only because their duration is a source literal with no control behind it. RFC 0005 §3b closes that gap without a new command message: a discovered literal becomes an ordinary control.
+
+- The dev-only Babel plugin wraps the **config argument** of an eligible `withTiming(target, { duration: <number literal>, ... })` call with `__riAnimationConfig(...)`. Eligible means: object-literal config, no spread, exactly one literal `duration` between 0 and 10000 ms. Anything else is left exactly as in M5b.
+- `__riAnimationConfig` registers one slider per call site in the existing `auto` schema and returns the original config object by identity until that slider is deliberately changed. It is a no-op in production and never throws into application code.
+- `animation.started` carries an additive `parameterControls` reference (`duration` → `{ schemaId, controlId }`). `panel-core` resolves the live value through it, so the span's declared duration follows the control.
+- The Workbench animation Inspector shows an editable **Duration** for such timing spans, and the span's right edge can be dragged on the timeline. Both go through the existing `setValue` / `commitValue` session path and replay the interaction on commit, like spring tuning. Out-of-range typed values are rejected with a reason, not clamped.
+- `animation.started` / `animation.completed` are now documented in `docs/protocol.md` and covered by conformance fixtures, which the M5b spike had left out.
+
+Known limits, recorded rather than hidden:
+
+- the tuned duration applies on the **next** run of the call site; nothing is rewound;
+- start offset is not editable: the example staggers its springs with `setTimeout`, which discovery cannot see;
+- a timing span that is interrupted by a later animation on the same property (the example's springs start at ~220 ms, before the 260 ms timings end) is still drawn at its declared length;
+- the control id embeds the call site's line and column, so inserting code above a call site and Fast Refreshing leaves the previous slider in the `auto` schema until a full reload;
+- the timeline drag cannot extend a span past the right end of the visible timeline; the Inspector field can;
+- the tuned duration is not written back to source. RFC 0004 anchors identify a `useSharedValue` declaration; a literal inside a call argument needs its own anchor shape.
+
+Manual validation checklist:
+
+1. Replay: four timing spans and four spring spans appear as before, and the app animates identically (no tuning yet).
+2. The `Inspected values` schema gains four `… duration` sliders after the first Replay.
+3. Select a timing span, set Duration to 600 ms, commit: the interaction replays and that span is drawn at 600 ms while the other three stay at 260 ms. In the example the return spring still takes over at ~220 ms, so the visible effect is that this property moves more slowly and travels less before springing back — not that the whole motion lasts longer.
+4. Drag the right edge of another timing span (the grip sits at the span's end, on top of the overlapping spring): on release the interaction replays with the new duration.
+5. Type 20000 in the Duration field: it is rejected with a reason and nothing is sent.
+6. Set a duration back to 260 ms: the app behaves as in step 1.
+
