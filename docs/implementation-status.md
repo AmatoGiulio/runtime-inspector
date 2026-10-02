@@ -281,3 +281,14 @@ Selecting a timing span exposes its start, declared duration, target metadata, p
 The playhead is observational only: dragging it answers what is active at that time in the Inspector but does not rewind the running application.
 
 The old single-probe graph is no longer rendered as the primary timeline body. Probe recording remains available in the protocol and contextual Inspector while the main Workbench surface moves to the property/span time model.
+
+### M5d timeline inspection UX refinement
+
+**Implemented on `feat/runtime-workbench-desktop`, pending manual validation**
+
+The motion timeline now renders one global playhead across the ruler and all property tracks instead of repeating a marker per row. The ruler uses a denser scale for short interactions (the validated ~1.2 second replay resolves at 200 ms intervals), and dragging directly on a property track selects the animation span active at that instant. When timing and spring overlap, the most recently started span wins.
+
+The spring animation Inspector now has one editable parameter section instead of duplicating read-only and editable spring values. Committing damping/stiffness/mass automatically replays the interaction and keeps focus on the corresponding spring span from the new replay.
+
+The earlier broker routing regression is also fixed: schema-scoped panel commands are delivered only to the runtime WebSocket that published that schema, preventing one Replay from firing once per active runtime schema.
+
