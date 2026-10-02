@@ -7,7 +7,10 @@ import {
   type PointerEvent as ReactPointerEvent
 } from "react";
 import { createRoot } from "react-dom/client";
-import { createPanelSession } from "@runtime-inspector/panel-core";
+import {
+  createPanelSession,
+  type RuntimeAnimationTrace
+} from "@runtime-inspector/panel-core";
 import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
 import { ControlInspector } from "./ControlInspector";
 import "./styles.css";
@@ -348,6 +351,9 @@ function App() {
     schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
   const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
+  const detectedAnimations = state.runtimeAnimations
+    .filter((animation) => !schemaId || animation.schemaId === schemaId)
+    .slice(-12);
 
   useEffect(() => {
     const video = runtimeVideoRef.current;
@@ -993,15 +999,75 @@ function App() {
           </div>
         </div>
 
-        <div className="track">
-          <div className="track-label">
-            <strong>{selectedProbe?.label ?? probeId ?? "Probe"}</strong>
-            <span>{selectedProbe?.unit ?? ""}</span>
+        <div className="timeline-body">
+          {detectedAnimations.length > 0 ? (
+            <DetectedAnimationTracks animations={detectedAnimations} />
+          ) : null}
+          <div className="track">
+            <div className="track-label">
+              <strong>{selectedProbe?.label ?? probeId ?? "Probe"}</strong>
+              <span>{selectedProbe?.unit ?? ""}</span>
+            </div>
+            <TraceGraph samples={samples} />
           </div>
-          <TraceGraph samples={samples} />
         </div>
       </section>
     </main>
+  );
+}
+
+function DetectedAnimationTracks({
+  animations
+}: {
+  animations: RuntimeAnimationTrace[];
+}) {
+  const starts = animations.map((animation) => animation.startedAtRuntimeMs);
+  const ends = animations.map(
+    (animation) => animation.endedAtRuntimeMs ?? animation.startedAtRuntimeMs + 16
+  );
+  const minTime = Math.min(...starts);
+  const maxTime = Math.max(...ends, minTime + 300);
+  const span = Math.max(1, maxTime - minTime);
+
+  return (
+    <div className="detected-animations">
+      <div className="detected-animations-title">
+        <span>Auto-detected animations</span>
+        <strong>{animations.length}</strong>
+      </div>
+      {animations.map((animation) => {
+        const start = ((animation.startedAtRuntimeMs - minTime) / span) * 100;
+        const endTime = animation.endedAtRuntimeMs ?? animation.startedAtRuntimeMs + 16;
+        const width = Math.max(1.5, ((endTime - animation.startedAtRuntimeMs) / span) * 100);
+        const duration =
+          animation.endedAtRuntimeMs !== undefined
+            ? Math.max(0, animation.endedAtRuntimeMs - animation.startedAtRuntimeMs)
+            : undefined;
+
+        return (
+          <div className="detected-animation-row" key={animation.instanceId}>
+            <div className="detected-animation-label">
+              <strong>{animation.target}</strong>
+              <span>
+                {animation.animationKind}
+                {duration !== undefined ? ` · ${formatTime(duration)}` : " · running"}
+              </span>
+            </div>
+            <div className="detected-animation-lane">
+              <div
+                className={`detected-animation-span ${animation.animationKind}`}
+                style={{ left: `${start}%`, width: `${width}%` }}
+                title={
+                  animation.source
+                    ? `${animation.source.file}:${animation.source.line}`
+                    : animation.callsiteId
+                }
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
