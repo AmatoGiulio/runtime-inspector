@@ -37,6 +37,9 @@ export function AnimationInspector({
   const estimated =
     animation.endedAtRuntimeMs === undefined &&
     animation.durationBasis === "spring-estimate";
+  const canTuneSpring =
+    animation.animationKind === "spring" &&
+    Boolean(springControl && springValue && onSetSpring && onCommitSpring);
 
   return (
     <div className="animation-inspector">
@@ -71,7 +74,7 @@ export function AnimationInspector({
         />
       </div>
 
-      {Object.keys(animation.resolvedConfig).length > 0 ? (
+      {Object.keys(animation.resolvedConfig).length > 0 && !canTuneSpring ? (
         <div className="animation-inspector-section">
           <div className="animation-inspector-section-title">Parameters</div>
           {Object.entries(animation.resolvedConfig).map(([key, value]) => (
@@ -80,13 +83,13 @@ export function AnimationInspector({
         </div>
       ) : null}
 
-      {animation.animationKind === "spring" &&
+      {canTuneSpring &&
       springControl &&
       springValue &&
       onSetSpring &&
       onCommitSpring ? (
         <div className="animation-inspector-section">
-          <div className="animation-inspector-section-title">Tune spring</div>
+          <div className="animation-inspector-section-title">Spring</div>
           <SpringFields
             control={springControl}
             value={springValue}
@@ -94,9 +97,17 @@ export function AnimationInspector({
             onSet={onSetSpring}
             onCommit={onCommitSpring}
           />
+          <InspectorRow
+            label="Estimated settle"
+            value={
+              durationMs !== undefined
+                ? `~${formatTime(durationMs)}`
+                : "—"
+            }
+          />
           {estimated ? (
             <div className="animation-inspector-note">
-              Settle time is estimated from the current spring parameters.
+              Estimated from the current spring parameters; runtime completion is not observed yet.
             </div>
           ) : null}
         </div>
