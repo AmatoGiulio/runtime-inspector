@@ -1040,3 +1040,7 @@ button {
   border-color: rgba(92, 196, 146, 0.72);
   background: rgba(56, 151, 108, 0.22);
 }
+
+.detected-animation-span.estimated {
+  border-style: dashed;
+}
