@@ -503,10 +503,12 @@ function App() {
   // until it plays; replaying the same scene keeps them in place (M6f).
   const shownSceneIdRef = useRef<string | undefined>(undefined);
   if (targetPlayingAtRuntimeMs !== undefined) shownSceneIdRef.current = targetSceneId;
+  // Until the new scene plays, the rows on screen belong to another scene: show none.
   const openingOtherScene =
     targetSceneId !== undefined &&
+    shownSceneIdRef.current !== undefined &&
     shownSceneIdRef.current !== targetSceneId &&
-    (targetSceneStatus?.phase === "requested" || targetSceneStatus?.phase === "navigating");
+    targetPlayingAtRuntimeMs === undefined;
   // A playing scene shows only the motion called from its `playing` time on (RFC 0006 §5).
   const latestBurst = useMemo(
     () =>
@@ -1912,6 +1914,7 @@ function timelineEmptyText(
   if (scene && status?.phase === "failed") {
     return status.reason ?? "The scene could not be opened.";
   }
+  if (scene) return `Press Play to see the motion of ${scene.title}.`;
   return "Press Play to capture the interaction.";
 }
 
