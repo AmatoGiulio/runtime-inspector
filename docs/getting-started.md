@@ -1,5 +1,23 @@
 # Getting Started
 
+## Add Runtime Inspector to your app
+
+From your React Native / Expo app root:
+
+```bash
+npx runtime-inspector init            # add --dry-run to preview the edits
+```
+
+`init` adds `@runtime-inspector/babel-plugin` to `babel.config.js` (before the Reanimated/worklets plugin, which must stay last) and wraps `metro.config.js` with `withRuntimeInspector(...)` from `@runtime-inspector/react-native/metro` (one copy of React, React Native and Reanimated; Rozenite when `WITH_ROZENITE=true`). It never runs your package manager: it prints the install command for the two packages if they are missing. Every step is idempotent; config shapes it cannot edit safely get a "manual step needed" line with the exact change.
+
+There is nothing else to write in the app for its animations to appear on the Workbench timeline. The hooks below are for values you want to expose explicitly.
+
+## No token to copy
+
+`runtime-inspector dev` writes `~/.runtime-inspector/session.json` (broker url + session token, file mode 0600; `RUNTIME_INSPECTOR_HOME` overrides the folder) and removes it on exit. The Workbench and the MCP client read it when `VITE_RI_TOKEN` / `RI_TOKEN` are not set, and pick up a restarted CLI by themselves. Explicit environment variables still win.
+
+## Working in this repository
+
 Install dependencies:
 
 ```bash

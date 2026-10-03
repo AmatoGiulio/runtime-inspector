@@ -29,7 +29,7 @@ pnpm dev                                                             # broker + 
 pnpm --filter @runtime-inspector/example-react-native-reanimated start
 ```
 
-`pnpm dev` prints the panel URL (with its session token), LAN addresses and a QR code. Devices find the broker through Metro — simulators, emulators and physical phones on the same network need no configuration.
+In your own app, `npx runtime-inspector init` does the setup (Babel plugin + Metro). `pnpm dev` prints the panel URL (with its session token), LAN addresses and a QR code, and writes `~/.runtime-inspector/session.json` so the Workbench and the MCP agent connect without copying the token. Devices find the broker through Metro — simulators, emulators and physical phones on the same network need no configuration.
 
 ## Declaring controls
 
@@ -76,7 +76,7 @@ In this repo: `pnpm --filter @runtime-inspector/example-react-native-reanimated 
 ### AI agent (MCP)
 
 ```bash
-RI_BROKER_URL=ws://127.0.0.1:4577 RI_TOKEN=<token printed by pnpm dev> runtime-inspector-mcp
+runtime-inspector-mcp   # reads ~/.runtime-inspector/session.json; RI_BROKER_URL / RI_TOKEN override it
 ```
 
 Tools: `get_schema`, `set_control_value`, `batch_set`, `trigger`, plus `list_scenes` / `open_scene` (open a motion scene and get the timing of the animations it played). Agent writes are committed values; stale schemas are refused with an explicit error.
