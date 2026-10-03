@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PanelSchemaSchema, safeParseRIPMessage } from "@runtime-inspector/protocol";
-import { AUTO_SCHEMA_ID, autoSchema, createDemoState } from "./demo-runtime-model.mjs";
+import {
+  AUTO_SCHEMA_ID,
+  SCENES_SCHEMA_ID,
+  autoSchema,
+  createDemoState,
+  likeBurstEvents,
+  scenesSchema
+} from "./demo-runtime-model.mjs";
 
 const TITLE_Y_DELAY = "demo/ProductRevealDemo.tsx:36:4:timing:titleY:delay";
 
@@ -115,4 +122,61 @@ test("instance ids differ across seeds", () => {
   const a = state.replayEvents({ nowMs: 5, instanceSeed: 1 }).map((event) => event.message.instanceId);
   const b = state.replayEvents({ nowMs: 5, instanceSeed: 2 }).map((event) => event.message.instanceId);
   assert.equal(new Set([...a, ...b]).size, 16);
+});
+
+test("the scenes schema validates and marks the active scene", () => {
+  const schema = scenesSchema("product-reveal");
+  assert.equal(PanelSchemaSchema.safeParse(schema).success, true);
+  assert.notEqual(safeParseRIPMessage(JSON.stringify({ type: "schema.publish", schema })), undefined);
+  assert.equal(schema.id, SCENES_SCHEMA_ID);
+  assert.equal(schema.title, "Scenes");
+  assert.deepEqual(schema.groups.map((group) => group.label), ["Store"]);
+  const controls = controlsOf(schema);
+  assert.deepEqual(
+    controls.map((control) => [control.id, control.label, control.binding]),
+    [
+      ["product-reveal", "Product reveal", "scenes.product-reveal"],
+      ["like-burst", "Like", "scenes.like-burst"]
+    ]
+  );
+  assert.deepEqual(controls[0].scene, {
+    url: "exp://127.0.0.1:8090/--/product",
+    active: true,
+    reachable: true
+  });
+  assert.deepEqual(controls[1].scene, {
+    url: "exp://127.0.0.1:8090/--/like",
+    active: false,
+    reachable: true
+  });
+  const switched = controlsOf(scenesSchema("like-burst"));
+  assert.deepEqual(switched.map((control) => control.scene.active), [false, true]);
+});
+
+test("likeBurstEvents produces 3 valid messages with the ring fade delayed", () => {
+  const events = likeBurstEvents({ nowMs: 2000, instanceSeed: 1 });
+  assert.equal(events.length, 3);
+  for (const { delayMs, message } of events) {
+    assert.equal(delayMs, 0);
+    assert.notEqual(safeParseRIPMessage(JSON.stringify(message)), undefined, JSON.stringify(message));
+    assert.equal(message.type, "animation.started");
+  }
+  assert.deepEqual(
+    events.map((event) => [event.message.target, event.message.animationKind]),
+    [
+      ["heartScale", "spring"],
+      ["ringScale", "timing"],
+      ["ringOpacity", "timing"]
+    ]
+  );
+  assert.deepEqual(eventFor(events, "ringScale").config, { duration: 420 });
+  assert.deepEqual(eventFor(events, "ringOpacity").config, { duration: 300 });
+  assert.equal(eventFor(events, "ringOpacity").startDelayMs, 120);
+  assert.equal(eventFor(events, "ringOpacity").startedAtRuntimeMs, 2000 + 2 * 0.4 + 120);
+  assert.equal(eventFor(events, "heartScale").startedAtRuntimeMs, 2000);
+  const other = likeBurstEvents({ nowMs: 2000, instanceSeed: 2 });
+  assert.equal(
+    new Set([...events, ...other].map((event) => event.message.instanceId)).size,
+    6
+  );
 });

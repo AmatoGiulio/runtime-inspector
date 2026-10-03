@@ -11,22 +11,28 @@ import {
 import { createRoot } from "react-dom/client";
 import {
   createPanelSession,
+  listScenes,
   type PanelSession,
-  type RuntimeAnimationTrace
+  type RuntimeAnimationTrace,
+  type SceneEntry
 } from "@runtime-inspector/panel-core";
-import type {
-  InspectorControl,
-  PanelSchema,
-  RuntimeProbeDescriptor,
-  SpringValue
+import {
+  SCENES_SCHEMA_ID,
+  type InspectorControl,
+  type PanelSchema,
+  type RuntimeProbeDescriptor,
+  type SpringValue
 } from "@runtime-inspector/protocol";
 import {
   AnimationInspector,
   type AnimationInspectorControl
 } from "./AnimationInspector";
 import { AnimationTimeline } from "./AnimationTimeline";
+import { ScenesPanel } from "./ScenesPanel";
 import {
+  animationsSince,
   buildTimelineModel,
+  clamp,
   latestAnimationBurst,
   mergeBurst,
   nextStickyDuration,
@@ -44,6 +50,12 @@ import "./styles.css";
 const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 const panelToken =
   new URLSearchParams(window.location.search).get("token") ?? import.meta.env.VITE_RI_TOKEN;
+
+const SIDEBAR_STORAGE_KEY = "ri.workbench.sidebar";
+const SCENE_THUMBNAILS_STORAGE_KEY = "ri.workbench.sceneThumbnails";
+const MAX_SCENE_THUMBNAILS = 40;
+const SCENE_THUMBNAIL_WIDTH = 72;
+const SIMULATOR_OPENING_NOTICE_MS = 4000;
 
 const session = createPanelSession({
   url: brokerUrl,
@@ -86,6 +98,7 @@ function App() {
   const { choice: themeChoice, resolved: resolvedTheme, cycle: cycleTheme } = useWorkbenchTheme();
   const themeLabel = themeChoiceLabel(themeChoice);
   const state = useSyncExternalStore(session.subscribe, session.getState);
+  // The Controls tab (and its automatic first selection) never lists the reserved scenes schema.
   const schemaIds = useMemo(
     () =>
       Array.from(
@@ -93,9 +106,34 @@ function App() {
           ...state.schemas.map((schema) => schema.id),
           ...Object.keys(state.traceSchemas)
         ])
-      ),
+      ).filter((id) => id !== SCENES_SCHEMA_ID),
     [state.schemas, state.traceSchemas]
   );
+  const scenes = useMemo(
+    () => listScenes(state),
+    // listScenes reads only the schemas and their stale flags.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.schemas, state.staleSchemaIds]
+  );
+  const scenesStale = Boolean(state.staleSchemaIds[SCENES_SCHEMA_ID]);
+  const [currentSceneId, setCurrentSceneId] = useState<string>();
+  /** Playback target: the selected scene, else the scene on screen. */
+  const targetScene =
+    scenes.find((scene) => scene.id === currentSceneId) ??
+    scenes.find((scene) => scene.active);
+  const targetSceneId = targetScene?.id;
+  const targetSceneStatus = targetSceneId ? state.sceneStatus[targetSceneId] : undefined;
+  const targetPlayingAtRuntimeMs =
+    targetSceneStatus?.phase === "playing" ? targetSceneStatus.atRuntimeMs : undefined;
+  const [sidebarVisible, setSidebarVisible] = useState(readStoredSidebarVisible);
+  // Undefined until the user picks a tab: Scenes when the app publishes any, else Controls.
+  const [sidebarTab, setSidebarTab] = useState<"scenes" | "controls">();
+  const effectiveSidebarTab = sidebarTab ?? (scenes.length > 0 ? "scenes" : "controls");
+  const [workbenchNotice, setWorkbenchNotice] = useState<string>();
+  const [simulatorOpeningTitle, setSimulatorOpeningTitle] = useState<string>();
+  const simulatorOpeningTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [sceneThumbnails, setSceneThumbnails] =
+    useState<Record<string, string>>(readStoredSceneThumbnails);
   const [schemaId, setSchemaId] = useState<string>();
   const [probeId, setProbeId] = useState<string>();
   const [selectedControlId, setSelectedControlId] = useState<string>();
@@ -134,7 +172,6 @@ function App() {
     latencyMs: []
   });
   const viewportBenchmarkTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [outlineVisible, setOutlineVisible] = useState(false);
   // User-chosen timeline height in px; undefined = the CSS default (`--wb-timeline-h`).
   const [timelineHeight, setTimelineHeight] = useState<number | undefined>(
     readStoredTimelineHeight
@@ -428,13 +465,31 @@ function App() {
     schemaId && selectedControl ? state.values[schemaId]?.[selectedControl.id] : undefined;
   const selectedSchemaStale = schemaId ? Boolean(state.staleSchemaIds[schemaId]) : false;
   const recording = state.recording;
+  // The scene whose motion the timeline last showed. Opening a different scene clears the rows
+  // until it plays; replaying the same scene keeps them in place (M6f).
+  const shownSceneIdRef = useRef<string | undefined>(undefined);
+  if (targetPlayingAtRuntimeMs !== undefined) shownSceneIdRef.current = targetSceneId;
+  const openingOtherScene =
+    targetSceneId !== undefined &&
+    shownSceneIdRef.current !== targetSceneId &&
+    (targetSceneStatus?.phase === "requested" || targetSceneStatus?.phase === "navigating");
+  // A playing scene shows only the motion called from its `playing` time on (RFC 0006 §5).
   const latestBurst = useMemo(
-    () => latestAnimationBurst(state.runtimeAnimations),
-    [state.runtimeAnimations]
+    () =>
+      openingOtherScene
+        ? []
+        : latestAnimationBurst(
+            targetPlayingAtRuntimeMs !== undefined
+              ? animationsSince(state.runtimeAnimations, targetPlayingAtRuntimeMs)
+              : state.runtimeAnimations
+          ),
+    [state.runtimeAnimations, targetPlayingAtRuntimeMs, openingOtherScene]
   );
   // What the timeline renders: a replay's events arrive one render at a time, so the latest burst
   // alone would unmount every row but the first. Rows that have not come back yet stay (rebased).
-  const displayedAnimations = useSettledBurst(latestBurst);
+  // A different scene starts clean: no rows carried over from the previous scene. Replays of the
+  // same scene merge as before, so its rows hold still.
+  const displayedAnimations = useSettledBurst(latestBurst, targetSceneId ?? "");
   const detectedAnimationOriginMs = timelineOriginMs(displayedAnimations);
   // Sticky ruler: while the same set of animations is on screen the scale only grows, so moving or
   // lengthening one block does not rescale the others.
@@ -442,6 +497,12 @@ function App() {
     { signature: string; durationMs: number } | undefined
   >(undefined);
   const [, setTimelineScaleEpoch] = useState(0);
+  // A different target scene gets its own ruler.
+  const timelineScaleSceneRef = useRef(targetSceneId);
+  if (timelineScaleSceneRef.current !== targetSceneId) {
+    timelineScaleSceneRef.current = targetSceneId;
+    timelineScaleRef.current = undefined;
+  }
   const timelineScaleSignature = useMemo(
     () => timelineSignature(displayedAnimations),
     [displayedAnimations]
@@ -482,6 +543,7 @@ function App() {
   }
   const replayTarget = useMemo(() => {
     for (const schema of state.schemas) {
+      if (schema.id === SCENES_SCHEMA_ID) continue;
       for (const group of schema.groups) {
         for (const control of group.controls) {
           if (
@@ -679,6 +741,94 @@ function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Space plays, unless typing or operating a control, or with a modifier held.
+  const replayShortcutRef = useRef(replay);
+  replayShortcutRef.current = replay;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== " " && event.code !== "Space") return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (isShortcutExcludedTarget(event.target)) return;
+      event.preventDefault();
+      replayShortcutRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!scenesStale) setWorkbenchNotice(undefined);
+  }, [scenesStale]);
+
+  useEffect(
+    () => () => {
+      if (simulatorOpeningTimerRef.current) clearTimeout(simulatorOpeningTimerRef.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, sidebarVisible ? "1" : "0");
+    } catch {
+      // Storage can be unavailable; the choice then only lasts for this session.
+    }
+  }, [sidebarVisible]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SCENE_THUMBNAILS_STORAGE_KEY, JSON.stringify(sceneThumbnails));
+    } catch {
+      // Storage can be unavailable or full; thumbnails then only last for this session.
+    }
+  }, [sceneThumbnails]);
+
+  // The last frame of a scene becomes its thumbnail: once its motion has had time to settle after
+  // `playing`, the live framebuffer is scaled down. Another scene starting first cancels it.
+  const thumbnailCapturedKeyRef = useRef<string | undefined>(undefined);
+  const anotherScenePlayingLater =
+    targetSceneId !== undefined &&
+    targetPlayingAtRuntimeMs !== undefined &&
+    Object.entries(state.sceneStatus).some(
+      ([sceneId, status]) =>
+        sceneId !== targetSceneId &&
+        status.phase === "playing" &&
+        (status.atRuntimeMs ?? 0) > targetPlayingAtRuntimeMs
+    );
+  useEffect(() => {
+    if (targetSceneId === undefined || targetPlayingAtRuntimeMs === undefined) return;
+    if (anotherScenePlayingLater) return;
+    if (runtimeCapture?.source !== "framebuffer" || !framebufferHasFrame) return;
+    const key = `${targetSceneId}:${targetPlayingAtRuntimeMs}`;
+    if (thumbnailCapturedKeyRef.current === key) return;
+
+    const sceneId = targetSceneId;
+    const delayMs = clamp((timelineContentDurationMs ?? 0) + 300, 1200, 3000);
+    const timer = setTimeout(() => {
+      thumbnailCapturedKeyRef.current = key;
+      const dataUrl = captureSceneThumbnail(framebufferCanvasRef.current);
+      if (!dataUrl) return;
+      setSceneThumbnails((current) => {
+        const next: Record<string, string> = { ...current };
+        delete next[sceneId];
+        next[sceneId] = dataUrl;
+        const ids = Object.keys(next);
+        for (const id of ids.slice(0, Math.max(0, ids.length - MAX_SCENE_THUMBNAILS))) {
+          delete next[id];
+        }
+        return next;
+      });
+    }, delayMs);
+    return () => clearTimeout(timer);
+  }, [
+    targetSceneId,
+    targetPlayingAtRuntimeMs,
+    anotherScenePlayingLater,
+    runtimeCapture?.source,
+    framebufferHasFrame,
+    timelineContentDurationMs
+  ]);
+
   function persistTimelineHeight(height: number | undefined) {
     try {
       if (height === undefined) {
@@ -755,15 +905,57 @@ function App() {
     session.startRecording(schemaId, [probeId], 60);
   }
 
-  function replay(preserveAnimationInspector = false) {
-    if (!replayTarget) return;
+  /**
+   * Play: opens the target scene (`scene` overrides it, for a row just clicked) when the app is
+   * connected; otherwise fires the first non-scene trigger whose id or binding contains "replay".
+   */
+  function replay(preserveAnimationInspector = false, scene: SceneEntry | undefined = targetScene) {
+    const openTarget = scene && !scene.stale ? scene : undefined;
+    if (!openTarget && !replayTarget) return;
     setSelectedAnimationId(undefined);
     setPlayheadMs(0);
     if (!preserveAnimationInspector && inspectorMode === "animation") {
       setInspectorMode(probes[0] ? "probe" : "control");
     }
-    session.fireTrigger(replayTarget.schemaId, replayTarget.controlId);
+    if (openTarget) {
+      session.openScene(openTarget.id);
+    } else if (replayTarget) {
+      session.fireTrigger(replayTarget.schemaId, replayTarget.controlId);
+    }
     setTimelinePlaying(true);
+  }
+
+  /** A scene row was clicked or Enter was pressed: select it, then open it. */
+  function activateScene(scene: SceneEntry) {
+    setCurrentSceneId(scene.id);
+    if (!scene.stale) {
+      setWorkbenchNotice(undefined);
+      replay(false, scene);
+      return;
+    }
+    // The app is not connected: cold-start it into the scene through its deep link.
+    const desktop = window.runtimeDesktop;
+    if (
+      !scene.url ||
+      !desktop ||
+      typeof desktop.openSimulatorUrl !== "function" ||
+      !selectedSimulatorUdid
+    ) {
+      setWorkbenchNotice("Start the app to open scenes.");
+      return;
+    }
+    setWorkbenchNotice(undefined);
+    setSimulatorOpeningTitle(scene.title);
+    if (simulatorOpeningTimerRef.current) clearTimeout(simulatorOpeningTimerRef.current);
+    simulatorOpeningTimerRef.current = setTimeout(() => {
+      simulatorOpeningTimerRef.current = undefined;
+      setSimulatorOpeningTitle(undefined);
+    }, SIMULATOR_OPENING_NOTICE_MS);
+    desktop.openSimulatorUrl(selectedSimulatorUdid, scene.url).catch((error: unknown) => {
+      setWorkbenchNotice(
+        error instanceof Error ? error.message : "Could not open the scene on the Simulator."
+      );
+    });
   }
 
   /** After the next replay, re-select the same call site (a newer run than `animation`). */
@@ -1070,12 +1262,14 @@ function App() {
         <button
           type="button"
           className="wb-button toggle"
-          aria-pressed={outlineVisible}
-          onClick={() => setOutlineVisible((visible) => !visible)}
+          aria-pressed={sidebarVisible}
+          onClick={() => setSidebarVisible((visible) => !visible)}
         >
-          Controls
+          Sidebar
         </button>
-        {state.notice && <div className="notice">{state.notice}</div>}
+        {(workbenchNotice ?? state.notice) && (
+          <div className="notice">{workbenchNotice ?? state.notice}</div>
+        )}
         <div className="topbar-spacer" />
 
         <div className="stage-controls">
@@ -1162,109 +1356,149 @@ function App() {
       </header>
 
       <section
-        className={outlineVisible ? "workspace" : "workspace no-outline"}
+        className={sidebarVisible ? "workspace" : "workspace no-sidebar"}
       >
-        {outlineVisible ? (
-          <aside className="outline panel">
-            <div className="panel-title">Outline</div>
-            {schemaIds.length === 0 ? (
-              <Empty text="No runtime semantics yet." />
-            ) : (
-              schemaIds.map((id) => {
-                const schema = state.schemas.find((item) => item.id === id);
-                const schemaProbes = state.traceSchemas[id] ?? [];
-                const controls =
-                  schema?.groups.flatMap((group) =>
-                    group.controls.map((control) => ({ group, control }))
-                  ) ?? [];
+        {sidebarVisible ? (
+          <aside className="sidebar panel">
+            <div className="sidebar-tabs" role="tablist" aria-label="Sidebar">
+              <button
+                type="button"
+                role="tab"
+                id="sidebar-tab-scenes"
+                aria-controls="sidebar-tabpanel"
+                aria-selected={effectiveSidebarTab === "scenes"}
+                className="sidebar-tab"
+                onClick={() => setSidebarTab("scenes")}
+              >
+                Scenes
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="sidebar-tab-controls"
+                aria-controls="sidebar-tabpanel"
+                aria-selected={effectiveSidebarTab === "controls"}
+                className="sidebar-tab"
+                onClick={() => setSidebarTab("controls")}
+              >
+                Controls
+              </button>
+            </div>
+            <div
+              className="sidebar-content"
+              role="tabpanel"
+              id="sidebar-tabpanel"
+              aria-labelledby={`sidebar-tab-${effectiveSidebarTab}`}
+            >
+              {effectiveSidebarTab === "scenes" ? (
+                <ScenesPanel
+                  scenes={scenes}
+                  sceneStatus={state.sceneStatus}
+                  selectedSceneId={currentSceneId}
+                  thumbnails={sceneThumbnails}
+                  stale={scenesStale}
+                  onSelect={setCurrentSceneId}
+                  onOpen={activateScene}
+                />
+              ) : schemaIds.length === 0 ? (
+                <Empty text="No runtime semantics yet." />
+              ) : (
+                schemaIds.map((id) => {
+                  const schema = state.schemas.find((item) => item.id === id);
+                  const schemaProbes = state.traceSchemas[id] ?? [];
+                  const controls =
+                    schema?.groups.flatMap((group) =>
+                      group.controls.map((control) => ({ group, control }))
+                    ) ?? [];
 
-                return (
-                  <div className="schema" key={id}>
-                    <button
-                      className={
-                        id === schemaId
-                          ? "wb-button toggle schema-button active"
-                          : "wb-button toggle schema-button"
-                      }
-                      onClick={() => {
-                        setSchemaId(id);
-                        if (schemaProbes[0]) {
-                          setProbeId(schemaProbes[0].id);
-                          setInspectorMode("probe");
-                        } else if (controls[0]) {
-                          setSelectedControlId(controls[0].control.id);
-                          setInspectorMode("control");
+                  return (
+                    <div className="schema" key={id}>
+                      <button
+                        className={
+                          id === schemaId
+                            ? "wb-button toggle schema-button active"
+                            : "wb-button toggle schema-button"
                         }
-                      }}
-                    >
-                      {schema?.title ?? id}
-                    </button>
+                        onClick={() => {
+                          setSchemaId(id);
+                          if (schemaProbes[0]) {
+                            setProbeId(schemaProbes[0].id);
+                            setInspectorMode("probe");
+                          } else if (controls[0]) {
+                            setSelectedControlId(controls[0].control.id);
+                            setInspectorMode("control");
+                          }
+                        }}
+                      >
+                        {schema?.title ?? id}
+                      </button>
 
-                    {id === schemaId ? (
-                      <div className="outline-sections">
-                        {controls.length > 0 ? (
-                          <div className="outline-section">
-                            <div className="outline-section-label">Controls</div>
-                            {controls.map(({ group, control }) => (
-                              <button
-                                key={control.id}
-                                className={
-                                  inspectorMode === "control" &&
-                                  control.id === selectedControlId
-                                    ? "wb-button toggle outline-item active"
-                                    : "wb-button toggle outline-item"
-                                }
-                                onClick={() => {
-                                  setSchemaId(id);
-                                  setSelectedControlId(control.id);
-                                  setInspectorMode("control");
-                                }}
-                                title={group.label}
-                              >
-                                <span className="outline-item-icon">
-                                  {controlGlyph(control.kind)}
-                                </span>
-                                <span className="outline-item-copy">
-                                  <span>{control.label}</span>
-                                  <small>{control.kind}</small>
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
+                      {id === schemaId ? (
+                        <div className="outline-sections">
+                          {controls.length > 0 ? (
+                            <div className="outline-section">
+                              <div className="outline-section-label">Controls</div>
+                              {controls.map(({ group, control }) => (
+                                <button
+                                  key={control.id}
+                                  className={
+                                    inspectorMode === "control" &&
+                                    control.id === selectedControlId
+                                      ? "wb-button toggle outline-item active"
+                                      : "wb-button toggle outline-item"
+                                  }
+                                  onClick={() => {
+                                    setSchemaId(id);
+                                    setSelectedControlId(control.id);
+                                    setInspectorMode("control");
+                                  }}
+                                  title={group.label}
+                                >
+                                  <span className="outline-item-icon">
+                                    {controlGlyph(control.kind)}
+                                  </span>
+                                  <span className="outline-item-copy">
+                                    <span>{control.label}</span>
+                                    <small>{control.kind}</small>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
 
-                        {schemaProbes.length > 0 ? (
-                          <div className="outline-section">
-                            <div className="outline-section-label">Probes</div>
-                            {schemaProbes.map((probe) => (
-                              <button
-                                key={probe.id}
-                                className={
-                                  inspectorMode === "probe" && probe.id === probeId
-                                    ? "wb-button toggle outline-item active"
-                                    : "wb-button toggle outline-item"
-                                }
-                                onClick={() => {
-                                  setSchemaId(id);
-                                  setProbeId(probe.id);
-                                  setInspectorMode("probe");
-                                }}
-                              >
-                                <span className="outline-item-icon">⌁</span>
-                                <span className="outline-item-copy">
-                                  <span>{probe.label ?? probe.id}</span>
-                                  <small>{probe.valueType}</small>
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
+                          {schemaProbes.length > 0 ? (
+                            <div className="outline-section">
+                              <div className="outline-section-label">Probes</div>
+                              {schemaProbes.map((probe) => (
+                                <button
+                                  key={probe.id}
+                                  className={
+                                    inspectorMode === "probe" && probe.id === probeId
+                                      ? "wb-button toggle outline-item active"
+                                      : "wb-button toggle outline-item"
+                                  }
+                                  onClick={() => {
+                                    setSchemaId(id);
+                                    setProbeId(probe.id);
+                                    setInspectorMode("probe");
+                                  }}
+                                >
+                                  <span className="outline-item-icon">⌁</span>
+                                  <span className="outline-item-copy">
+                                    <span>{probe.label ?? probe.id}</span>
+                                    <small>{probe.valueType}</small>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </aside>
         ) : null}
 
@@ -1413,7 +1647,7 @@ function App() {
             title="Play"
             aria-label="Play"
             onClick={() => replay()}
-            disabled={!replayTarget}
+            disabled={!(targetScene && !targetScene.stale) && !replayTarget}
           >
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
@@ -1423,6 +1657,7 @@ function App() {
             </svg>
             Play
           </button>
+          {targetScene ? <span className="timeline-target">{targetScene.title}</span> : null}
           <div className="timeline-time dialkit-timeline-time">
             {timelineDurationMs !== undefined ? (
               <>
@@ -1584,7 +1819,7 @@ function App() {
             />
           ) : (
             <div className="timeline-empty">
-              Press Play to capture the interaction.
+              {timelineEmptyText(targetScene, targetSceneStatus, simulatorOpeningTitle)}
             </div>
           )}
         </div>
@@ -1600,12 +1835,17 @@ function App() {
  */
 function useSettledBurst(
   latest: RuntimeAnimationTrace[],
+  /** When it changes, the displayed burst becomes exactly `latest`: nothing is merged across it. */
+  resetKey: string,
   settleMs = 150
 ): RuntimeAnimationTrace[] {
-  const [shown, setShown] = useState({ latest, displayed: latest });
+  const [shown, setShown] = useState({ latest, displayed: latest, resetKey });
   let current = shown;
-  if (shown.latest !== latest) {
-    current = { latest, displayed: mergeBurst(shown.displayed, latest) };
+  if (shown.resetKey !== resetKey) {
+    current = { latest, displayed: latest, resetKey };
+    setShown(current);
+  } else if (shown.latest !== latest) {
+    current = { latest, displayed: mergeBurst(shown.displayed, latest), resetKey };
     setShown(current);
   }
 
@@ -1613,7 +1853,7 @@ function useSettledBurst(
     const timer = setTimeout(() => {
       setShown((previous) =>
         previous.latest === latest && previous.displayed !== latest
-          ? { latest, displayed: latest }
+          ? { ...previous, latest, displayed: latest }
           : previous
       );
     }, settleMs);
@@ -1621,6 +1861,71 @@ function useSettledBurst(
   }, [latest, settleMs]);
 
   return current.displayed;
+}
+
+/** The timeline's empty-state line: the Simulator cold start, the target scene's open, or the default. */
+function timelineEmptyText(
+  scene: SceneEntry | undefined,
+  status: { phase: string; reason?: string } | undefined,
+  simulatorOpeningTitle: string | undefined
+): string {
+  if (simulatorOpeningTitle !== undefined) {
+    return `Opening ${simulatorOpeningTitle} on the Simulator…`;
+  }
+  if (scene && (status?.phase === "requested" || status?.phase === "navigating")) {
+    return `Opening ${scene.title}…`;
+  }
+  if (scene && status?.phase === "failed") {
+    return status.reason ?? "The scene could not be opened.";
+  }
+  return "Press Play to capture the interaction.";
+}
+
+/** Space must not fire while typing or while a control has the keyboard. */
+function isShortcutExcludedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.closest("input, textarea, select, button, [contenteditable]") !== null;
+}
+
+function readStoredSidebarVisible(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function readStoredSceneThumbnails(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(SCENE_THUMBNAILS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const entries = Object.entries(parsed as Record<string, unknown>).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && entry[1].startsWith("data:image/")
+    );
+    return Object.fromEntries(entries.slice(-MAX_SCENE_THUMBNAILS));
+  } catch {
+    return {};
+  }
+}
+
+/** The framebuffer canvas scaled to a 72 px wide JPEG data url; undefined when there is nothing to draw. */
+function captureSceneThumbnail(source: HTMLCanvasElement | null): string | undefined {
+  if (!source || source.width <= 0 || source.height <= 0) return undefined;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = SCENE_THUMBNAIL_WIDTH;
+    canvas.height = Math.max(1, Math.round((source.height * SCENE_THUMBNAIL_WIDTH) / source.width));
+    const context = canvas.getContext("2d");
+    if (!context) return undefined;
+    context.drawImage(source, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch {
+    return undefined;
+  }
 }
 
 function animationDisplayEnd(animation: RuntimeAnimationTrace): number {

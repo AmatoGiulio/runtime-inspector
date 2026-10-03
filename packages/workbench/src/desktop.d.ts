@@ -105,6 +105,8 @@ declare global {
       callback: (error: { message: string }) => void
     ): () => void;
     getDeviceChrome(udid: string): Promise<RuntimeDesktopDeviceChrome | null>;
+    /** Opens `url` on the Simulator with `xcrun simctl openurl`; rejects with the validation message. */
+    openSimulatorUrl(udid: string, url: string): Promise<boolean>;
     getScreenPermission(): Promise<string>;
     prepareSimulatorInput(): Promise<boolean>;
     sendSimulatorPointer(event: {

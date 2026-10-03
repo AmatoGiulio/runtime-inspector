@@ -4,6 +4,7 @@ import type { PanelSchema } from "@runtime-inspector/protocol";
 import {
   PENDING_PREVIEW_TTL_MS,
   animationKeys,
+  animationsSince,
   mergeBurst,
   type PendingPreview,
   buildTimelineModel,
@@ -621,6 +622,36 @@ describe("timelineOriginMs", () => {
       model.groups[0]!.rows.map((row) => [row.animation.instanceId, row.startMs])
     );
     expect(rows).toEqual({ delayed: 500, later: 200 });
+  });
+});
+
+describe("animationsSince", () => {
+  it("returns an empty list for no animations", () => {
+    expect(animationsSince([], 1000)).toEqual([]);
+  });
+
+  it("keeps animations called at or after the time, with 1 ms tolerance, in input order", () => {
+    const animations = [
+      trace({ instanceId: "before", startedAtRuntimeMs: 998.9 }),
+      trace({ instanceId: "late", startedAtRuntimeMs: 1500 }),
+      trace({ instanceId: "tolerance", startedAtRuntimeMs: 999.2 }),
+      trace({ instanceId: "exact", startedAtRuntimeMs: 1000 })
+    ];
+    expect(animationsSince(animations, 1000).map((a) => a.instanceId)).toEqual([
+      "late",
+      "tolerance",
+      "exact"
+    ]);
+  });
+
+  it("uses the call time, not the delayed start", () => {
+    const animations = [
+      // Called at 900, starts at 1100: earlier than the scene, dropped.
+      trace({ instanceId: "delayedOld", startedAtRuntimeMs: 1100, startDelayMs: 200 }),
+      // Called at 1000, starts at 1300: kept.
+      trace({ instanceId: "delayedNew", startedAtRuntimeMs: 1300, startDelayMs: 300 })
+    ];
+    expect(animationsSince(animations, 1000).map((a) => a.instanceId)).toEqual(["delayedNew"]);
   });
 });
 

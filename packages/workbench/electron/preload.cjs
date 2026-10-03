@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld("runtimeDesktop", {
     ipcRenderer.on("runtime-desktop:simulator-framebuffer-error", handler);
     return () => ipcRenderer.removeListener("runtime-desktop:simulator-framebuffer-error", handler);
   },
+  openSimulatorUrl: (udid, url) =>
+    ipcRenderer.invoke("runtime-desktop:open-simulator-url", udid, url),
   getDeviceChrome: (udid) => ipcRenderer.invoke("runtime-desktop:get-device-chrome", udid),
   getScreenPermission: () => ipcRenderer.invoke("runtime-desktop:get-screen-permission"),
   prepareSimulatorInput: () => ipcRenderer.invoke("runtime-desktop:prepare-simulator-input"),

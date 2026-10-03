@@ -346,6 +346,19 @@ export function timelineOriginMs(animations: RuntimeAnimationTrace[]): number {
 }
 
 /**
+ * The animations called at or after `callTimeMs` (1 ms tolerance), in input order. Used to keep a
+ * scene's timeline to the motion that followed its `playing` time (RFC 0006 §5).
+ */
+export function animationsSince(
+  animations: RuntimeAnimationTrace[],
+  callTimeMs: number
+): RuntimeAnimationTrace[] {
+  return animations.filter(
+    (animation) => animationCallTimeMs(animation) >= callTimeMs - 1
+  );
+}
+
+/**
  * The animations of the last interaction: clusters by call time, a gap larger than
  * `idleGapMs` between consecutive calls starts a new cluster. Original relative order is kept.
  */

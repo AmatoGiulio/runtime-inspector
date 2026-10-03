@@ -350,13 +350,13 @@ button {
 
 .workspace {
   display: grid;
-  grid-template-columns: 220px minmax(520px, 1fr) 280px;
+  grid-template-columns: 248px minmax(520px, 1fr) 280px;
   grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
 
-.workspace.no-outline {
+.workspace.no-sidebar {
   grid-template-columns: minmax(520px, 1fr) 280px;
 }
 
@@ -366,8 +366,60 @@ button {
   overflow: auto;
 }
 
-.outline {
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border-right: 1px solid var(--wb-border);
+}
+
+/* Scenes | Controls: a neutral segmented control (selection here is not an accent use). */
+.sidebar-tabs {
+  flex: 0 0 auto;
+  height: var(--wb-control-h);
+  margin: 8px 12px;
+  padding: 2px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  border-radius: var(--wb-radius);
+  background: var(--wb-surface-raised);
+}
+
+.sidebar-tab {
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: calc(var(--wb-radius) - 2px);
+  background: transparent;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.sidebar-tab:hover:not([aria-selected="true"]) {
+  color: var(--wb-text);
+}
+
+.sidebar-tab[aria-selected="true"] {
+  background: var(--wb-surface-active);
+  color: var(--wb-text);
+}
+
+.sidebar-tab:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: 1px;
+}
+
+.sidebar-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--wb-border);
 }
 
 .inspector {
@@ -405,6 +457,177 @@ button {
 .wb-button.schema-button.active {
   background: var(--wb-surface-raised);
   color: var(--wb-text);
+}
+
+/* Scenes navigator */
+
+.scenes-note {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--wb-border-subtle);
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+}
+
+.scenes-note::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--wb-text-muted);
+  vertical-align: middle;
+}
+
+.scenes-list {
+  padding: 10px 12px;
+}
+
+.scenes-list:focus-visible {
+  outline: 2px solid var(--wb-accent);
+  outline-offset: -2px;
+}
+
+.scenes-group + .scenes-group {
+  padding-top: 10px;
+}
+
+.scenes-group-label {
+  padding: 0 0 6px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-label);
+}
+
+/* Rows bleed 8px into the 12px gutter, like the Outline rows. */
+.scene-row {
+  margin-inline: -8px;
+  padding: 6px 8px;
+  border-radius: var(--wb-radius);
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.scene-row:hover {
+  background: var(--wb-surface-raised);
+}
+
+/* Selection: row tint plus ring, as on the selected timeline row and clip. */
+.scene-row.selected {
+  background: var(--wb-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--wb-accent);
+}
+
+.scene-row.dimmed {
+  opacity: 0.45;
+}
+
+.scene-row-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.scene-thumb {
+  width: 30px;
+  height: 64px;
+  flex: 0 0 30px;
+  display: block;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--wb-video-bg);
+}
+
+.scene-thumb.placeholder {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--wb-border-subtle);
+  background: var(--wb-surface-raised);
+  color: var(--wb-text-muted);
+  font: var(--wb-type-label);
+}
+
+.scene-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scene-title,
+.scene-description {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scene-title {
+  color: var(--wb-text);
+  font: var(--wb-type-body);
+}
+
+.scene-description {
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+}
+
+/* Icon-sized like the other in-row buttons (22px); takes no room until the row is hovered,
+   so the title keeps the full width. */
+.wb-button.scene-copy-link {
+  display: none;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+  border-radius: var(--wb-radius-sm);
+}
+
+.scene-row:hover .scene-copy-link {
+  display: inline-grid;
+  place-items: center;
+}
+
+/* "On screen": the status-dot language of .wb-pill, without the label. */
+.scene-onscreen {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--wb-success);
+}
+
+.scene-copy-link svg {
+  width: 14px;
+  height: 14px;
+}
+
+.scene-state {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.scene-opening {
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+  white-space: nowrap;
+}
+
+.scene-failed {
+  color: var(--wb-danger);
+  font: var(--wb-type-small);
+}
+
+/* Under the selected failed row, aligned with its title. */
+.scene-reason {
+  margin-top: 4px;
+  padding-left: 40px;
+  color: var(--wb-text-secondary);
+  font: var(--wb-type-small);
+  line-height: 1.4;
 }
 
 .runtime-stage {
@@ -761,6 +984,17 @@ button {
   width: 12px;
   height: 12px;
   flex: 0 0 auto;
+}
+
+/* The scene Play targets, next to the button. */
+.timeline-target {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--wb-text-muted);
+  font: var(--wb-type-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timeline-time {
@@ -1397,6 +1631,9 @@ button {
   }
 
   .wb-button,
+  .wb-button.scene-copy-link,
+  .sidebar-tab,
+  .scene-row,
   .simulator-select,
   .motion-bar,
   .motion-bar-resize,

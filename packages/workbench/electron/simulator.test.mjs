@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   flattenSimulatorDevices,
   normalizeSimulatorDeviceCrop,
-  runtimeLabel
+  runtimeLabel,
+  validateSimulatorUrlRequest
 } from "./simulator.mjs";
 
 test("runtimeLabel renders CoreSimulator iOS ids", () => {
@@ -117,4 +118,26 @@ test("normalizeSimulatorDeviceCrop rejects groups with the wrong aspect ratio", 
   );
 
   assert.equal(crop, undefined);
+});
+
+const UDID = "0A1B2C3D-4E5F-6789-ABCD-EF0123456789";
+
+test("validateSimulatorUrlRequest accepts a UDID and a url with a scheme", () => {
+  assert.equal(validateSimulatorUrlRequest(UDID, "exp://127.0.0.1:8081/--/product"), undefined);
+  assert.equal(validateSimulatorUrlRequest(UDID.toLowerCase(), "myapp://like"), undefined);
+  assert.equal(validateSimulatorUrlRequest(UDID, "https://example.com/a"), undefined);
+});
+
+test("validateSimulatorUrlRequest rejects bad UDIDs", () => {
+  for (const udid of [undefined, "", "BOOTED", `${UDID}0`, UDID.slice(1), "0A1B2C3D 4E5F-6789-ABCD-EF0123456789", 42]) {
+    assert.equal(typeof validateSimulatorUrlRequest(udid, "myapp://x"), "string", String(udid));
+  }
+});
+
+test("validateSimulatorUrlRequest rejects missing, schemeless and oversized urls", () => {
+  for (const url of [undefined, "", 42, "/product", "product", "1abc://x", "-x://y", " myapp://x"]) {
+    assert.equal(typeof validateSimulatorUrlRequest(UDID, url), "string", String(url));
+  }
+  assert.equal(typeof validateSimulatorUrlRequest(UDID, `myapp://${"a".repeat(2040)}`), "string");
+  assert.equal(validateSimulatorUrlRequest(UDID, `myapp://${"a".repeat(2039 - 8)}`), undefined);
 });

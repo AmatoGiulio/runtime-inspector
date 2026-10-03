@@ -249,6 +249,35 @@ export async function ensureIOSSimulatorBooted(udid) {
   return refreshed.find((item) => item.udid === udid) ?? { ...device, state: "Booted" };
 }
 
+const SIMULATOR_UDID_PATTERN = /^[0-9A-F-]{36}$/i;
+const URL_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i;
+const MAX_SIMULATOR_URL_LENGTH = 2048;
+
+/** Validates an open-url request; returns an error message, or undefined when it is valid. */
+export function validateSimulatorUrlRequest(udid, url) {
+  if (typeof udid !== "string" || !SIMULATOR_UDID_PATTERN.test(udid)) {
+    return "A valid Simulator UDID is required.";
+  }
+  if (typeof url !== "string" || url.length === 0) {
+    return "A url is required.";
+  }
+  if (url.length >= MAX_SIMULATOR_URL_LENGTH) {
+    return `The url must be shorter than ${MAX_SIMULATOR_URL_LENGTH} characters.`;
+  }
+  if (!URL_SCHEME_PATTERN.test(url)) {
+    return "The url must start with a scheme (for example myapp:// or exp://).";
+  }
+  return undefined;
+}
+
+/** Opens `url` on the Simulator (`xcrun simctl openurl`), without a shell. */
+export async function openIOSSimulatorUrl(udid, url) {
+  await execFileAsync("xcrun", ["simctl", "openurl", udid, url], {
+    timeout: 15_000,
+    maxBuffer: 1024 * 1024
+  });
+}
+
 function compareRuntimeLabels(a, b) {
   const parse = (label) =>
     label

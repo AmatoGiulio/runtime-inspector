@@ -145,3 +145,74 @@ export function createDemoState() {
     }
   };
 }
+
+// --- Scenes (RFC 0006) -------------------------------------------------------------------------
+
+export const SCENES_SCHEMA_ID = "scenes";
+
+export const DEMO_SCENES = [
+  { id: "product-reveal", title: "Product reveal", url: "exp://127.0.0.1:8090/--/product" },
+  { id: "like-burst", title: "Like", url: "exp://127.0.0.1:8090/--/like" }
+];
+
+/** The reserved `scenes` schema: one "Store" group, one scene trigger per demo scene. */
+export function scenesSchema(activeSceneId) {
+  return {
+    id: SCENES_SCHEMA_ID,
+    title: "Scenes",
+    groups: [
+      {
+        id: "Store",
+        label: "Store",
+        controls: DEMO_SCENES.map((scene) => ({
+          id: scene.id,
+          kind: "trigger",
+          label: scene.title,
+          binding: `scenes.${scene.id}`,
+          scene: { url: scene.url, active: scene.id === activeSceneId, reachable: true }
+        }))
+      }
+    ]
+  };
+}
+
+const LIKE_FILE = "demo/LikeBurstDemo.tsx";
+const LIKE_FIRST_LINE = 21;
+const LIKE_ENCLOSURE = ["LikeBurstDemo", "play"];
+
+const LIKE_SITES = [
+  { target: "heartScale", kind: "spring", toValue: 1, delay: 0, config: { damping: 10, stiffness: 260 }, expression: "withSpring(1, { damping: 10, stiffness: 260 })" },
+  { target: "ringScale", kind: "timing", toValue: 1.6, delay: 0, config: { duration: 420 }, expression: "withTiming(1.6, { duration: 420 })" },
+  { target: "ringOpacity", kind: "timing", toValue: 0, delay: 120, config: { duration: 300 }, expression: "withDelay(120, withTiming(0, { duration: 300 }))" }
+].map((site, index) => {
+  const line = LIKE_FIRST_LINE + index;
+  return { ...site, line, callsiteId: `${LIKE_FILE}:${line}:${COLUMN}:${site.kind}:${site.target}` };
+});
+
+/** The `animation.started` messages one run of the like burst emits at call time (same envelope as `replayEvents`). */
+export function likeBurstEvents({ nowMs, instanceSeed }) {
+  return LIKE_SITES.map((site, index) => {
+    const startedAtRuntimeMs = nowMs + index * STAGGER_MS + site.delay;
+    return {
+      delayMs: 0,
+      message: {
+        type: "animation.started",
+        instanceId: `${site.callsiteId}:${startedAtRuntimeMs}:${instanceSeed}`,
+        callsiteId: site.callsiteId,
+        target: site.target,
+        animationKind: site.kind,
+        startedAtRuntimeMs,
+        ...(site.delay > 0 ? { startDelayMs: site.delay } : {}),
+        toValue: site.toValue,
+        config: { ...site.config },
+        source: {
+          file: LIKE_FILE,
+          line: site.line,
+          column: COLUMN,
+          enclosure: [...LIKE_ENCLOSURE],
+          expression: site.expression
+        }
+      }
+    };
+  });
+}

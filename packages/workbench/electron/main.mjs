@@ -14,7 +14,9 @@ import { createServer } from "vite";
 import {
   captureIOSSimulatorFrame,
   ensureIOSSimulatorBooted,
-  listIOSSimulators
+  listIOSSimulators,
+  openIOSSimulatorUrl,
+  validateSimulatorUrlRequest
 } from "./simulator.mjs";
 import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
 import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
@@ -130,6 +132,15 @@ function registerDesktopIpc() {
   ipcMain.handle("runtime-desktop:list-simulators", async () => {
     ensureDarwin();
     return listIOSSimulators();
+  });
+
+  // Opens a scene's deep link on the Simulator (cold start when the app is not connected).
+  ipcMain.handle("runtime-desktop:open-simulator-url", async (_event, udid, url) => {
+    ensureDarwin();
+    const invalid = validateSimulatorUrlRequest(udid, url);
+    if (invalid) throw new Error(invalid);
+    await openIOSSimulatorUrl(udid, url);
+    return true;
   });
 
   // The real iPhone bezel, read from the user's Xcode. Any failure degrades to null (generic frame).
