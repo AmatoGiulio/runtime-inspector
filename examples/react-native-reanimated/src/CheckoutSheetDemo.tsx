@@ -7,7 +7,6 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useScene } from "@runtime-inspector/react-native";
 
 export function CheckoutSheetDemo() {
   const backdropOpacity = useSharedValue(0);
@@ -15,7 +14,8 @@ export function CheckoutSheetDemo() {
   const contentOpacity = useSharedValue(0);
   const payScale = useSharedValue(0.9);
 
-  const play = useScene("checkout-sheet", () => {
+  // @scene "Checkout sheet" group="Store"
+  function play() {
     // Reset closed (plain assignments, not animations).
     backdropOpacity.value = 0;
     sheetY.value = 420;
@@ -26,7 +26,7 @@ export function CheckoutSheetDemo() {
     sheetY.value = withSpring(0, { damping: 18, stiffness: 180 });
     contentOpacity.value = withDelay(140, withTiming(1, { duration: 220 }));
     payScale.value = withDelay(220, withSpring(1, { damping: 12, stiffness: 240 }));
-  });
+  }
 
   useEffect(() => {
     play();

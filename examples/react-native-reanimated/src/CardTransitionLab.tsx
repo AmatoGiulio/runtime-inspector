@@ -9,7 +9,7 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useInspector, useRuntimeProbe, useRuntimeValue, useScene } from "@runtime-inspector/react-native";
+import { useInspector, useRuntimeValue } from "@runtime-inspector/react-native";
 
 export function CardTransitionLab() {
   // @inspect min=8 max=48
@@ -64,12 +64,7 @@ export function CardTransitionLab() {
     benchmarkViewport: () => benchmarkViewport()
   });
 
-  useRuntimeProbe("card-transition", "moveX", card.moveX, {
-    label: "Move X",
-    group: "Motion",
-    unit: "px"
-  });
-
+  // @scene "Card transition" group="Lab"
   function replayTransition() {
     const easing = Easing.bezier(...card.easing.value);
     card.moveX.value = withTiming(-110, { duration: 260, easing });
@@ -87,8 +82,6 @@ export function CardTransitionLab() {
       card.color.value = targets.color;
     }, 220);
   }
-
-  useScene("card-transition", replayTransition);
 
   function benchmarkViewport() {
     const duration = 140;

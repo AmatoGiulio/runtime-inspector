@@ -7,7 +7,6 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useScene } from "@runtime-inspector/react-native";
 
 export function WelcomeDemo() {
   const logoScale = useSharedValue(0.7);
@@ -21,7 +20,8 @@ export function WelcomeDemo() {
   const row3X = useSharedValue(-40);
   const row3Opacity = useSharedValue(0);
 
-  const play = useScene("welcome", () => {
+  // @scene "Welcome" group="Onboarding"
+  function play() {
     // Reset to the starting pose (plain assignments, not animations).
     logoScale.value = 0.7;
     logoOpacity.value = 0;
@@ -44,7 +44,7 @@ export function WelcomeDemo() {
     row2Opacity.value = withDelay(320, withTiming(1, { duration: 300 }));
     row3X.value = withDelay(400, withTiming(0, { duration: 360 }));
     row3Opacity.value = withDelay(400, withTiming(1, { duration: 300 }));
-  });
+  }
 
   useEffect(() => {
     play();

@@ -6,7 +6,6 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useScene } from "@runtime-inspector/react-native";
 
 export function LikeBurstDemo() {
   const heartScale = useSharedValue(0.6);
@@ -15,7 +14,8 @@ export function LikeBurstDemo() {
   const countY = useSharedValue(16);
   const countOpacity = useSharedValue(0);
 
-  const play = useScene("like-burst", () => {
+  // @scene "Like" group="Store"
+  function play() {
     // Reset to the starting pose (plain assignments, not animations).
     heartScale.value = 0.6;
     ringScale.value = 0.6;
@@ -28,7 +28,7 @@ export function LikeBurstDemo() {
     ringOpacity.value = withDelay(120, withTiming(0, { duration: 300 }));
     countY.value = withDelay(80, withSpring(0, { damping: 14, stiffness: 200 }));
     countOpacity.value = withTiming(1, { duration: 200 });
-  });
+  }
 
   const heartStyle = useAnimatedStyle(() => ({
     transform: [{ scale: heartScale.value }]

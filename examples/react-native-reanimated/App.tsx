@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import "./src/scenes";
 import { CardTransitionLab } from "./src/CardTransitionLab";
 import { CheckoutSheetDemo } from "./src/CheckoutSheetDemo";
 import { HomeScreen } from "./src/HomeScreen";

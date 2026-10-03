@@ -7,7 +7,6 @@ import Animated, {
   withSpring,
   withTiming
 } from "react-native-reanimated";
-import { useScene } from "@runtime-inspector/react-native";
 
 export function ProductRevealDemo() {
   const coverOpacity = useSharedValue(0);
@@ -19,7 +18,8 @@ export function ProductRevealDemo() {
   const buttonOpacity = useSharedValue(0);
   const buttonScale = useSharedValue(0.9);
 
-  const play = useScene("product-reveal", () => {
+  // @scene "Product reveal" group="Store"
+  function play() {
     // Reset to the starting pose (plain assignments, not animations).
     coverOpacity.value = 0;
     coverScale.value = 0.86;
@@ -38,7 +38,7 @@ export function ProductRevealDemo() {
     detailsY.value = withDelay(240, withTiming(0, { duration: 380 }));
     buttonOpacity.value = withDelay(380, withTiming(1, { duration: 240 }));
     buttonScale.value = withDelay(380, withSpring(1, { damping: 12, stiffness: 220 }));
-  });
+  }
 
   useEffect(() => {
     play();
