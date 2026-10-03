@@ -71,8 +71,8 @@ Only one open is pending at a time. Opening is best-effort and dev-only, like ev
 A scene declares either an absolute link (`myapp://product/42`, `https://…`) or a path (`/product/42`). The runtime resolves a path to an absolute `url` when it publishes, in this order:
 
 1. `configureScenes({ linkPrefix })`, when set (`myapp://` + `product/42`);
-2. `createURL(path)` from `expo-linking`, when that module is installed (guarded `require`; the SDK ships CJS for exactly this reason);
-3. in Expo Go, `exp://<host:port>/--<path>`, with the host taken from the experience url when it carries one, else from the Metro script url broker discovery already resolves (observed on Expo Go 2.32: the experience url can be a bare `exp://`);
+2. in Expo Go, `exp://<host:port>/--<path>`, with the host taken from the experience url when it carries one, else from the Metro script url broker discovery already resolves (observed on Expo Go 2.32: the experience url can be a bare `exp://`);
+3. in an Expo development build, `<scheme>://<path>` with the scheme the app declares (`expo.scheme`, read from the Expo constants);
 4. otherwise no `url`, and one development warning per scene explaining how to fix it.
 
 The published `url` is absolute so a client can show it, copy it, or open it on the device from outside the app (for example `simctl openurl` when the runtime is not connected). The runtime itself opens it with `Linking.openURL`, so the app's own linking configuration (React Navigation, Expo Router, or hand-written) decides where it lands. `open()` is the escape hatch for state a url cannot express.
@@ -163,3 +163,7 @@ Additive under docs/protocol-stability.md: a new optional field and a new messag
 - Runtime: declaration merge; auto-declaration; schema shape and order; link resolution order; open when active / by `open()` / by `Linking.openURL`; mount wait and timeout; no double play after an entrance; supersede; play error; in-place republish keeps the same socket; production no-op.
 - Broker: `scene.status` reaches panels, is not cached, is not replayed to a late panel; a `control.trigger` on `scenes` reaches only the scenes connection.
 - panel-core, MCP, Workbench: their own unit tests; then the example app on the iOS Simulator through the desktop Workbench.
+
+## Implementation notes
+
+- The first implementation resolved paths with a guarded `require("expo-linking")`. On the iOS Simulator, Metro reported the missing optional module as an uncaught error even inside `try/catch`, so the runtime now reads the Expo constants directly and never requires `expo-linking`.

@@ -278,7 +278,7 @@ A **scene** is a named moment of motion: where to go in the app, and what to pla
 
 Only one open is pending at a time; a new open supersedes it. Opening is best-effort and development-only.
 
-**Link resolution.** A scene declares an absolute link (`myapp://product/42`, `https://…`), used as is, or a path (`/product/42`), resolved when the schema is published, in order: `configureScenes({ linkPrefix })`; `createURL(path)` from `expo-linking` when installed; Expo Go's experience url (`<experienceUrl>/--<path>`, derived from the Metro script url when the experience url has no host); otherwise no `url` and one development warning per scene.
+**Link resolution.** A scene declares an absolute link (`myapp://product/42`, `https://…`), used as is, or a path (`/product/42`), resolved when the schema is published, in order: `configureScenes({ linkPrefix })`; in Expo Go, `exp://<host>/--<path>` (host from the experience url, or from the Metro script url when the experience url has no host); in an Expo development build, `<scheme>://<path>` with the declared `expo.scheme`; otherwise no `url` and one development warning per scene.
 
 #### `scene.status`
 

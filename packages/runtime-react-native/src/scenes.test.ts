@@ -210,7 +210,7 @@ describe("resolveSceneLink", () => {
     expect(scenes.resolveSceneLink("myapp://product/42")).toBe("myapp://product/42");
     expect(scenes.resolveSceneLink("https://example.com/p")).toBe("https://example.com/p");
     expect(scenes.resolveSceneLink(undefined)).toBeUndefined();
-    // expo-linking is not installed here, so the path falls through every step.
+    // No prefix, no Expo Go, no Expo scheme here: the path falls through every step.
     expect(scenes.resolveSceneLink("/product")).toBeUndefined();
   });
 
@@ -257,6 +257,19 @@ describe("resolveSceneLink", () => {
     } finally {
       reactNative.NativeModules.SourceCode = original;
     }
+  });
+
+  it("uses the scheme an Expo development build declares", async () => {
+    vi.stubGlobal("expo", {
+      modules: {
+        ExponentConstants: {
+          appOwnership: null,
+          manifest: JSON.stringify({ extra: { expoClient: { scheme: "motionapp" } } })
+        }
+      }
+    });
+    const { scenes } = await load();
+    expect(scenes.resolveSceneLink("/product/42")).toBe("motionapp://product/42");
   });
 
   it("warns exactly once per scene whose link does not resolve", async () => {

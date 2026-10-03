@@ -291,7 +291,7 @@ export function openScene(sceneId: string): void {
   if (!open && url === undefined) {
     const reason =
       link !== undefined
-        ? `Scene "${sceneId}" is not on screen, has no open(), and its link "${link}" did not resolve to a url. Call configureScenes({ linkPrefix }) or install expo-linking.`
+        ? `Scene "${sceneId}" is not on screen, has no open(), and its link "${link}" did not resolve to a url. Call configureScenes({ linkPrefix }) with your app's scheme.`
         : `Scene "${sceneId}" is not on screen and has neither a link nor open().`;
     emitStatus(sceneId, "failed", nowMs(), "UNREACHABLE", reason);
     return;
@@ -347,8 +347,10 @@ export function openScene(sceneId: string): void {
 
 /**
  * Resolves a scene link to an absolute url (RFC 0006 §4): absolute links as is; paths
- * through `configureScenes({ linkPrefix })`, then `expo-linking`'s `createURL`, then
- * Expo Go's experience url. Returns undefined when nothing resolves.
+ * through `configureScenes({ linkPrefix })`, then Expo Go's `exp://<host>/--<path>`, then the
+ * scheme an Expo development build declares. Returns undefined when nothing resolves.
+ * No `require("expo-linking")`: Metro reports a missing optional module as an uncaught
+ * error even inside try/catch, so the Expo constants are read directly instead.
  */
 export function resolveSceneLink(link: string | undefined): string | undefined {
   if (!link) return undefined;
@@ -360,12 +362,14 @@ export function resolveSceneLink(link: string | undefined): string | undefined {
     return linkPrefix.endsWith("/") ? linkPrefix + path.slice(1) : linkPrefix + path;
   }
 
-  const fromExpoLinking = createUrlWithExpoLinking(path);
-  if (fromExpoLinking !== undefined) return fromExpoLinking;
-
   const expoGoBase = getExpoGoBaseUrl();
   if (expoGoBase) {
     return `${expoGoBase}/--${path}`;
+  }
+
+  const expoScheme = getExpoAppScheme();
+  if (expoScheme) {
+    return `${expoScheme}://${path.slice(1)}`;
   }
 
   return undefined;
@@ -542,7 +546,7 @@ function buildScenesSchema(): PanelSchema {
       warnedUnresolvedLink.add(entry.id);
       warnDev(
         `Scene "${entry.id}" has the link "${link}" but no url could be resolved, so it can only be opened while it is on screen. ` +
-          `Call configureScenes({ linkPrefix: "myapp://" }) with your app's scheme, or install expo-linking.`
+          `Call configureScenes({ linkPrefix: "myapp://" }) with your app's scheme.`
       );
     }
 
@@ -593,14 +597,20 @@ function deriveSceneTitle(id: string): string {
   return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
-function createUrlWithExpoLinking(path: string): string | undefined {
+/** The scheme an Expo development build declares (`expo.scheme`); not used inside Expo Go. */
+function getExpoAppScheme(): string | undefined {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const expoLinking = require("expo-linking") as {
-      createURL?: (path: string) => string;
-    };
-    const url = expoLinking?.createURL?.(path);
-    return typeof url === "string" && url.length > 0 ? url : undefined;
+    const constants = (globalThis as {
+      expo?: { modules?: { ExponentConstants?: { appOwnership?: unknown; manifest?: unknown } } };
+    }).expo?.modules?.ExponentConstants;
+    if (!constants || constants.appOwnership === "expo") return undefined;
+    const raw = constants.manifest;
+    const manifest = (typeof raw === "string" ? JSON.parse(raw) : raw) as
+      | { scheme?: unknown; extra?: { expoClient?: { scheme?: unknown } } }
+      | undefined;
+    const declared = manifest?.extra?.expoClient?.scheme ?? manifest?.scheme;
+    const scheme = Array.isArray(declared) ? declared[0] : declared;
+    return typeof scheme === "string" && /^[a-z][a-z0-9+.-]*$/i.test(scheme) ? scheme : undefined;
   } catch {
     return undefined;
   }
