@@ -108,7 +108,23 @@ const replay = useAction("replay", () => runReplayAnimation());
 
 Actions are declared, not inferred from a function's shape — the same rationale as the `useRuntimeValue` function-initial error above. Same lifecycle as `useRuntimeValue` (register on mount, dispose on unmount, name release, live-collision suffix + warning). Options: `label`.
 
-### `useScene` (motion scenes)
+### Automatic scenes and curves (no code)
+
+With the Babel plugin on, every function in a component that starts discovered animations becomes a **scene** by itself ([RFC 0008](../rfcs/0008-automatic-motions.md)): a `function play() {}` or `const play = () => {}` / `useCallback(...)` declared in the component body, or a `useEffect` whose body only animates. It appears in the Workbench while its component is on screen (and stays listed afterwards), titled from the component and function names, and Play replays it. Shared values animated in the component are recorded as curves without `useRuntimeProbe`.
+
+Optional comment for names, or to exclude a function:
+
+```ts
+// @scene "Product reveal" group="Store"
+function play() { … }
+
+// @scene off
+function resetPose() { … }
+```
+
+An automatic scene can be replayed while its screen is showing. To open it from elsewhere, add navigation with `defineScene("<file>:<Component>.<function>", { open, link })` or use the explicit API below.
+
+### `useScene` (motion scenes) — explicit
 
 A scene is a named moment of motion — the product page reveal, the like burst, the sheet opening — that any client can open: the app navigates there, waits for the screen to mount, and plays the motion ([RFC 0006](../rfcs/0006-scenes.md)). The Workbench lists scenes as a storyboard; the web panel and React Native DevTools show them as buttons; the MCP agent has `list_scenes` / `open_scene`.
 

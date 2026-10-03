@@ -451,3 +451,17 @@ Not done yet:
 1. a physical-device run and a development build with its own scheme (link delivered without reload);
 2. the copy-link and Simulator cold-start paths were unit-tested, not exercised by hand;
 3. scene state is not shown in the web panel beyond the trigger buttons.
+
+## Zero-code setup and automatic motions — RFC 0008
+
+**Implemented on `feat/runtime-workbench-desktop`; validated on the iOS Simulator on 2026-10-03.**
+
+- `npx runtime-inspector init` wires `babel.config.js` and `metro.config.js` (idempotent, `--dry-run`, never runs the package manager).
+- `withRuntimeInspector(config)` from `@runtime-inspector/react-native/metro` replaces the singleton resolver boilerplate and, with Rozenite on, loads the DevTools bridge before the app (no import in the app).
+- `runtime-inspector dev` writes `~/.runtime-inspector/session.json` (0600); the Workbench and the MCP client connect without a token and follow a restarted CLI.
+- The Babel plugin turns motion functions into scenes (`__riMotion`) and animated top-level shared values into probes (`__riProbe`); `// @scene "Title" group="…"` / `// @scene off`. No protocol change. Probes are registered while their component is mounted and capped at the RFC 0005 limit of 16, with one warning when full.
+- The example app has no Runtime Inspector code for scenes or curves any more; only `CardTransitionLab` still uses `useInspector` / `useRuntimeValue` / `// @inspect`.
+
+Validated live: with Metro on the one-line config and the Workbench started without a token, opening the Like screen in the app listed the scene automatically, Play replayed it (5 rows), and the heart scale curve was available.
+
+Not done yet: opening an automatic scene whose screen is not showing (route inference), exposing `interpolate` ranges and initial values automatically, write-back of animation literals (RFC 0007).
