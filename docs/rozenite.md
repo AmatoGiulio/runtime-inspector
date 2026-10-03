@@ -80,23 +80,16 @@ The renderer supports:
 ## Using it in an app
 
 1. Add the packages: `@runtime-inspector/react-native`, `@runtime-inspector/panel-rozenite`, and `@rozenite/metro` (dev).
-2. Wrap the Metro config. Keep it conditional so production bundling is unaffected:
+2. Use `withRuntimeInspector` in `metro.config.js` (`npx runtime-inspector init` writes it):
 
    ```js
-   const { withRozenite } = require("@rozenite/metro");
-
-   module.exports = withRozenite(config, {
-     enabled: process.env.WITH_ROZENITE === "true",
-     include: ["@runtime-inspector/panel-rozenite"]
-   });
+   const { getDefaultConfig } = require("expo/metro-config");
+   const { withRuntimeInspector } = require("@runtime-inspector/react-native/metro");
+   module.exports = withRuntimeInspector(getDefaultConfig(__dirname));
    ```
 
-3. Import the plugin once from the app entry. `@rozenite/metro` does not inject plugin code into the bundle; the import registers the device side of the bridge. It is inert in production and when Rozenite is not enabled:
-
-   ```js
-   import "@runtime-inspector/panel-rozenite";
-   ```
-
+   With `WITH_ROZENITE=true` (or `withRuntimeInspector(config, { rozenite: true })`) it applies `withRozenite` with this plugin and loads the device side of the bridge before the app: imports of `@runtime-inspector/react-native` resolve to a small entry (`rozenite-entry.js`) that re-exports the SDK and loads the panel, and that entry runs before the main module. No import in the app is needed. Without Rozenite the panel is not bundled at all. It warns when Rozenite is requested but `@rozenite/metro` or the panel package does not resolve.
+3. (Removed: the app no longer imports `@runtime-inspector/panel-rozenite`.)
 4. Start Metro with `WITH_ROZENITE=true`, open React Native DevTools (`j` in the Metro terminal) and select **Rozenite → Runtime Inspector**.
 
 No broker, CLI or token is involved. Declarations are unchanged — `useRuntimeValue`, `useAction`, `useInspector` and `// @inspect` appear in DevTools exactly as in the web panel. The app does not mirror values into a Rozenite API.
