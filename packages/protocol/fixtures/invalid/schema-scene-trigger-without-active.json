@@ -1,0 +1,22 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "scenes",
+    "title": "Scenes",
+    "groups": [
+      {
+        "id": "scenes",
+        "label": "Scenes",
+        "controls": [
+          {
+            "id": "product-reveal",
+            "kind": "trigger",
+            "label": "Product reveal",
+            "binding": "scenes.product-reveal",
+            "scene": { "url": "myapp://product", "reachable": true }
+          }
+        ]
+      }
+    ]
+  }
+}

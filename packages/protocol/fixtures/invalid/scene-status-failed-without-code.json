@@ -1,0 +1,7 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "failed",
+  "atRuntimeMs": 6200.5,
+  "reason": "The scene did not mount in time."
+}

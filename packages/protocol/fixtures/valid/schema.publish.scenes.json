@@ -1,0 +1,43 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "scenes",
+    "title": "Scenes",
+    "groups": [
+      {
+        "id": "Store",
+        "label": "Store",
+        "controls": [
+          {
+            "id": "product-reveal",
+            "kind": "trigger",
+            "label": "Product reveal",
+            "binding": "scenes.product-reveal",
+            "scene": { "url": "myapp://product", "active": true, "reachable": true }
+          },
+          {
+            "id": "like-burst",
+            "kind": "trigger",
+            "label": "Like",
+            "description": "Heart pop on like",
+            "binding": "scenes.like-burst",
+            "scene": { "url": "myapp://product", "active": false, "reachable": true }
+          }
+        ]
+      },
+      {
+        "id": "Onboarding",
+        "label": "Onboarding",
+        "controls": [
+          {
+            "id": "onboarding-intro",
+            "kind": "trigger",
+            "label": "Onboarding intro",
+            "binding": "scenes.onboarding-intro",
+            "scene": { "active": false, "reachable": false }
+          }
+        ]
+      }
+    ]
+  }
+}

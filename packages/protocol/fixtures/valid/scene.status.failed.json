@@ -1,0 +1,8 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "failed",
+  "atRuntimeMs": 6200.5,
+  "code": "MOUNT_TIMEOUT",
+  "reason": "Opened myapp://product but no useScene(\"product-reveal\") became active within 5000 ms. Check the link, or call useScene(\"product-reveal\") on the target screen."
+}

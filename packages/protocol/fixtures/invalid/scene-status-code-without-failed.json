@@ -1,0 +1,7 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "playing",
+  "atRuntimeMs": 1534.25,
+  "code": "MOUNT_TIMEOUT"
+}

@@ -1,0 +1,8 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "failed",
+  "atRuntimeMs": 6200.5,
+  "code": "TOTALLY_MADE_UP",
+  "reason": "Something went wrong."
+}

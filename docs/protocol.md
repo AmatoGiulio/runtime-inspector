@@ -37,6 +37,7 @@ Classification of every current message type:
 | `recording.complete` | Lifecycle event |
 | `animation.started` | Lifecycle event |
 | `animation.completed` | Lifecycle event |
+| `scene.status` | Lifecycle event |
 
 **Taxonomy violation resolved in 0.3.** Prior to 0.3, `trigger` controls ("do this callback now", e.g. "replay transition") were fired via `control.patch` — the same message type used for value updates (slider, toggle, color, bezier, spring), and drag-preview patches were indistinguishable from a human's decided value. Protocol 0.3 introduces two dedicated messages to resolve this:
 
@@ -147,6 +148,8 @@ Every non-`trigger` control may carry an optional `source: SourceAnchor` field *
 
 `file` is relative to the Babel root/cwd; `line`/`column` are a tiebreaker only, never trusted offsets — re-location always re-parses the current file. `enclosure` is the enclosing function/component chain, outermost first. `init` is the exact source text of the original initializer argument, used as the safety check before overwriting (see `source.apply` below). A control without a `source` field simply has no anchor: panels show no "Apply to code" affordance for it. Panels that predate this field ignore it (tolerant reader).
 
+A `trigger` control may carry an optional `scene: SceneDescriptor` field *(since RFC 0006, additive)*: `{ url?: string, active: boolean, reachable: boolean }`. It marks the trigger as a **scene**; the runtime sets it only on the triggers of the reserved schema with id `scenes` (title `Scenes`), which it publishes for scenes the way it publishes Runtime Values in the reserved `auto` schema. `url`, when present, is a non-empty string; `active` and `reachable` are required inside `scene`. See [Scenes](#scenes-rfc-0006) below and [RFC 0006](../rfcs/0006-scenes.md).
+
 ### `schema.dispose`
 
 Sent by a `runtime` client from `disconnect()` (deliberate teardown: screen unmount, `definePanel` hot-reload replacement) before closing its socket, best-effort.
@@ -249,6 +252,58 @@ In development builds the Babel plugin observes direct `shared.value = withTimin
 `animation.completed` (**Lifecycle event**) is defined with `endedAtRuntimeMs`, `finished` and `current`, but the current runtime does not emit it: observation is behavior-transparent and no transparent completion signal exists yet. Clients must treat any span end derived without it as declared or estimated, not observed.
 
 Both messages are observations of something that already happened. They are never cached and never replayed; a panel that joins late sees only animations that start afterwards.
+
+### Scenes (RFC 0006)
+
+A **scene** is a named moment of motion: where to go in the app, and what to play once there. The runtime publishes scenes as `trigger` controls in the reserved `scenes` schema: one group per scene group in first-declaration order (`id` and `label` are the group name; scenes without a group go to a group with id `scenes` and label `Scenes`), one trigger per scene with `id` = scene id, `label` = title, optional `description`, and the `scene` descriptor:
+
+```json
+{
+  "id": "product-reveal",
+  "kind": "trigger",
+  "label": "Product reveal",
+  "binding": "scenes.product-reveal",
+  "scene": { "url": "myapp://product", "active": true, "reachable": true }
+}
+```
+
+`active` is true while a `useScene` binding for the scene is mounted and active (the scene is on screen); `reachable` is true when the runtime can bring it on screen by itself (it is active, or it has a url or an `open()` callback). The runtime republishes the `scenes` schema **in place** on its open connection when they change; there is no separate scene-state message.
+
+**Opening.** A panel opens a scene with the existing `control.trigger` (`schemaId: "scenes"`, `controlId: <sceneId>`). The runtime then:
+
+1. plays it now if a binding is active (the most recently activated one) and reports `playing`;
+2. otherwise navigates with the scene's `open()`, or else `Linking.openURL(url)`, and reports `navigating`; with neither, it reports `failed` / `UNREACHABLE`;
+3. waits up to `timeoutMs` (default 5000) for a binding to become active, else reports `failed` / `MOUNT_TIMEOUT`;
+4. one frame after the binding becomes active, plays once and reports `playing`, unless the screen already ran that play function since it became active (an entrance), in which case `playing` carries the time of that run.
+
+Only one open is pending at a time; a new open supersedes it. Opening is best-effort and development-only.
+
+**Link resolution.** A scene declares an absolute link (`myapp://product/42`, `https://…`), used as is, or a path (`/product/42`), resolved when the schema is published, in order: `configureScenes({ linkPrefix })`; `createURL(path)` from `expo-linking` when installed; Expo Go's experience url (`<experienceUrl>/--<path>`, derived from the Metro script url when the experience url has no host); otherwise no `url` and one development warning per scene.
+
+#### `scene.status`
+
+Runtime → panels (family: Lifecycle event). Reports the progress of an open. Never cached, never replayed.
+
+```json
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "failed",
+  "atRuntimeMs": 6200.5,
+  "code": "MOUNT_TIMEOUT",
+  "reason": "Opened myapp://product for scene \"product-reveal\" but no useScene(\"product-reveal\") became active within 5000 ms. Check the link, or call useScene(\"product-reveal\") on the target screen."
+}
+```
+
+`phase` is `navigating`, `playing` or `failed`. `atRuntimeMs` uses the same monotonic runtime clock as `animation.started.startedAtRuntimeMs`; for `playing` it is the time the scene's play function ran. `code` and `reason` (a non-empty human-readable explanation) are present if and only if `phase` is `failed`; the message parsers reject any other combination.
+
+| Code | Meaning |
+| --- | --- |
+| `UNREACHABLE` | not on screen, and neither `open()` nor a resolved url exists |
+| `NAVIGATION_FAILED` | `open()` threw or rejected, or `Linking.openURL` rejected |
+| `MOUNT_TIMEOUT` | no binding became active within `timeoutMs` |
+| `PLAY_FAILED` | the play function threw, or the screen left before playing |
+| `SUPERSEDED` | a newer open replaced this pending one |
 
 ### `control.patch`
 
@@ -452,6 +507,7 @@ Derived from `packages/transport-ws/src/index.ts`.
 | `recording.complete` | opposite role (panel) | no | no |
 | `animation.started` | opposite role (panel) | never | never |
 | `animation.completed` | opposite role (panel) | never | never |
+| `scene.status` | opposite role (panel) | never | never |
 | `error` | sender only, from broker/runtime | no | no |
 | `source.apply` | `workspace` clients only (from a `panel`) | no | no |
 | `source.applyResult` | `panel` clients only (from a `workspace`) | no | no |

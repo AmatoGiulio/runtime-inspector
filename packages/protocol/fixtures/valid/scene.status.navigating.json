@@ -1,0 +1,6 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "navigating",
+  "atRuntimeMs": 1200.5
+}

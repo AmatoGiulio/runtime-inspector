@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PanelSchemaSchema,
   RIP_VERSION,
+  SCENES_SCHEMA_ID,
   createPatch,
   describeInvalidValue,
   isValidControlValue,
@@ -579,5 +580,114 @@ describe("recording protocol (RFC 0005 M0)", () => {
         samples: [{ t: 0, values: { moveX: Number.NaN } }]
       })
     ).toThrow();
+  });
+});
+describe("scenes protocol (RFC 0006)", () => {
+  const sceneTrigger = {
+    id: "product-reveal",
+    kind: "trigger",
+    label: "Product reveal",
+    binding: "scenes.product-reveal",
+    scene: { url: "myapp://product", active: true, reachable: true }
+  };
+
+  function scenesPublish(control: Record<string, unknown>) {
+    return {
+      type: "schema.publish",
+      schema: {
+        id: SCENES_SCHEMA_ID,
+        title: "Scenes",
+        groups: [{ id: "Store", label: "Store", controls: [control] }]
+      }
+    };
+  }
+
+  it("reserves the scenes schema id", () => {
+    expect(SCENES_SCHEMA_ID).toBe("scenes");
+  });
+
+  it("keeps the scene field on a trigger through parse and round-trip", () => {
+    const parsed = parseRIPMessage(scenesPublish(sceneTrigger));
+    if (parsed.type !== "schema.publish") throw new Error("unexpected message type");
+    expect(parsed.schema.groups[0]?.controls[0]).toEqual(sceneTrigger);
+    expect(safeParseRIPMessage(JSON.stringify(parsed))).toEqual(parsed);
+  });
+
+  it("accepts a scene without url and a trigger without scene", () => {
+    expect(() =>
+      parseRIPMessage(scenesPublish({ ...sceneTrigger, scene: { active: false, reachable: false } }))
+    ).not.toThrow();
+    const { scene: _scene, ...plain } = sceneTrigger;
+    const parsed = parseRIPMessage(scenesPublish(plain));
+    if (parsed.type !== "schema.publish") throw new Error("unexpected message type");
+    expect("scene" in parsed.schema.groups[0]!.controls[0]!).toBe(false);
+  });
+
+  it("rejects a scene without active or reachable, or with an empty url", () => {
+    for (const scene of [
+      { url: "myapp://product", reachable: true },
+      { url: "myapp://product", active: true },
+      { url: "", active: true, reachable: true },
+      { active: "yes", reachable: true }
+    ]) {
+      expect(() => parseRIPMessage(scenesPublish({ ...sceneTrigger, scene }))).toThrow();
+      expect(safeParseRIPMessage(JSON.stringify(scenesPublish({ ...sceneTrigger, scene })))).toBeUndefined();
+    }
+  });
+
+  const navigating = {
+    type: "scene.status",
+    sceneId: "product-reveal",
+    phase: "navigating",
+    atRuntimeMs: 1200.5
+  };
+  const failed = {
+    ...navigating,
+    phase: "failed",
+    code: "MOUNT_TIMEOUT",
+    reason: "No useScene(\"product-reveal\") became active within 5000 ms."
+  };
+
+  it("parses every scene.status phase", () => {
+    expect(parseRIPMessage(navigating)).toEqual(navigating);
+    expect(parseRIPMessage({ ...navigating, phase: "playing", atRuntimeMs: 0 }).type).toBe("scene.status");
+    expect(parseRIPMessage(failed)).toEqual(failed);
+    expect(safeParseRIPMessage(JSON.stringify(failed))).toEqual(failed);
+    for (const code of ["UNREACHABLE", "NAVIGATION_FAILED", "MOUNT_TIMEOUT", "PLAY_FAILED", "SUPERSEDED"]) {
+      expect(parseRIPMessage({ ...failed, code }).type).toBe("scene.status");
+    }
+  });
+
+  it("rejects a failed scene.status without a code or without a reason", () => {
+    const { code: _code, ...withoutCode } = failed;
+    const { reason: _reason, ...withoutReason } = failed;
+    for (const message of [withoutCode, withoutReason]) {
+      expect(() => parseRIPMessage(message)).toThrow();
+      expect(safeParseRIPMessage(JSON.stringify(message))).toBeUndefined();
+    }
+  });
+
+  it("rejects a code or a reason on a phase other than failed", () => {
+    for (const message of [
+      { ...navigating, code: "MOUNT_TIMEOUT" },
+      { ...navigating, phase: "playing", reason: "played" },
+      { ...navigating, phase: "playing", code: "PLAY_FAILED", reason: "boom" }
+    ]) {
+      expect(() => parseRIPMessage(message)).toThrow();
+      expect(safeParseRIPMessage(JSON.stringify(message))).toBeUndefined();
+    }
+  });
+
+  it("rejects unknown phases and codes and malformed fields", () => {
+    for (const message of [
+      { ...navigating, phase: "teleporting" },
+      { ...failed, code: "TOTALLY_MADE_UP" },
+      { ...failed, reason: "" },
+      { ...navigating, sceneId: "" },
+      { ...navigating, atRuntimeMs: -1 },
+      { ...navigating, atRuntimeMs: Number.NaN }
+    ]) {
+      expect(() => parseRIPMessage(message)).toThrow();
+    }
   });
 });

@@ -931,6 +931,121 @@ describe("Runtime Inspector recording transport (RFC 0005 M0)", () => {
   });
 });
 
+describe("Runtime Inspector scenes (RFC 0006)", () => {
+  async function connect(role: "runtime" | "panel", clientId: string) {
+    const socket = await openSocket(`ws://127.0.0.1:${broker!.port}`);
+    const messages: Array<{ type?: string; sceneId?: string; schemaId?: string; controlId?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    socket.send(JSON.stringify({ type: "handshake.hello", protocolVersion: "0.3", role, clientId }));
+    return { socket, messages };
+  }
+
+  const playing = {
+    type: "scene.status",
+    sceneId: "product-reveal",
+    phase: "playing",
+    atRuntimeMs: 1534.25
+  };
+
+  it("forwards scene.status from a runtime to connected panels", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    const runtime = await connect("runtime", "runtime-scenes");
+    const panel = await connect("panel", "panel-scenes");
+    await wait(30);
+
+    runtime.socket.send(JSON.stringify(playing));
+    await wait(50);
+
+    runtime.socket.close();
+    panel.socket.close();
+
+    expect(panel.messages.filter((message) => message.type === "scene.status")).toEqual([playing]);
+    expect(runtime.messages.some((message) => message.type === "scene.status")).toBe(false);
+  });
+
+  it("never replays scene.status to a panel that connects later", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    const runtime = await connect("runtime", "runtime-scenes-late");
+    runtime.socket.send(
+      JSON.stringify({ type: "schema.publish", schema: { id: "scenes", title: "Scenes", groups: [] } })
+    );
+    runtime.socket.send(JSON.stringify(playing));
+    await wait(30);
+
+    const latePanel = await connect("panel", "panel-scenes-late");
+    await wait(50);
+
+    runtime.socket.close();
+    latePanel.socket.close();
+
+    expect(latePanel.messages.some((message) => message.type === "schema.publish")).toBe(true);
+    expect(latePanel.messages.some((message) => message.type === "scene.status")).toBe(false);
+  });
+
+  it("routes a control.trigger on the scenes schema only to the scenes runtime connection", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    const scenesRuntime = await connect("runtime", "runtime-scenes-route");
+    scenesRuntime.socket.send(
+      JSON.stringify({
+        type: "schema.publish",
+        schema: {
+          id: "scenes",
+          title: "Scenes",
+          groups: [
+            {
+              id: "Store",
+              label: "Store",
+              controls: [
+                {
+                  id: "product-reveal",
+                  kind: "trigger",
+                  label: "Product reveal",
+                  binding: "scenes.product-reveal",
+                  scene: { url: "myapp://product", active: false, reachable: true }
+                }
+              ]
+            }
+          ]
+        }
+      })
+    );
+    const autoRuntime = await connect("runtime", "runtime-auto-route");
+    autoRuntime.socket.send(
+      JSON.stringify({ type: "schema.publish", schema: { id: "auto", title: "Auto", groups: [] } })
+    );
+    await wait(40);
+
+    const panel = await connect("panel", "panel-scenes-route");
+    await wait(30);
+    panel.socket.send(
+      JSON.stringify({
+        type: "control.trigger",
+        schemaId: "scenes",
+        controlId: "product-reveal",
+        source: "panel"
+      })
+    );
+    await wait(50);
+
+    scenesRuntime.socket.close();
+    autoRuntime.socket.close();
+    panel.socket.close();
+
+    expect(
+      scenesRuntime.messages.filter(
+        (message) =>
+          message.type === "control.trigger" &&
+          message.schemaId === "scenes" &&
+          message.controlId === "product-reveal"
+      )
+    ).toHaveLength(1);
+    expect(autoRuntime.messages.some((message) => message.type === "control.trigger")).toBe(false);
+  });
+});
+
 function openSocket(url: string) {
   return new Promise<WebSocket>((resolve, reject) => {
     const socket = new WebSocket(url);

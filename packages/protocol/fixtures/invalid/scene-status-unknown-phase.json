@@ -1,0 +1,6 @@
+{
+  "type": "scene.status",
+  "sceneId": "product-reveal",
+  "phase": "teleporting",
+  "atRuntimeMs": 1200.5
+}

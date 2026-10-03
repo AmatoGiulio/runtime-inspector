@@ -92,12 +92,33 @@ export interface SpringControl extends BaseControl<"spring", SpringValue> {
   };
 }
 
+/** Reserved schema id under which the runtime publishes scenes as trigger controls (RFC 0006). */
+export const SCENES_SCHEMA_ID = "scenes";
+
+/** Navigator metadata that marks a trigger control as a scene (RFC 0006 §2). */
+export interface SceneDescriptor {
+  /** Absolute deep link to the scene, resolved by the runtime (decision 4). Absent when none resolves. */
+  url?: string;
+  /** True while a `useScene` binding for this scene is mounted and active (the scene is on screen). */
+  active: boolean;
+  /** True when the runtime can bring the scene on screen by itself: it is active, or it has a url or an open() callback. */
+  reachable: boolean;
+}
+
+export const SceneDescriptorSchema = z.object({
+  url: z.string().min(1).optional(),
+  active: z.boolean(),
+  reachable: z.boolean()
+});
+
 export interface TriggerControl {
   id: string;
   kind: "trigger";
   label: string;
   description?: string;
   binding?: string;
+  /** Marks the trigger as a scene in the reserved `scenes` schema (RFC 0006). */
+  scene?: SceneDescriptor;
 }
 
 export type InspectorControl =
@@ -379,6 +400,30 @@ export interface RuntimeAnimationCompleted {
   current?: string | number | boolean | null;
 }
 
+export type SceneStatusPhase = "navigating" | "playing" | "failed";
+
+export type SceneFailureCode =
+  | "UNREACHABLE"
+  | "NAVIGATION_FAILED"
+  | "MOUNT_TIMEOUT"
+  | "PLAY_FAILED"
+  | "SUPERSEDED";
+
+/**
+ * Progress of opening a scene (RFC 0006 §5). Lifecycle event, runtime -> panels;
+ * never cached, never replayed.
+ */
+export interface SceneStatus {
+  type: "scene.status";
+  sceneId: string;
+  phase: SceneStatusPhase;
+  /** Same monotonic runtime clock as `animation.started.startedAtRuntimeMs`. */
+  atRuntimeMs: number;
+  /** Present iff phase is "failed". */
+  code?: SceneFailureCode;
+  /** Human-readable explanation, present iff phase is "failed". */
+  reason?: string;
+}
 
 export type RIPMessage =
   | HandshakeHello
@@ -401,6 +446,7 @@ export type RIPMessage =
   | RecordingComplete
   | RuntimeAnimationStarted
   | RuntimeAnimationCompleted
+  | SceneStatus
   | ErrorMessage;
 
 const roleSchema = z.union([z.literal("runtime"), z.literal("panel"), z.literal("workspace")]);
@@ -499,7 +545,8 @@ export const TriggerControlSchema = z.object({
   kind: z.literal("trigger"),
   label: z.string().min(1),
   description: z.string().optional(),
-  binding: z.string().optional()
+  binding: z.string().optional(),
+  scene: SceneDescriptorSchema.optional()
 });
 
 export const InspectorControlSchema = z.discriminatedUnion("kind", [
@@ -773,6 +820,34 @@ export const RuntimeAnimationCompletedSchema = z.object({
   current: z.union([z.string(), finiteNumberSchema, z.boolean(), z.null()]).optional()
 });
 
+const SceneStatusPhaseSchema = z.union([
+  z.literal("navigating"),
+  z.literal("playing"),
+  z.literal("failed")
+]);
+
+const SceneFailureCodeSchema = z.union([
+  z.literal("UNREACHABLE"),
+  z.literal("NAVIGATION_FAILED"),
+  z.literal("MOUNT_TIMEOUT"),
+  z.literal("PLAY_FAILED"),
+  z.literal("SUPERSEDED")
+]);
+
+/**
+ * Field-level shape of `scene.status`. The cross-field rule (`code` and `reason`
+ * present iff `phase` is "failed") is enforced by `parseRIPMessage` and
+ * `safeParseRIPMessage`, because discriminated-union members must stay plain objects.
+ */
+export const SceneStatusSchema = z.object({
+  type: z.literal("scene.status"),
+  sceneId: z.string().min(1),
+  phase: SceneStatusPhaseSchema,
+  atRuntimeMs: finiteNumberSchema.nonnegative(),
+  code: SceneFailureCodeSchema.optional(),
+  reason: z.string().min(1).optional()
+});
+
 export const RIPMessageSchema = z.discriminatedUnion("type", [
   HandshakeHelloSchema,
   HandshakeAcceptSchema,
@@ -794,6 +869,7 @@ export const RIPMessageSchema = z.discriminatedUnion("type", [
   RecordingCompleteSchema,
   RuntimeAnimationStartedSchema,
   RuntimeAnimationCompletedSchema,
+  SceneStatusSchema,
   ErrorMessageSchema
 ]);
 
@@ -806,6 +882,22 @@ function checkStructuralRequirements(input: unknown): void {
     !Object.prototype.hasOwnProperty.call(input, "value")
   ) {
     throw new Error("control.commit requires a value field");
+  }
+
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    "type" in input &&
+    (input as { type: unknown }).type === "scene.status"
+  ) {
+    const status = input as { phase?: unknown; code?: unknown; reason?: unknown };
+    if (status.phase === "failed") {
+      if (status.code === undefined || status.reason === undefined) {
+        throw new Error('scene.status with phase "failed" requires a code and a reason');
+      }
+    } else if (status.code !== undefined || status.reason !== undefined) {
+      throw new Error('scene.status carries a code and a reason only when phase is "failed"');
+    }
   }
 }
 
