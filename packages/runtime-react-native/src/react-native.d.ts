@@ -9,4 +9,7 @@ declare module "react-native" {
   export const TurboModuleRegistry: {
     get?: (name: string) => unknown;
   };
+  export const Linking: {
+    openURL: (url: string) => Promise<unknown>;
+  };
 }

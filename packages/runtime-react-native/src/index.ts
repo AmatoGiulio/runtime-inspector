@@ -1,5 +1,6 @@
 import {
   RIP_VERSION,
+  SCENES_SCHEMA_ID,
   safeParseRIPMessage,
   validateControlValue,
   type BatchPatch,
@@ -33,6 +34,7 @@ import {
   __riObserveAnimation,
   setRuntimeAnimationEmitter
 } from "./animation-observer";
+import { setSceneStatusEmitter } from "./scenes";
 
 declare const __DEV__: boolean | undefined;
 
@@ -90,6 +92,7 @@ let warnedUnreachable = false;
 
 setRuntimeTraceEmitter(sendRuntimeMessage);
 setRuntimeAnimationEmitter(sendRuntimeAnimationMessage);
+setSceneStatusEmitter((message) => sendRuntimeMessage(SCENES_SCHEMA_ID, message));
 
 function getScriptUrl(): Array<string | undefined> {
   let fromNativeModules: string | undefined;
@@ -123,6 +126,15 @@ function getScriptUrl(): Array<string | undefined> {
   }
 
   return [fromNativeModules, fromTurboModule, fromExpoGlobal];
+}
+
+/**
+ * Internal: the Metro script url broker discovery resolves (a tunnel url only when no
+ * other source has one). Used by scenes to derive Expo Go deep links. Not public API.
+ */
+export function __resolveDevServerScriptUrl(): string | undefined {
+  const { scriptUrl, tunnelUrl } = resolveScriptUrl(getScriptUrl());
+  return scriptUrl ?? tunnelUrl;
 }
 
 function getPlatformOs(): string | undefined {
@@ -172,13 +184,7 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
     teardownSession(existing);
   }
 
-  for (const controlGroup of schema.groups) {
-    for (const control of controlGroup.controls) {
-      if (control.kind !== "trigger" && control.binding && control.value === undefined) {
-        control.value = control.defaultValue as never;
-      }
-    }
-  }
+  applyBindingDefaults(schema);
 
   if (!isDev()) {
     return { schema, connect: noop, disconnect: noop };
@@ -204,6 +210,47 @@ export function definePanel(schema: PanelSchema, options: RuntimeInspectorOption
     connect: () => connectRuntime(session),
     disconnect: () => disconnectRuntime(session)
   };
+}
+
+/**
+ * Republishes a schema in place: when a session for `schema.id` exists, its schema is
+ * replaced and a fresh `schema.publish` is sent on the open connection (and to direct
+ * clients) without disposing, closing or reconnecting. A connection that is still opening
+ * publishes the latest schema when it opens. Without a session, defines and connects one.
+ * No-op in production.
+ */
+export function updatePanelSchema(schema: PanelSchema, options: RuntimeInspectorOptions = {}): void {
+  if (!isDev()) return;
+
+  const session = sessions.get(schema.id);
+  if (!session) {
+    definePanel(schema, options).connect();
+    return;
+  }
+
+  applyBindingDefaults(schema);
+  session.schema = schema;
+  if (session.active) {
+    broadcastDirect({ type: "schema.publish", schema });
+  }
+
+  const socket = session.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  try {
+    socket.send(JSON.stringify({ type: "schema.publish", schema }));
+  } catch {
+    // best-effort: the next open publishes session.schema again
+  }
+}
+
+function applyBindingDefaults(schema: PanelSchema) {
+  for (const controlGroup of schema.groups) {
+    for (const control of controlGroup.controls) {
+      if (control.kind !== "trigger" && control.binding && control.value === undefined) {
+        control.value = control.defaultValue as never;
+      }
+    }
+  }
 }
 
 export function bindSharedValue<T>(
@@ -363,6 +410,9 @@ export type {
 export { __riInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
+export { defineScene, defineScenes, configureScenes, useScene } from "./scenes";
+export type { SceneDeclaration, UseSceneOptions, ConfigureScenesOptions } from "./scenes";
+
 export { __riObserveAnimation } from "./animation-observer";
 export { __riAnimationConfig, __riAnimationDelay, __riAnimationStart } from "./animation-config";
 export type {
@@ -467,7 +517,7 @@ function connectRuntime(session: Session) {
         clientName: options.clientName ?? "React Native Runtime"
       })
     );
-    socket.send(JSON.stringify({ type: "schema.publish", schema }));
+    socket.send(JSON.stringify({ type: "schema.publish", schema: session.schema }));
     const traceSchema = getTraceSchema(schema.id);
     if (traceSchema) {
       socket.send(JSON.stringify(traceSchema));

@@ -566,3 +566,78 @@ describe("discovery diagnostics", () => {
     }
   });
 });
+
+describe("updatePanelSchema (in-place republish)", () => {
+  function parsedSent(socket: FakeWebSocket) {
+    return socket.sent.map((raw) => JSON.parse(raw) as { type: string; schema?: PanelSchema });
+  }
+
+  it("republishes on the same open socket without dispose, close or a new socket", async () => {
+    const { attachRuntimeInspectorProtocolClient, definePanel, updatePanelSchema } = await import("./index");
+    definePanel(makeSchema("in-place"), { brokerUrl: "ws://127.0.0.1:4577" }).connect();
+    const socket = FakeWebSocket.instances.at(-1)!;
+    socket.open();
+
+    const direct: Array<{ type: string; schema?: PanelSchema }> = [];
+    const client = attachRuntimeInspectorProtocolClient({ send: (message) => direct.push(message) });
+    client.receive({ type: "handshake.hello", protocolVersion: "0.3", role: "panel", clientId: "direct" });
+    direct.length = 0;
+
+    const next = makeSliderSchema("in-place");
+    next.title = "Updated";
+    updatePanelSchema(next);
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(socket.closeCalls).toBe(0);
+    const messages = parsedSent(socket);
+    expect(messages.some((message) => message.type === "schema.dispose")).toBe(false);
+    const publishes = messages.filter((message) => message.type === "schema.publish");
+    expect(publishes).toHaveLength(2);
+    expect(publishes[1].schema?.title).toBe("Updated");
+    // Same binding-default normalization as definePanel.
+    expect(sliderValue(publishes[1].schema!)).toBe(1);
+    expect(direct).toEqual([{ type: "schema.publish", schema: next }]);
+
+    client.dispose();
+  });
+
+  it("publishes the latest schema when a connecting socket opens", async () => {
+    const { definePanel, updatePanelSchema } = await import("./index");
+    definePanel(makeSchema("connecting"), { brokerUrl: "ws://127.0.0.1:4577" }).connect();
+    const socket = FakeWebSocket.instances.at(-1)!;
+
+    const next = makeSchema("connecting");
+    next.title = "Latest";
+    updatePanelSchema(next);
+    expect(socket.sent).toHaveLength(0);
+
+    socket.open();
+    const publishes = parsedSent(socket).filter((message) => message.type === "schema.publish");
+    expect(publishes).toHaveLength(1);
+    expect(publishes[0].schema?.title).toBe("Latest");
+    expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it("defines and connects a session when none exists", async () => {
+    const { applyControlPatch, bindValue, updatePanelSchema } = await import("./index");
+    const schema = makeSchema("fresh");
+    updatePanelSchema(schema, { brokerUrl: "ws://127.0.0.1:4577" });
+
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    const socket = FakeWebSocket.instances[0];
+    socket.open();
+    expect(parsedSent(socket).filter((message) => message.type === "schema.publish")).toHaveLength(1);
+
+    const setter = vi.fn();
+    bindValue("fresh.value", setter);
+    applyControlPatch({ type: "control.patch", schemaId: "fresh", controlId: "value", value: true });
+    expect(setter).toHaveBeenCalledWith(true);
+  });
+
+  it("is a no-op in production", async () => {
+    vi.stubGlobal("__DEV__", false);
+    const { updatePanelSchema } = await import("./index");
+    updatePanelSchema(makeSchema("prod-update"), { brokerUrl: "ws://127.0.0.1:4577" });
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+});
