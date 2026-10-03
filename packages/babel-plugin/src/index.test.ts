@@ -1,4 +1,7 @@
-import { transformSync, type TransformOptions } from "@babel/core";
+import { parseSync, transformSync, type TransformOptions } from "@babel/core";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath, resolve as resolvePath } from "node:path";
 import { describe, expect, it } from "vitest";
 import plugin from "./index";
 
@@ -781,3 +784,510 @@ describe("runtime-inspector babel plugin", () => {
 });
 
 const SOURCE_IMPORT = "@runtime-inspector/react-native";
+describe("automatic motions and probes (RFC 0008)", () => {
+  const OPTS = { filename: "/repo/src/Demo.tsx", root: "/repo" };
+  const IMPORTS = `
+      import { useCallback, useEffect, useLayoutEffect } from "react";
+      import { useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";
+      import { useAction, useScene } from "@runtime-inspector/react-native";`;
+
+  function motion(body: string, envName = "development"): string {
+    return transformWithOpts(`${IMPORTS}\n${body}`, { ...OPTS, envName }).replace(/\s+/g, " ");
+  }
+
+  /** Callsite ids from the emitted `__riObserveAnimation` metas, in source order. */
+  function observedCallsites(normalized: string): string[] {
+    return Array.from(
+      normalized.matchAll(/__riObserveAnimation\(.*?\{ callsiteId: "([^"]+)"/g),
+      (match) => match[1]
+    );
+  }
+
+  function motionCalls(normalized: string): string[] {
+    return Array.from(normalized.matchAll(/__riMotion\("([^"]+)"/g), (match) => match[1]);
+  }
+
+  /** The `callsites` array literal of the `__riMotion` meta for `sceneId`. */
+  function motionCallsites(normalized: string, sceneId: string): string[] {
+    const start = normalized.indexOf(`__riMotion("${sceneId}"`);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const match = /callsites: \[([^\]]*)\]/.exec(normalized.slice(start));
+    return Array.from((match?.[1] ?? "").matchAll(/"([^"]+)"/g), (item) => item[1]);
+  }
+
+  it("injects a function declaration once, after it, with every callsite id of its animations", () => {
+    const normalized = motion(`
+      export function ProductRevealDemo() {
+        const coverOpacity = useSharedValue(0);
+        const titleY = useSharedValue(24);
+        function play() {
+          coverOpacity.value = 0;
+          coverOpacity.value = withTiming(1, { duration: 320 });
+          titleY.value = withDelay(140, withTiming(0, { duration: 380 }));
+        }
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain(
+      'function play() { coverOpacity.value = 0; coverOpacity.value = __riObserveAnimation('
+    );
+    expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:ProductRevealDemo.play"]);
+    expect(normalized).toMatch(
+      /\} __riMotion\("src\/Demo\.tsx:ProductRevealDemo\.play", play, \{ component: "ProductRevealDemo", name: "play", file: "src\/Demo\.tsx", line: 9, callsites: \[/
+    );
+    const callsites = motionCallsites(normalized, "src/Demo.tsx:ProductRevealDemo.play");
+    expect(callsites).toEqual([
+      "src/Demo.tsx:11:10:timing:coverOpacity",
+      "src/Demo.tsx:12:10:timing:titleY"
+    ]);
+    expect(callsites).toEqual(observedCallsites(normalized));
+    const runtimeImports = normalized.match(/import \{[^}]*\} from "@runtime-inspector\/react-native"/g);
+    expect(runtimeImports).toHaveLength(1);
+    expect(runtimeImports![0].match(/__riMotion/g)).toHaveLength(1);
+    expect(runtimeImports![0].match(/__riProbe/g)).toHaveLength(1);
+  });
+
+  it.each([
+    ["an arrow", "const play = () => { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotion("],
+    ["a function expression", "const play = function () { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotion("],
+    ["useCallback", "const play = useCallback(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);", "const play = __riMotion(\"src/Demo.tsx:Card.play\", useCallback(() =>"]
+  ])("wraps the initializer of %s", (_label, declaration, expected) => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        ${declaration}
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain(expected);
+    expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:Card.play"]);
+    expect(normalized).toContain('{ component: "Card", name: "play", file: "src/Demo.tsx", line: 8, callsites: [');
+    expect(motionCallsites(normalized, "src/Demo.tsx:Card.play")).toEqual(observedCallsites(normalized));
+  });
+
+  it("keeps the enclosure of an animation in a wrapped const arrow", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        const play = () => { opacity.value = withTiming(1, { duration: 200 }); };
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain('enclosure: ["Card", "play"]');
+  });
+
+  it("finds components declared as const arrows and default exports", () => {
+    const normalized = motion(`
+      export const Sheet = () => {
+        const y = useSharedValue(400);
+        function open() { y.value = withSpring(0, { damping: 18 }); }
+        return open;
+      };
+      export default function Welcome() {
+        const logo = useSharedValue(0);
+        function intro() { logo.value = withTiming(1, { duration: 260 }); }
+        return intro;
+      }
+    `);
+
+    expect(motionCalls(normalized)).toEqual([
+      "src/Demo.tsx:Sheet.open",
+      "src/Demo.tsx:Welcome.intro"
+    ]);
+  });
+
+  it("wraps a pure-motion effect and names it by its line", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withTiming(1, { duration: 200 }); }
+        useEffect(() => {
+          opacity.value = 0;
+          opacity.value = withSpring(1, { damping: 12 });
+          play();
+        }, []);
+        return null;
+      }
+    `);
+
+    expect(normalized).toContain('useEffect(__riMotion("src/Demo.tsx:Card.effect@9", () => {');
+    expect(normalized).toContain(
+      '{ component: "Card", name: "effect", file: "src/Demo.tsx", line: 9, callsites: ["src/Demo.tsx:11:10:spring:opacity"] }), []);'
+    );
+    expect(motionCalls(normalized)).toEqual([
+      "src/Demo.tsx:Card.play",
+      "src/Demo.tsx:Card.effect@9"
+    ]);
+  });
+
+  it("wraps a pure useLayoutEffect", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        useLayoutEffect(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);
+        return null;
+      }
+    `);
+
+    expect(normalized).toContain('useLayoutEffect(__riMotion("src/Demo.tsx:Card.effect@8", () =>');
+  });
+
+  it.each([
+    ["a subscription", "const id = setInterval(() => {}, 100);"],
+    ["a timer", "setTimeout(() => {}, 100);"],
+    ["a state update", "setOpen(true);"],
+    ["a cleanup", "return () => {};"]
+  ])("does not wrap an effect with %s, but still observes its animations", (_label, statement) => {
+    const normalized = motion(`
+      function Card({ setOpen }) {
+        const opacity = useSharedValue(0);
+        useEffect(() => {
+          opacity.value = withTiming(1, { duration: 200 });
+          ${statement}
+        }, []);
+        return null;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+    expect(normalized).toContain("__riObserveAnimation(");
+  });
+
+  it("does not make an effect without its own animations a motion", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withTiming(1, { duration: 200 }); }
+        useEffect(() => { play(); }, []);
+        return null;
+      }
+    `);
+
+    expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:Card.play"]);
+    expect(normalized).toContain("useEffect(() => { play(); }, []);");
+  });
+
+  it("attributes an animation in a setTimeout callback to the nearest motion function", () => {
+    const normalized = motion(`
+      function CardTransitionLab() {
+        const moveX = useSharedValue(0);
+        function replayTransition() {
+          moveX.value = withTiming(-110, { duration: 260 });
+          setTimeout(() => {
+            moveX.value = withSpring(0, { damping: 14 });
+          }, 220);
+        }
+        return replayTransition;
+      }
+    `);
+
+    expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:CardTransitionLab.replayTransition"]);
+    expect(
+      motionCallsites(normalized, "src/Demo.tsx:CardTransitionLab.replayTransition")
+    ).toEqual(["src/Demo.tsx:9:10:timing:moveX", "src/Demo.tsx:11:12:spring:moveX"]);
+  });
+
+  it("leaves inline handlers, render-time assignments and nested components alone", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        opacity.value = withTiming(1, { duration: 100 });
+        function Inner() {
+          function bump() { opacity.value = withTiming(0.5, { duration: 100 }); }
+          return bump;
+        }
+        return <Pressable onPress={() => { opacity.value = withTiming(0, { duration: 100 }); }} />;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+    expect(normalized.match(/__riObserveAnimation\(/g)).toHaveLength(3);
+  });
+
+  it("does not inject inside conditionals, loops or nested functions", () => {
+    const normalized = motion(`
+      function Card({ on }) {
+        const opacity = useSharedValue(0);
+        if (on) {
+          function a() { opacity.value = withTiming(1, { duration: 100 }); }
+          a();
+        }
+        for (const x of [1]) {
+          const b = () => { opacity.value = withTiming(x, { duration: 100 }); };
+          b();
+        }
+        return null;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+  });
+
+  it("does not inject after an early return, so the hook stays unconditional", () => {
+    const normalized = motion(`
+      function Card({ hidden }) {
+        const opacity = useSharedValue(0);
+        if (hidden) return null;
+        const play = () => { opacity.value = withTiming(1, { duration: 100 }); };
+        return play;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+  });
+
+  it.each([
+    ["passed to useScene", "useScene(\"reveal\", play);"],
+    ["passed to useAction", "useAction(\"replay\", play);"]
+  ])("skips an explicit function %s", (_label, call) => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        ${call}
+        return null;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+    expect(normalized).toContain("__riObserveAnimation(");
+  });
+
+  it("skips a function initialized by useScene", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        const play = useScene("reveal", () => { opacity.value = withTiming(1, { duration: 100 }); });
+        return play;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+    expect(normalized).toContain("__riObserveAnimation(");
+  });
+
+  it("reads the title and group of a // @scene comment", () => {
+    const normalized = motion(`
+      function ProductRevealDemo() {
+        const opacity = useSharedValue(0);
+        // @scene "Product reveal" group="Store"
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        /* @scene "Fade" */
+        const fade = () => { opacity.value = withTiming(0, { duration: 100 }); };
+        // @scene group="Lab"
+        useEffect(() => { opacity.value = withTiming(1, { duration: 100 }); }, []);
+        return null;
+      }
+    `);
+
+    expect(normalized).toContain(
+      'name: "play", file: "src/Demo.tsx", line: 9, title: "Product reveal", group: "Store", callsites: ['
+    );
+    expect(normalized).toContain('name: "fade", file: "src/Demo.tsx", line: 11, title: "Fade", callsites: [');
+    expect(normalized).toContain('name: "effect", file: "src/Demo.tsx", line: 13, group: "Lab", callsites: [');
+  });
+
+  it("excludes a function marked // @scene off", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        // @scene off
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        return play;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riMotion");
+    expect(normalized).toContain("__riObserveAnimation(");
+  });
+
+  it.each([
+    ["an unquoted title", "// @scene Product reveal"],
+    ["an unknown key", '// @scene "Reveal" color="red"'],
+    ["the group before the title", '// @scene group="Store" "Reveal"'],
+    ["an empty title", '// @scene ""'],
+    ["an unquoted group", '// @scene "Reveal" group=Store']
+  ])("fails the build for %s", (_label, comment) => {
+    expect(() =>
+      motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        ${comment}
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        return play;
+      }
+    `)
+    ).toThrow(/invalid \/\/ @scene comment.*@scene "Title" group="Group"/s);
+  });
+
+  it("ignores comments that only start with @scene as part of another word", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        // @scenery is not a directive
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        return play;
+      }
+    `);
+
+    expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:Card.play"]);
+  });
+
+  it("wraps only animated top-level literal shared values in __riProbe", () => {
+    const normalized = motion(`
+      function ProductRevealDemo() {
+        const titleY = useSharedValue(24);
+        const rowX = useSharedValue(-40);
+        const visible = useSharedValue(false);
+        const idle = useSharedValue(0);
+        const config = useSharedValue({ x: 1 });
+        const nested = useSharedValue(0);
+        const box = { inner: useSharedValue(0) };
+        function play() {
+          titleY.value = withTiming(0, { duration: 380 });
+          rowX.value = withTiming(0, { duration: 360 });
+          visible.value = withTiming(true, { duration: 1 });
+          config.value = withTiming({ x: 2 });
+          box.inner.value = withTiming(1, { duration: 1 });
+          idle.value = 1;
+        }
+        function Inner() {
+          const deep = useSharedValue(0);
+          deep.value = withTiming(1, { duration: 1 });
+          return deep;
+        }
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain(
+      'const titleY = __riProbe(useSharedValue(24), "titleY", { component: "ProductRevealDemo", file: "src/Demo.tsx" });'
+    );
+    expect(normalized).toContain('const rowX = __riProbe(useSharedValue(-40), "rowX", {');
+    expect(normalized).toContain('const visible = __riProbe(useSharedValue(false), "visible", {');
+    expect(normalized).toContain("const idle = useSharedValue(0);");
+    expect(normalized).toContain("const config = useSharedValue({ x: 1 });");
+    expect(normalized).toContain("const nested = useSharedValue(0);");
+    expect(normalized).toContain("inner: useSharedValue(0)");
+    expect(normalized).toContain("const deep = useSharedValue(0);");
+    expect(normalized.match(/__riProbe\(/g)).toHaveLength(3);
+  });
+
+  it("does not probe a shared value only animated inside a worklet context", () => {
+    const normalized = motion(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        useAnimatedStyle(() => {
+          opacity.value = withTiming(1, { duration: 1 });
+          return {};
+        });
+        return null;
+      }
+    `);
+
+    expect(normalized).not.toContain("__riProbe");
+    expect(normalized).not.toContain("__riMotion");
+  });
+
+  it("composes the probe with // @inspect", () => {
+    const normalized = motion(`
+      function Card() {
+        // @inspect min=0 max=1
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain(
+      'const opacity = __riProbe(__riInspect(useSharedValue(0), "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } }), "opacity", { component: "Card", file: "src/Demo.tsx" });'
+    );
+    expect(normalized).toContain('schemaId: "auto"');
+  });
+
+  it("leaves motions and probes untouched in production", () => {
+    const normalized = motion(
+      `
+      function Card() {
+        const opacity = useSharedValue(0);
+        // @scene "Fade" group="Lab"
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        useEffect(() => { opacity.value = withTiming(1, { duration: 100 }); }, []);
+        return play;
+      }
+    `,
+      "production"
+    );
+
+    expect(normalized).not.toContain("__ri");
+    expect(normalized).toContain("const opacity = useSharedValue(0);");
+  });
+
+  it("does not run without a filename", () => {
+    const code = transformWithOpts(
+      `${IMPORTS}
+      function Card() {
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withTiming(1, { duration: 100 }); }
+        return play;
+      }`,
+      { filename: undefined }
+    );
+
+    expect(code).not.toContain("__riMotion");
+    expect(code).not.toContain("__riProbe");
+  });
+
+  const reanimatedPlugin = (() => {
+    try {
+      return require.resolve("react-native-reanimated/plugin", {
+        paths: [resolvePath(__dirname, "../../../examples/react-native-reanimated")]
+      });
+    } catch {
+      return undefined;
+    }
+  })();
+
+  it.skipIf(!reanimatedPlugin)("keeps the output valid for the Reanimated plugin", () => {
+    const source = `${IMPORTS}
+      import { useAnimatedStyle } from "react-native-reanimated";
+      export function Demo() {
+        const opacity = useSharedValue(0);
+        // @scene "Fade" group="Lab"
+        function play() {
+          opacity.value = withTiming(1, { duration: 100 });
+          setTimeout(() => { opacity.value = withSpring(0, { damping: 10 }); }, 50);
+        }
+        const replay = useCallback(() => { opacity.value = withTiming(0, { duration: 100 }); }, []);
+        useEffect(() => { opacity.value = withTiming(1, { duration: 100 }); }, []);
+        const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+        return [play, replay, style];
+      }`;
+    // The Reanimated plugin reads the file from disk.
+    const root = mkdtempSync(joinPath(tmpdir(), "ri-motion-"));
+    mkdirSync(joinPath(root, "src"));
+    const filename = joinPath(root, "src", "Demo.tsx");
+    writeFileSync(filename, source);
+    const result = transformSync(source, {
+      filename,
+      root,
+      presets: [["@babel/preset-typescript", { isTSX: true, allExtensions: true }]],
+      plugins: [plugin, reanimatedPlugin!],
+      envName: "development",
+      babelrc: false,
+      configFile: false
+    });
+    const code = result?.code ?? "";
+
+    expect(code).toContain('__riMotion("src/Demo.tsx:Demo.play", play,');
+    expect(code).toContain('__riMotion("src/Demo.tsx:Demo.replay", useCallback(');
+    expect(code).toContain('useEffect(__riMotion("src/Demo.tsx:Demo.effect@14",');
+    expect(code).toContain("__riProbe(useSharedValue(0)");
+    // Reanimated still workletizes the style callback, and the output parses.
+    expect(code).toContain("__workletHash");
+    expect(() => parseSync(code, { babelrc: false, configFile: false, filename: "out.js" })).not.toThrow();
+  });
+});

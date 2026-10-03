@@ -10,6 +10,12 @@ import type {
 } from "@babel/types";
 import { relative, sep } from "node:path";
 import { parseDirectiveComment, type ParsedDirective } from "./directive";
+import {
+  instrumentMotions,
+  MOTION_HELPER_NAME,
+  PROBE_HELPER_NAME,
+  type DiscoveredAnimation
+} from "./motion";
 
 const HELPER_NAME = "__riInspect";
 const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
@@ -104,11 +110,28 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         stateBag._riSkipAnimationInstrumentation = shouldSkipAnimationInstrumentation(
           state.filename ?? state.file.opts.filename ?? undefined
         );
+
+        // RFC 0008: automatic motions and probes, decided on the untouched program so the
+        // callsite ids match the ones the AssignmentExpression visitor emits afterwards.
+        const file = relativeSourceFile(state);
+        if (!stateBag._riSkipAnimationInstrumentation && file) {
+          instrumentMotions(programPath, {
+            types: api.types,
+            file,
+            discover: (path) => discoverAnimation(path, state)?.discovered,
+            ensureImport: (path, helperName) => ensureRuntimeHelperImport(path, helperName, api)
+          });
+        }
       },
       VariableDeclarator(path: NodePath<VariableDeclarator>, state: PluginPass) {
         if (isProduction) return;
 
-        const init = path.node.init;
+        // RFC 0008 §5: an automatic probe wraps the declaration first; `// @inspect`
+        // composes inside it: __riProbe(__riInspect(useSharedValue(...), ...), ...).
+        const probed = isProbeHelperCall(path.node.init);
+        const init = probed
+          ? ((path.node.init as CallExpression).arguments[0] as Node)
+          : path.node.init;
         const id = path.node.id;
 
         if (
@@ -160,25 +183,21 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           metaObject
         ]);
 
-        path.get("init").replaceWith(call);
+        const initPath = probed
+          ? (path.get("init.arguments.0") as NodePath<Node>)
+          : path.get("init");
+        initPath.replaceWith(call);
         programState(path)._riAutoValueNames?.add(name);
         ensureHelperImport(path, state, api);
       },
       AssignmentExpression(path: NodePath<AssignmentExpression>, state: PluginPass) {
         if (isProduction) return;
         if (programState(path)._riSkipAnimationInstrumentation) return;
-        if (path.node.operator !== "=") return;
 
-        const target = animationAssignmentTarget(path.node.left, state);
-        if (!target) return;
-
-        const right = path.node.right;
-        if (right.type !== "CallExpression") return;
-
-        const shape = animationAssignmentShape(right);
-        if (!shape) return;
-
-        if (isInsideKnownWorkletContext(path)) return;
+        const found = discoverAnimation(path, state);
+        if (!found) return;
+        const { target, shape } = found;
+        const right = path.node.right as CallExpression;
 
         const t = api.types;
         const { animationKind, delayed } = shape;
@@ -267,6 +286,16 @@ function isUseSharedValueCallee(callee: Node): boolean {
     return callee.property.type === "Identifier" && callee.property.name === "useSharedValue";
   }
   return false;
+}
+
+/** A `__riProbe(<init>, ...)` call injected by the RFC 0008 motion pass. */
+function isProbeHelperCall(node: Node | null | undefined): node is CallExpression {
+  return (
+    node?.type === "CallExpression" &&
+    node.callee.type === "Identifier" &&
+    node.callee.name === PROBE_HELPER_NAME &&
+    node.arguments[0]?.type === "CallExpression"
+  );
 }
 
 function isUseInspectorCallee(callee: Node): boolean {
@@ -361,6 +390,65 @@ function animationAssignmentTarget(
   return { target, root: object.name };
 }
 
+/**
+ * The eligibility rules of the AssignmentExpression visitor: a `<target>.value = <animation>`
+ * assignment of an accepted shape, outside known worklet contexts, with a callsite id.
+ * Shared with the RFC 0008 motion pass so both use the same ids.
+ */
+function discoverAnimation(
+  path: NodePath<AssignmentExpression>,
+  state: PluginPass
+):
+  | {
+      target: { target: string; root: string };
+      shape: { animationKind: AnimationKind; delayed: boolean };
+      discovered: DiscoveredAnimation;
+    }
+  | undefined {
+  if (path.node.operator !== "=") return undefined;
+
+  const target = animationAssignmentTarget(path.node.left, state);
+  if (!target) return undefined;
+
+  const right = path.node.right;
+  if (right.type !== "CallExpression") return undefined;
+
+  const shape = animationAssignmentShape(right);
+  if (!shape) return undefined;
+
+  if (isInsideKnownWorkletContext(path)) return undefined;
+
+  const site = animationCallsite(path, state, target, shape.animationKind);
+  if (!site) return undefined;
+
+  return {
+    target,
+    shape,
+    discovered: { callsiteId: site.callsiteId, target: target.target, root: target.root }
+  };
+}
+
+/** The file path relative to the Babel root (or cwd), or undefined when either is unknown. */
+function relativeSourceFile(state: PluginPass): string | undefined {
+  const filename = state.filename ?? state.file.opts.filename ?? undefined;
+  const rootDir = state.file.opts.root ?? state.file.opts.cwd ?? undefined;
+  if (!filename || !rootDir) return undefined;
+  return relative(rootDir, filename).split(sep).join("/");
+}
+
+function animationCallsite(
+  path: NodePath<AssignmentExpression>,
+  state: PluginPass,
+  target: { target: string; root: string },
+  animationKind: AnimationKind
+) {
+  const file = relativeSourceFile(state);
+  const loc = path.node.loc;
+  if (!file || !loc) return undefined;
+  const callsiteId = `${file}:${loc.start.line}:${loc.start.column}:${animationKind}:${target.target}`;
+  return { file, loc, callsiteId };
+}
+
 function buildAnimationMeta(
   path: NodePath<AssignmentExpression>,
   state: PluginPass,
@@ -369,13 +457,9 @@ function buildAnimationMeta(
   animationCall: CallExpression,
   api: BabelAPI
 ) {
-  const filename = state.filename ?? state.file.opts.filename ?? undefined;
-  const rootDir = state.file.opts.root ?? state.file.opts.cwd ?? undefined;
-  const loc = path.node.loc;
-  if (!filename || !rootDir || !loc) return undefined;
-
-  const file = relative(rootDir, filename).split(sep).join("/");
-  const callsiteId = `${file}:${loc.start.line}:${loc.start.column}:${animationKind}:${target.target}`;
+  const site = animationCallsite(path, state, target, animationKind);
+  if (!site) return undefined;
+  const { file, loc, callsiteId } = site;
   const stateBag = programState(path);
   const schemaId =
     stateBag._riInspectorSchemas?.get(target.root) ??
@@ -855,7 +939,15 @@ function collectEnclosure(path: NodePath): string[] {
     if (current.isFunctionDeclaration() && current.node.id?.name) {
       names.push(current.node.id.name);
     } else if (current.isFunctionExpression() || current.isArrowFunctionExpression()) {
-      const parent = current.parentPath;
+      let parent = current.parentPath;
+      // RFC 0008: `const play = __riMotion(id, () => {...}, meta)` still encloses as "play".
+      if (
+        parent?.isCallExpression() &&
+        parent.node.callee.type === "Identifier" &&
+        parent.node.callee.name === MOTION_HELPER_NAME
+      ) {
+        parent = parent.parentPath;
+      }
       if (parent && parent.isVariableDeclarator() && parent.node.id.type === "Identifier") {
         names.push(parent.node.id.name);
       }
