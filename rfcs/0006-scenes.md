@@ -72,10 +72,12 @@ A scene declares either an absolute link (`myapp://product/42`, `https://…`) o
 
 1. `configureScenes({ linkPrefix })`, when set (`myapp://` + `product/42`);
 2. `createURL(path)` from `expo-linking`, when that module is installed (guarded `require`; the SDK ships CJS for exactly this reason);
-3. Expo Go's experience url, `<experienceUrl>/--<path>` (the same native constant broker discovery already reads);
+3. in Expo Go, `exp://<host:port>/--<path>`, with the host taken from the experience url when it carries one, else from the Metro script url broker discovery already resolves (observed on Expo Go 2.32: the experience url can be a bare `exp://`);
 4. otherwise no `url`, and one development warning per scene explaining how to fix it.
 
 The published `url` is absolute so a client can show it, copy it, or open it on the device from outside the app (for example `simctl openurl` when the runtime is not connected). The runtime itself opens it with `Linking.openURL`, so the app's own linking configuration (React Navigation, Expo Router, or hand-written) decides where it lands. `open()` is the escape hatch for state a url cannot express.
+
+Expo Go caveat, observed on the iOS Simulator (Expo Go 2.32, SDK 52): opening `exp://…/--/path` for the running project **reloads** the JavaScript bundle instead of delivering the url to the running app. The pending open dies with the old runtime and the scene's entrance plays on the fresh mount. Apps developed in Expo Go should therefore declare `open()` for in-app navigation and keep `link` for display, copy and cold start; development builds with their own scheme deliver links to the running app normally.
 
 ### 5. `scene.status` — Lifecycle event
 
