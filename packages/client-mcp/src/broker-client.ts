@@ -36,6 +36,8 @@ export interface SceneEntry {
 
 export interface BrokerClient {
   connect(): Promise<void>;
+  /** True while the broker socket is open. */
+  isConnected(): boolean;
   getSchemas(): PanelSchema[];
   getValues(schemaId: string): Record<string, unknown>;
   isStale(schemaId: string): boolean;
@@ -345,6 +347,10 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     );
   }
 
+  function isConnected(): boolean {
+    return socket?.readyState === WebSocket.OPEN;
+  }
+
   function close() {
     socket?.close();
     socket = undefined;
@@ -352,6 +358,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
 
   return {
     connect,
+    isConnected,
     getSchemas,
     getValues,
     isStale,

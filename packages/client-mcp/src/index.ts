@@ -9,6 +9,7 @@ import {
   type SceneStatus
 } from "@runtime-inspector/protocol";
 import { createBrokerClient, type BrokerClient } from "./broker-client.js";
+import { resolveBrokerTarget } from "./session-file.js";
 
 export {
   createBrokerClient,
@@ -17,16 +18,22 @@ export {
   type SceneEntry
 } from "./broker-client.js";
 
-const brokerUrl = process.env.RI_BROKER_URL ?? "ws://127.0.0.1:4577";
-const token = process.env.RI_TOKEN;
-
 let client: BrokerClient | undefined;
 let connecting: Promise<BrokerClient> | undefined;
 
 async function getConnectedClient(): Promise<BrokerClient> {
-  if (client) return client;
+  if (client && client.isConnected()) return client;
+  if (client) {
+    // The broker went away (e.g. `runtime-inspector dev` restarted): drop the
+    // dead client so the next attempt re-resolves the target.
+    client.close();
+    client = undefined;
+  }
   if (!connecting) {
-    const created = createBrokerClient({ url: brokerUrl, token });
+    // Resolved on every new connection attempt: env first, else the session
+    // file written by `runtime-inspector dev` (a restarted CLI is picked up).
+    const target = resolveBrokerTarget();
+    const created = createBrokerClient({ url: target.url, token: target.token });
     connecting = created
       .connect()
       .then(() => {

@@ -58,6 +58,21 @@ describe("createBrokerClient", () => {
     expect(client.getValues("test-schema").speed).toBe(1);
   });
 
+  it("reports isConnected while the broker socket is open", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    expect(client.isConnected()).toBe(false);
+    await client.connect();
+    expect(client.isConnected()).toBe(true);
+
+    await broker.close();
+    broker = undefined;
+    await wait(50);
+    expect(client.isConnected()).toBe(false);
+  });
+
   it("sends a control.commit for a valid value (an agent decision is a commit) and rejects an invalid one without sending", async () => {
     broker = startBroker({ port: 0 });
     await waitForBrokerPort(broker);
