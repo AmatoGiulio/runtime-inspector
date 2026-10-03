@@ -3,13 +3,17 @@ import type {
   RuntimeAnimationMeta
 } from "@runtime-inspector/protocol";
 import { consumeAppliedStartDelay } from "./animation-start-state";
+import { noteAnimationCallsiteStarted } from "./scenes";
 
 type RuntimeAnimationEmitter = (
   schemaId: string | undefined,
   message: RIPMessage
 ) => void;
 
-let emitRuntimeAnimation: RuntimeAnimationEmitter | undefined;
+// `var`, not `let`: importing scenes.ts closes an import cycle through index.ts, which
+// installs the emitter while this module may still be evaluating (a `let` would be in its TDZ).
+// eslint-disable-next-line no-var
+var emitRuntimeAnimation: RuntimeAnimationEmitter | undefined;
 let instanceCounter = 0;
 
 export function setRuntimeAnimationEmitter(emitter: RuntimeAnimationEmitter): void {
@@ -31,14 +35,22 @@ export function __riObserveAnimation<T>(
   animation: T,
   meta: RuntimeAnimationMeta
 ): T {
+  const calledAt = nowMs();
   try {
     const applied = consumeAppliedStartDelay(meta.callsiteId);
     reportAnimationStarted(
       meta,
       runtimeAnimationInstanceId(meta.callsiteId),
-      nowMs() + (applied ?? 0),
+      calledAt + (applied ?? 0),
       applied
     );
+  } catch {
+    // Observation is strictly best-effort.
+  }
+
+  try {
+    // RFC 0008 §3: lets an automatic scene know the app already ran its motion.
+    noteAnimationCallsiteStarted(meta.callsiteId, calledAt);
   } catch {
     // Observation is strictly best-effort.
   }

@@ -412,6 +412,10 @@ export type { InspectMeta } from "./auto";
 
 export { defineScene, defineScenes, configureScenes, useScene } from "./scenes";
 export type { SceneDeclaration, UseSceneOptions, ConfigureScenesOptions } from "./scenes";
+export { __riMotion } from "./motion";
+export type { MotionMeta } from "./motion";
+export { __riProbe } from "./probe-auto";
+export type { AutoProbeMeta } from "./probe-auto";
 
 export { __riObserveAnimation } from "./animation-observer";
 export { __riAnimationConfig, __riAnimationDelay, __riAnimationStart } from "./animation-config";

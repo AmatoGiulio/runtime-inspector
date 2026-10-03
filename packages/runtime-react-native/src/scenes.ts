@@ -35,6 +35,16 @@ export interface UseSceneOptions extends Omit<SceneDeclaration, "open"> {
   active?: boolean;
 }
 
+/** Options of `bindScene`: `useScene` options plus the automatic-motion callsites (RFC 0008 §3). */
+export interface BindSceneOptions extends UseSceneOptions {
+  /**
+   * Callsite ids of the animations inside an automatic motion. When present, the scene counts
+   * as already played once any of them reported `animation.started` after the binding became
+   * active, instead of relying on the binding's own run function.
+   */
+  callsites?: readonly string[];
+}
+
 export interface ConfigureScenesOptions {
   linkPrefix?: string;
   timeoutMs?: number;
@@ -57,6 +67,10 @@ interface SceneBinding {
   activatedAt: number | undefined;
   activationSeq: number;
   lastRunAt: number | undefined;
+  /** Automatic motions (RFC 0008): the animation callsites the app's own calls start. */
+  callsites: ReadonlySet<string> | undefined;
+  /** Latest time one of `callsites` started while the binding was mounted. */
+  lastCallsiteStartAt: number | undefined;
 }
 
 interface SceneEntry {
@@ -200,7 +214,7 @@ export function useScene(id: string, play: () => void, options: UseSceneOptions 
  * declares itself. The options' title/group/link/description only fill fields no
  * declaration has set.
  */
-export function bindScene(sceneId: string, play: () => void, options: UseSceneOptions = {}): SceneHandle {
+export function bindScene(sceneId: string, play: () => void, options: BindSceneOptions = {}): SceneHandle {
   if (!isDev() || !isValidSceneId(sceneId)) {
     if (isDev()) {
       warnDev("Ignoring useScene with an empty scene id.");
@@ -224,7 +238,9 @@ export function bindScene(sceneId: string, play: () => void, options: UseSceneOp
     activeFlag: options.active ?? true,
     activatedAt: undefined,
     activationSeq: 0,
-    lastRunAt: undefined
+    lastRunAt: undefined,
+    callsites: options.callsites ? new Set(options.callsites) : undefined,
+    lastCallsiteStartAt: undefined
   };
   if (binding.activeFlag) {
     markActivated(binding);
@@ -255,6 +271,22 @@ export function bindScene(sceneId: string, play: () => void, options: UseSceneOp
       schedulePublish();
     }
   };
+}
+
+/**
+ * In-process notification from the animation observer (RFC 0008 §3): an animation call site
+ * started at `atMs`. Records it on every mounted automatic binding that lists the callsite,
+ * so "already ran" detection sees the app's own calls of its motion function. Best-effort.
+ */
+export function noteAnimationCallsiteStarted(callsiteId: string, atMs: number): void {
+  if (!isDev()) return;
+  for (const entry of scenes.values()) {
+    for (const binding of entry.bindings) {
+      if (binding.mounted && binding.callsites?.has(callsiteId)) {
+        binding.lastCallsiteStartAt = atMs;
+      }
+    }
+  }
 }
 
 /**
@@ -476,17 +508,24 @@ function onBindingActivated(entry: SceneEntry, binding: SceneBinding): void {
       );
       return;
     }
-    if (
-      target.lastRunAt !== undefined &&
-      target.activatedAt !== undefined &&
-      target.lastRunAt >= target.activatedAt
-    ) {
+    const ranAt = lastRunSinceActivation(target);
+    if (ranAt !== undefined) {
       // The screen already ran its play function since it became active (an entrance).
-      emitStatus(pending.sceneId, "playing", target.lastRunAt);
+      emitStatus(pending.sceneId, "playing", ranAt);
       return;
     }
     playAndReport(pending.sceneId, target);
   });
+}
+
+/**
+ * When the binding's motion already ran since it became active: its own run function for an
+ * explicit `useScene`, any of its animation callsites for an automatic motion (RFC 0008 §3).
+ */
+function lastRunSinceActivation(binding: SceneBinding): number | undefined {
+  if (binding.activatedAt === undefined) return undefined;
+  const ranAt = binding.callsites ? binding.lastCallsiteStartAt : binding.lastRunAt;
+  return ranAt !== undefined && ranAt >= binding.activatedAt ? ranAt : undefined;
 }
 
 function clearPendingTimer(pending: PendingOpen): void {
