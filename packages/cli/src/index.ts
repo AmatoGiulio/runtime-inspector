@@ -8,12 +8,24 @@ import { execa } from "execa";
 import qrcode from "qrcode-terminal";
 import { startBroker } from "@runtime-inspector/transport-ws";
 import { startWorkspaceClient } from "./workspace.js";
+import { removeSessionFile, writeSessionFile } from "./session-file.js";
+import { runInitCommand } from "./init.js";
+
+const USAGE = [
+  "Usage:",
+  "  runtime-inspector dev                             Start the broker, panel and source write-back",
+  "  runtime-inspector init [--cwd <dir>] [--dry-run]  Wire a React Native app for Runtime Inspector"
+].join("\n");
 
 const command = process.argv[2];
 
+if (command === "init") {
+  process.exit(await runInitCommand(process.argv.slice(3)));
+}
+
 if (command !== "dev") {
-  console.log("Usage: runtime-inspector dev");
-  process.exit(command ? 1 : 0);
+  console.log(USAGE);
+  process.exit(command && command !== "--help" && command !== "-h" ? 1 : 0);
 }
 
 const requestedBrokerPort = Number(process.env.RUNTIME_INSPECTOR_PORT ?? 4577);
@@ -65,6 +77,18 @@ const workspace = startWorkspaceClient({
 });
 console.log(`Runtime Inspector workspace: write-back enabled (${workspaceRoot})`);
 
+const sessionPath = writeSessionFile({
+  version: 1,
+  brokerUrl: localBrokerUrl,
+  ...(lanAddress ? { lanBrokerUrl } : {}),
+  token,
+  panelUrl: localPanelUrl,
+  workspaceRoot,
+  pid: process.pid,
+  startedAt: new Date().toISOString()
+});
+console.log(`Session file: ${sessionPath} (Workbench and MCP read it; no token to copy)`);
+
 const panel = execa("pnpm", ["dev"], {
   cwd: panelDir,
   stdio: "inherit",
@@ -77,6 +101,7 @@ const panel = execa("pnpm", ["dev"], {
 });
 
 const shutdown = async () => {
+  removeSessionFile(process.pid);
   panel.kill("SIGTERM");
   workspace.close();
   await broker.close();
