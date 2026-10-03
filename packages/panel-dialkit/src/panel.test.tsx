@@ -52,6 +52,7 @@ function makeSession(): PanelSession {
     setValue: vi.fn(),
     commitValue: vi.fn(),
     fireTrigger: vi.fn(),
+    openScene: vi.fn(),
     saveCompareSlot: vi.fn(),
     applyCompareSlot: vi.fn(),
     exportTypeScript: vi.fn(() => "export const card = {};"),
@@ -71,6 +72,7 @@ function makeState(overrides: Partial<PanelState> = {}): PanelState {
     traceSchemas: {},
     runtimeAnimations: [],
     compareSlots: {},
+    sceneStatus: {},
     ...overrides,
   };
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPanelSession, type WebSocketLike } from "./index";
+import { createPanelSession, listScenes, type WebSocketLike } from "./index";
 import type { PanelSchema } from "@runtime-inspector/protocol";
 
 class FakeSocket implements WebSocketLike {
@@ -1044,5 +1044,246 @@ describe("recording lifecycle guards", () => {
     expect(session.getState().recording?.complete).toBe(true);
     expect(session.getState().recording?.incomplete).toBe(true);
     expect(session.getState().notice).toContain("trace is incomplete");
+  });
+});
+const scenesSchema: PanelSchema = {
+  id: "scenes",
+  title: "Scenes",
+  groups: [
+    {
+      id: "Store",
+      label: "Store",
+      controls: [
+        {
+          id: "product-reveal",
+          kind: "trigger",
+          label: "Product reveal",
+          binding: "scenes.product-reveal",
+          scene: { url: "myapp://product", active: true, reachable: true }
+        },
+        {
+          id: "like-burst",
+          kind: "trigger",
+          label: "Like",
+          description: "Heart pop on like",
+          scene: { url: "myapp://product", active: false, reachable: true }
+        },
+        { id: "not-a-scene", kind: "trigger", label: "Plain trigger" }
+      ]
+    },
+    {
+      id: "scenes",
+      label: "Scenes",
+      controls: [
+        { id: "welcome", kind: "trigger", label: "Welcome", scene: { active: false, reachable: false } }
+      ]
+    }
+  ]
+};
+
+function sentTriggers(socket: FakeSocket) {
+  return socket.sent.map((raw) => JSON.parse(raw)).filter((message) => message.type === "control.trigger");
+}
+
+describe("scenes (RFC 0006)", () => {
+  it("lists scene triggers in group and control order, skipping plain triggers", () => {
+    const { session } = createSession();
+    expect(listScenes(session.getState())).toEqual([]);
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, testSchema);
+    expect(listScenes(session.getState())).toEqual([]);
+    socket.receive({ type: "schema.publish", schema: scenesSchema });
+
+    expect(listScenes(session.getState())).toEqual([
+      {
+        id: "product-reveal",
+        title: "Product reveal",
+        group: "Store",
+        url: "myapp://product",
+        active: true,
+        reachable: true,
+        stale: false
+      },
+      {
+        id: "like-burst",
+        title: "Like",
+        group: "Store",
+        description: "Heart pop on like",
+        url: "myapp://product",
+        active: false,
+        reachable: true,
+        stale: false
+      },
+      { id: "welcome", title: "Welcome", group: "Scenes", active: false, reachable: false, stale: false }
+    ]);
+  });
+
+  it("marks listed scenes stale when the scenes runtime goes offline", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    socket.receive({ type: "runtime.status", online: false, clientId: "rt", schemaId: "scenes" });
+    expect(listScenes(session.getState()).every((scene) => scene.stale)).toBe(true);
+  });
+
+  it("opens a scene by firing a trigger on the scenes schema", () => {
+    const { session, setNow } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    setNow(1234);
+
+    expect(session.openScene("product-reveal")).toBe(true);
+
+    expect(sentTriggers(socket)).toEqual([
+      expect.objectContaining({ schemaId: "scenes", controlId: "product-reveal" })
+    ]);
+    expect(session.getState().sceneStatus["product-reveal"]).toEqual({
+      phase: "requested",
+      requestedAt: 1234
+    });
+  });
+
+  it("refuses unknown scenes and plain triggers with a notice", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    expect(session.openScene("nope")).toBe(false);
+    expect(session.getState().notice).toBe('Unknown scene "nope".');
+
+    publishSchema(socket, scenesSchema);
+    expect(session.openScene("nope")).toBe(false);
+    expect(session.openScene("not-a-scene")).toBe(false);
+    expect(session.getState().notice).toBe('Unknown scene "not-a-scene".');
+    expect(sentTriggers(socket)).toHaveLength(0);
+    expect(session.getState().sceneStatus).toEqual({});
+  });
+
+  it("refuses to open a scene while the scenes schema is stale", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    socket.receive({ type: "runtime.status", online: false, clientId: "rt", schemaId: "scenes" });
+
+    expect(session.openScene("product-reveal")).toBe(false);
+    expect(session.getState().notice).toBe("The app is not connected; the scene cannot be opened.");
+    expect(sentTriggers(socket)).toHaveLength(0);
+    expect(session.getState().sceneStatus["product-reveal"]).toBeUndefined();
+  });
+
+  it("records scene.status and keeps requestedAt", () => {
+    const { session, setNow } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    setNow(500);
+    session.openScene("product-reveal");
+
+    socket.receive({ type: "scene.status", sceneId: "product-reveal", phase: "navigating", atRuntimeMs: 510 });
+    expect(session.getState().sceneStatus["product-reveal"]).toEqual({
+      phase: "navigating",
+      requestedAt: 500,
+      atRuntimeMs: 510
+    });
+
+    socket.receive({ type: "scene.status", sceneId: "product-reveal", phase: "playing", atRuntimeMs: 900 });
+    expect(session.getState().sceneStatus["product-reveal"]).toEqual({
+      phase: "playing",
+      requestedAt: 500,
+      atRuntimeMs: 900
+    });
+
+    socket.receive({
+      type: "scene.status",
+      sceneId: "like-burst",
+      phase: "failed",
+      atRuntimeMs: 950,
+      code: "MOUNT_TIMEOUT",
+      reason: "No screen mounted."
+    });
+    expect(session.getState().sceneStatus["like-burst"]).toEqual({
+      phase: "failed",
+      atRuntimeMs: 950,
+      code: "MOUNT_TIMEOUT",
+      reason: "No screen mounted."
+    });
+  });
+
+  it("fails requested and navigating scenes when the scenes runtime goes offline", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    session.openScene("product-reveal");
+    session.openScene("like-burst");
+    socket.receive({ type: "scene.status", sceneId: "like-burst", phase: "navigating", atRuntimeMs: 10 });
+    session.openScene("welcome");
+    socket.receive({ type: "scene.status", sceneId: "welcome", phase: "playing", atRuntimeMs: 20 });
+
+    socket.receive({ type: "runtime.status", online: false, clientId: "rt", schemaId: "scenes" });
+
+    const status = session.getState().sceneStatus;
+    const reason = "The app disconnected while opening the scene (it may have reloaded).";
+    expect(status["product-reveal"]).toMatchObject({ phase: "failed", reason });
+    expect(status["like-burst"]).toMatchObject({ phase: "failed", reason });
+    expect(status.welcome?.phase).toBe("playing");
+    // The cancelled timeouts must not fire later.
+    vi.advanceTimersByTime(10_000);
+    expect(session.getState().sceneStatus["product-reveal"]?.reason).toBe(reason);
+  });
+
+  it("does not fail scenes when another schema goes offline", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, testSchema);
+    socket.receive({ type: "schema.publish", schema: scenesSchema });
+    session.openScene("product-reveal");
+    socket.receive({ type: "runtime.status", online: false, clientId: "rt", schemaId: "demo" });
+    expect(session.getState().sceneStatus["product-reveal"]?.phase).toBe("requested");
+  });
+
+  it("fails a scene that gets no scene.status within 8 seconds", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    session.openScene("product-reveal");
+
+    vi.advanceTimersByTime(7999);
+    expect(session.getState().sceneStatus["product-reveal"]?.phase).toBe("requested");
+    vi.advanceTimersByTime(1);
+    expect(session.getState().sceneStatus["product-reveal"]).toMatchObject({
+      phase: "failed",
+      reason: "The app did not answer. Is it running a Runtime Inspector version with scenes?"
+    });
+  });
+
+  it("cancels the answer timeout once the app reports any status", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    session.openScene("product-reveal");
+    vi.advanceTimersByTime(3000);
+    socket.receive({ type: "scene.status", sceneId: "product-reveal", phase: "playing", atRuntimeMs: 3000 });
+
+    vi.advanceTimersByTime(20_000);
+    expect(session.getState().sceneStatus["product-reveal"]?.phase).toBe("playing");
+  });
+
+  it("clears scene timers on dispose", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, scenesSchema);
+    session.openScene("product-reveal");
+    session.dispose();
+
+    vi.advanceTimersByTime(20_000);
+    expect(session.getState().sceneStatus["product-reveal"]?.phase).toBe("requested");
   });
 });

@@ -1,5 +1,6 @@
 import {
   RIP_VERSION,
+  SCENES_SCHEMA_ID,
   createCommit,
   createPatch,
   createTrigger,
@@ -18,6 +19,7 @@ import {
   type RuntimeAnimationConfig,
   type RuntimeAnimationStarted,
   type RuntimeProbeDescriptor,
+  type SceneStatus,
   type SpringValue,
   type TraceSchemaPublish,
   type TriggerControl
@@ -67,6 +69,30 @@ export interface RuntimeAnimationTrace extends RuntimeAnimationStarted {
   durationBasis?: "declared" | "spring-estimate";
 }
 
+export interface SceneEntry {
+  id: string;
+  title: string;
+  group: string;
+  description?: string;
+  url?: string;
+  active: boolean;
+  reachable: boolean;
+  stale: boolean;
+}
+
+export type SceneOpenPhase = "requested" | "navigating" | "playing" | "failed";
+
+export interface SceneOpenState {
+  phase: SceneOpenPhase;
+  requestedAt?: number;
+  atRuntimeMs?: number;
+  code?: string;
+  reason?: string;
+}
+
+/** How long a requested scene may stay without any `scene.status` before the panel gives up. */
+const SCENE_ANSWER_TIMEOUT_MS = 8000;
+
 export interface PanelState {
   status: ConnectionStatus;
   notice?: string;
@@ -86,6 +112,8 @@ export interface PanelState {
   /** Results of the most recently received `source.applyResult`, keyed by nothing (single latest snapshot). */
   lastApplyResult?: LastApplyResultInfo;
   compareSlots: Record<string, Partial<Record<CompareSlotId, Record<string, unknown>>>>;
+  /** Progress of the latest open per scene id (RFC 0006). */
+  sceneStatus: Record<string, SceneOpenState>;
 }
 
 export interface WebSocketLike {
@@ -129,6 +157,8 @@ export interface PanelSession {
   setValue(schemaId: string, controlId: string, value: unknown): void;
   commitValue(schemaId: string, controlId: string): void;
   fireTrigger(schemaId: string, controlId: string): void;
+  /** Opens a scene through the `scenes` schema. Returns false (with a notice) when it cannot be requested. */
+  openScene(sceneId: string): boolean;
   saveCompareSlot(slot: CompareSlotId, schemaId: string): void;
   applyCompareSlot(slot: CompareSlotId, schemaId: string): void;
   exportTypeScript(schemaId: string): string;
@@ -162,12 +192,14 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     runtimeAnimations: [],
     recording: undefined,
     lastPatch: undefined,
-    compareSlots: {}
+    compareSlots: {},
+    sceneStatus: {}
   };
 
   const listeners = new Set<() => void>();
   const schemasById = new Map<string, PanelSchema>();
   const pendingPatches = new Map<string, PendingPatch>();
+  const sceneTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let recordingCounter = 0;
 
   let socket: WebSocketLike | null = null;
@@ -274,6 +306,11 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
               !message.online &&
               state.recording?.schemaId === message.schemaId &&
               !state.recording.complete;
+            if (!message.online && message.schemaId === SCENES_SCHEMA_ID) {
+              failPendingScenes(
+                "The app disconnected while opening the scene (it may have reloaded)."
+              );
+            }
             setState({
               staleSchemaIds: { ...state.staleSchemaIds, [message.schemaId]: !message.online },
               ...(recordingWentOffline
@@ -322,6 +359,9 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
             }
           });
         }
+      }
+      if (message.type === "scene.status") {
+        applySceneStatus(message);
       }
       if (message.type === "animation.started") {
         applyAnimationStarted(message);
@@ -384,7 +424,54 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       reconnectTimer = undefined;
     }
     clearPendingPatches();
+    clearSceneTimers();
     socket?.close();
+  }
+
+  function clearSceneTimers() {
+    for (const timer of sceneTimers.values()) {
+      clearTimeout(timer);
+    }
+    sceneTimers.clear();
+  }
+
+  function clearSceneTimer(sceneId: string) {
+    const timer = sceneTimers.get(sceneId);
+    if (timer) {
+      clearTimeout(timer);
+      sceneTimers.delete(sceneId);
+    }
+  }
+
+  function applySceneStatus(message: SceneStatus) {
+    clearSceneTimer(message.sceneId);
+    const previous = state.sceneStatus[message.sceneId];
+    const next: SceneOpenState = {
+      phase: message.phase,
+      ...(previous?.requestedAt !== undefined ? { requestedAt: previous.requestedAt } : {}),
+      atRuntimeMs: message.atRuntimeMs,
+      ...(message.code !== undefined ? { code: message.code } : {}),
+      ...(message.reason !== undefined ? { reason: message.reason } : {})
+    };
+    setState({ sceneStatus: { ...state.sceneStatus, [message.sceneId]: next } });
+  }
+
+  function failPendingScenes(reason: string) {
+    const nextStatus: Record<string, SceneOpenState> = { ...state.sceneStatus };
+    let changed = false;
+    for (const [sceneId, entry] of Object.entries(state.sceneStatus)) {
+      if (entry.phase !== "requested" && entry.phase !== "navigating") continue;
+      clearSceneTimer(sceneId);
+      nextStatus[sceneId] = {
+        phase: "failed",
+        ...(entry.requestedAt !== undefined ? { requestedAt: entry.requestedAt } : {}),
+        reason
+      };
+      changed = true;
+    }
+    if (changed) {
+      setState({ sceneStatus: nextStatus });
+    }
   }
 
   function clearPendingPatches() {
@@ -783,6 +870,42 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     markPatch(controlId, control?.label ?? controlId);
   }
 
+  function openScene(sceneId: string): boolean {
+    const scene = listScenes(state).find((entry) => entry.id === sceneId);
+    if (!scene) {
+      setState({ notice: `Unknown scene "${sceneId}".` });
+      return false;
+    }
+    if (scene.stale) {
+      setState({ notice: "The app is not connected; the scene cannot be opened." });
+      return false;
+    }
+    clearSceneTimer(sceneId);
+    setState({
+      sceneStatus: { ...state.sceneStatus, [sceneId]: { phase: "requested", requestedAt: now() } }
+    });
+    sceneTimers.set(
+      sceneId,
+      setTimeout(() => {
+        sceneTimers.delete(sceneId);
+        const current = state.sceneStatus[sceneId];
+        if (current?.phase !== "requested") return;
+        setState({
+          sceneStatus: {
+            ...state.sceneStatus,
+            [sceneId]: {
+              phase: "failed",
+              ...(current.requestedAt !== undefined ? { requestedAt: current.requestedAt } : {}),
+              reason: "The app did not answer. Is it running a Runtime Inspector version with scenes?"
+            }
+          }
+        });
+      }, SCENE_ANSWER_TIMEOUT_MS)
+    );
+    fireTrigger(SCENES_SCHEMA_ID, sceneId);
+    return true;
+  }
+
   function saveCompareSlot(slot: CompareSlotId, schemaId: string) {
     const values = state.values[schemaId] ?? {};
     const schemaSlots = state.compareSlots[schemaId] ?? {};
@@ -943,6 +1066,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     setValue,
     commitValue,
     fireTrigger,
+    openScene,
     saveCompareSlot,
     applyCompareSlot,
     exportTypeScript,
@@ -951,6 +1075,30 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     stopRecording,
     clearRecording
   };
+}
+
+/** Scenes published in the reserved `scenes` schema, in group/control order. */
+export function listScenes(state: PanelState): SceneEntry[] {
+  const schema = state.schemas.find((candidate) => candidate.id === SCENES_SCHEMA_ID);
+  if (!schema) return [];
+  const stale = state.staleSchemaIds[SCENES_SCHEMA_ID] ?? false;
+  const entries: SceneEntry[] = [];
+  for (const group of schema.groups) {
+    for (const control of group.controls) {
+      if (control.kind !== "trigger" || !control.scene) continue;
+      entries.push({
+        id: control.id,
+        title: control.label,
+        group: group.label,
+        ...(control.description !== undefined ? { description: control.description } : {}),
+        ...(control.scene.url !== undefined ? { url: control.scene.url } : {}),
+        active: control.scene.active,
+        reachable: control.scene.reachable,
+        stale
+      });
+    }
+  }
+  return entries;
 }
 
 function filterValidSnapshot(schema: PanelSchema, snapshot: Record<string, unknown>) {

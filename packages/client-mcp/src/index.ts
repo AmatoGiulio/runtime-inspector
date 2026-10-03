@@ -2,10 +2,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { isValueControl, type PanelSchema } from "@runtime-inspector/protocol";
+import {
+  SCENES_SCHEMA_ID,
+  isValueControl,
+  type PanelSchema,
+  type SceneStatus
+} from "@runtime-inspector/protocol";
 import { createBrokerClient, type BrokerClient } from "./broker-client.js";
 
-export { createBrokerClient, type BrokerClient, type BrokerClientOptions } from "./broker-client.js";
+export {
+  createBrokerClient,
+  type BrokerClient,
+  type BrokerClientOptions,
+  type SceneEntry
+} from "./broker-client.js";
 
 const brokerUrl = process.env.RI_BROKER_URL ?? "ws://127.0.0.1:4577";
 const token = process.env.RI_TOKEN;
@@ -165,7 +175,9 @@ server.registerTool(
     title: "Fire a trigger control",
     description:
       "Fire a trigger control (e.g. \"replay transition\") to re-run an animation on the device after " +
-      "changing values, so you can observe the effect of your tuning without touching the app.",
+      "changing values, so you can observe the effect of your tuning without touching the app. " +
+      "Scenes are triggers in the \"scenes\" schema, but prefer open_scene: it navigates, waits for the " +
+      "motion to play and reports what ran.",
     inputSchema: {
       schemaId: z.string().optional().describe("Schema id. Optional if only one schema is cached."),
       controlId: z.string().describe("The trigger control id to fire.")
@@ -178,6 +190,149 @@ server.registerTool(
       activeClient.fireTrigger(resolvedSchemaId, controlId);
       return {
         content: [{ type: "text", text: `Fired trigger "${controlId}" on schema "${resolvedSchemaId}".` }]
+      };
+    } catch (error) {
+      return errorResult(error);
+    }
+  }
+);
+
+server.registerTool(
+  "list_scenes",
+  {
+    title: "List motion scenes",
+    description:
+      "List the app's motion scenes (named moments such as a product reveal or a sheet opening). " +
+      "Each can be opened with open_scene: the app navigates there and plays the motion.",
+    inputSchema: {}
+  },
+  async () => {
+    try {
+      const activeClient = await getConnectedClient();
+      const scenes = activeClient.getScenes();
+      if (scenes.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "The app publishes no scenes. Declare them with defineScene/useScene in the app's " +
+                "Runtime Inspector SDK and make sure the app is running."
+            }
+          ]
+        };
+      }
+      const payload = scenes.map((scene) => ({
+        id: scene.id,
+        title: scene.title,
+        group: scene.group,
+        ...(scene.description !== undefined ? { description: scene.description } : {}),
+        url: scene.url,
+        active: scene.active,
+        reachable: scene.reachable,
+        stale: scene.stale
+      }));
+      return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+    } catch (error) {
+      return errorResult(error);
+    }
+  }
+);
+
+const OPEN_SCENE_CAP_MS = 8000;
+
+server.registerTool(
+  "open_scene",
+  {
+    title: "Open a motion scene",
+    description:
+      "Open a motion scene: the app navigates to it, waits until the screen is mounted and plays the " +
+      "motion. Returns the animations that started in the moment after the scene played (target, kind, " +
+      "start/call time relative to the play, duration, config, the controls that tune them, source). " +
+      "Tune them with set_control_value/batch_set on the referenced controls; committing then " +
+      "re-opening the scene replays it with the new values. Call list_scenes first for valid ids.",
+    inputSchema: {
+      sceneId: z.string().describe("The scene id from list_scenes."),
+      observeMs: z
+        .number()
+        .min(0)
+        .max(5000)
+        .optional()
+        .describe("How long to keep observing animations after the scene plays, in ms. Default 1500.")
+    }
+  },
+  async ({ sceneId, observeMs }) => {
+    try {
+      const activeClient = await getConnectedClient();
+      const scene = activeClient.getScenes().find((entry) => entry.id === sceneId);
+      if (!scene) {
+        throw new Error(`Unknown scene "${sceneId}". Call list_scenes to see the available scenes.`);
+      }
+
+      // Subscribe before firing so only statuses received after the request count.
+      let resolveOutcome!: (status: SceneStatus | undefined) => void;
+      const outcome = new Promise<SceneStatus | undefined>((resolve) => {
+        resolveOutcome = resolve;
+      });
+      let lastPhase: string | undefined;
+      const unsubscribe = activeClient.onSceneStatus((status) => {
+        if (status.sceneId !== sceneId) return;
+        lastPhase = status.phase;
+        if (status.phase === "playing" || status.phase === "failed") {
+          resolveOutcome(status);
+        }
+      });
+      const cap = setTimeout(() => resolveOutcome(undefined), OPEN_SCENE_CAP_MS);
+
+      let status: SceneStatus | undefined;
+      try {
+        activeClient.fireTrigger(SCENES_SCHEMA_ID, sceneId);
+        status = await outcome;
+      } finally {
+        clearTimeout(cap);
+        unsubscribe();
+      }
+
+      if (!status) {
+        return errorResult(
+          new Error(
+            `Scene "${sceneId}" did not start playing within ${OPEN_SCENE_CAP_MS} ms` +
+              (lastPhase ? ` (last phase: ${lastPhase}).` : " (the app sent no status; is it running a Runtime Inspector version with scenes?).")
+          )
+        );
+      }
+      if (status.phase === "failed") {
+        return errorResult(new Error(`Scene "${sceneId}" failed: ${status.code}: ${status.reason}`));
+      }
+
+      const playedAt = status.atRuntimeMs;
+      await new Promise((resolve) => setTimeout(resolve, observeMs ?? 1500));
+
+      const animations = activeClient
+        .getAnimationsSince(playedAt)
+        .map((animation) => {
+          const callTime = animation.startedAtRuntimeMs - (animation.startDelayMs ?? 0);
+          return {
+            target: animation.target,
+            kind: animation.animationKind,
+            startMs: Math.round(animation.startedAtRuntimeMs - playedAt),
+            callMs: Math.round(callTime - playedAt),
+            durationMs: typeof animation.config.duration === "number" ? animation.config.duration : null,
+            config: animation.config,
+            parameterControls: animation.parameterControls,
+            startControl: animation.startControl,
+            source: animation.source ? `${animation.source.file}:${animation.source.line}` : undefined
+          };
+        })
+        .sort((a, b) => a.startMs - b.startMs);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ scene: sceneId, playedAtRuntimeMs: playedAt, animations }, null, 2)
+          }
+        ]
       };
     } catch (error) {
       return errorResult(error);
