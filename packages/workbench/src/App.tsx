@@ -47,15 +47,18 @@ import { themeChoiceLabel, useWorkbenchTheme } from "./theme";
 import "@runtime-inspector/panel-dialkit/styles.css";
 import "./styles.css";
 
-const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
-const panelToken =
-  new URLSearchParams(window.location.search).get("token") ?? import.meta.env.VITE_RI_TOKEN;
+const launchParams = new URLSearchParams(window.location.search);
+const brokerUrl =
+  launchParams.get("broker") ?? import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
+const panelToken = launchParams.get("token") ?? import.meta.env.VITE_RI_TOKEN;
 
 const SIDEBAR_STORAGE_KEY = "ri.workbench.sidebar";
 const SCENE_THUMBNAILS_STORAGE_KEY = "ri.workbench.sceneThumbnails";
 const MAX_SCENE_THUMBNAILS = 40;
 const SCENE_THUMBNAIL_WIDTH = 72;
 const SIMULATOR_OPENING_NOTICE_MS = 4000;
+const SESSION_RELOAD_STORAGE_KEY = "ri.workbench.sessionReloadAt";
+const SESSION_RELOAD_INTERVAL_MS = 5000;
 
 const session = createPanelSession({
   url: brokerUrl,
@@ -189,6 +192,37 @@ function App() {
       }
     | undefined
   >(undefined);
+
+  useEffect(() => {
+    // Desktop only: a token rejected by the broker usually means the CLI restarted with a new one.
+    // Re-read its session file and reload with the new token (at most once per 5 s, across reloads).
+    const desktop = window.runtimeDesktop;
+    if (state.status !== "rejected" || typeof desktop?.getRuntimeSession !== "function") return;
+
+    let cancelled = false;
+    const check = () => {
+      if (Date.now() - readSessionReloadAt() < SESSION_RELOAD_INTERVAL_MS) return;
+      void desktop
+        .getRuntimeSession()
+        .then((runtimeSession) => {
+          if (cancelled || !runtimeSession || runtimeSession.token === panelToken) return;
+          writeSessionReloadAt(Date.now());
+          const next = new URL(window.location.href);
+          next.searchParams.set("token", runtimeSession.token);
+          next.searchParams.set("broker", runtimeSession.brokerUrl);
+          window.location.replace(next.toString());
+        })
+        .catch(() => {
+          // No session file yet; the next check retries.
+        });
+    };
+    check();
+    const timer = setInterval(check, SESSION_RELOAD_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [state.status]);
 
   useEffect(() => {
     // Desktop only; a plain browser has no bridge and keeps the generic frame.
@@ -1893,6 +1927,23 @@ function readStoredSidebarVisible(): boolean {
     return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) !== "0";
   } catch {
     return true;
+  }
+}
+
+/** Session-scoped so the throttle survives the reload it triggers. */
+function readSessionReloadAt(): number {
+  try {
+    return Number(window.sessionStorage.getItem(SESSION_RELOAD_STORAGE_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeSessionReloadAt(at: number) {
+  try {
+    window.sessionStorage.setItem(SESSION_RELOAD_STORAGE_KEY, String(at));
+  } catch {
+    // Without storage the token comparison still prevents a reload loop.
   }
 }
 

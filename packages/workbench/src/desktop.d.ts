@@ -108,6 +108,8 @@ declare global {
     /** Opens `url` on the Simulator with `xcrun simctl openurl`; rejects with the validation message. */
     openSimulatorUrl(udid: string, url: string): Promise<boolean>;
     getScreenPermission(): Promise<string>;
+    /** Broker URL and token of the running CLI (its session file), or null when none is running. */
+    getRuntimeSession(): Promise<{ brokerUrl: string; token: string } | null>;
     prepareSimulatorInput(): Promise<boolean>;
     sendSimulatorPointer(event: {
       type: "down" | "drag" | "up";

@@ -22,6 +22,7 @@ import { parseDesktopWindowId, SimulatorInputHelper } from "./input-helper.mjs";
 import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
 import { loadDeviceChrome } from "./device-chrome.mjs";
+import { readRuntimeSession } from "./session-file.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -75,7 +76,7 @@ app.on("before-quit", async () => {
 
 async function startRenderer() {
   if (!isDev) {
-    return pathToFileURL(path.join(packageRoot, "dist", "index.html")).toString();
+    return withBrokerParams(pathToFileURL(path.join(packageRoot, "dist", "index.html")));
   }
 
   viteServer = await createServer({
@@ -89,8 +90,17 @@ async function startRenderer() {
   });
   await viteServer.listen();
 
-  const url = new URL(`http://127.0.0.1:${rendererPort}`);
-  if (panelToken) url.searchParams.set("token", panelToken);
+  return withBrokerParams(new URL(`http://127.0.0.1:${rendererPort}`));
+}
+
+// Without VITE_RI_TOKEN, the running CLI's session file supplies the token and broker URL, so the
+// Workbench needs no environment. Environment variables keep precedence.
+async function withBrokerParams(url) {
+  const runtimeSession = panelToken ? null : await readRuntimeSession();
+  const token = panelToken ?? runtimeSession?.token;
+  const brokerUrl = process.env.VITE_RI_BROKER_URL ? undefined : runtimeSession?.brokerUrl;
+  if (token) url.searchParams.set("token", token);
+  if (brokerUrl) url.searchParams.set("broker", brokerUrl);
   return url.toString();
 }
 
@@ -124,6 +134,14 @@ function registerDesktopIpc() {
     screenPermission:
       process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("screen") : "unknown"
   }));
+
+  // Lets the renderer pick up a restarted CLI's new token without restarting the Workbench.
+  ipcMain.handle("runtime-desktop:get-runtime-session", async () => {
+    const runtimeSession = await readRuntimeSession();
+    return runtimeSession
+      ? { brokerUrl: runtimeSession.brokerUrl, token: runtimeSession.token }
+      : null;
+  });
 
   ipcMain.handle("runtime-desktop:get-screen-permission", async () =>
     process.platform === "darwin" ? systemPreferences.getMediaAccessStatus("screen") : "unknown"

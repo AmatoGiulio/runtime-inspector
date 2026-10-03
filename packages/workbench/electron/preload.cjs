@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("runtimeDesktop", {
     ipcRenderer.invoke("runtime-desktop:open-simulator-url", udid, url),
   getDeviceChrome: (udid) => ipcRenderer.invoke("runtime-desktop:get-device-chrome", udid),
   getScreenPermission: () => ipcRenderer.invoke("runtime-desktop:get-screen-permission"),
+  getRuntimeSession: () => ipcRenderer.invoke("runtime-desktop:get-runtime-session"),
   prepareSimulatorInput: () => ipcRenderer.invoke("runtime-desktop:prepare-simulator-input"),
   sendSimulatorPointer: (event) =>
     ipcRenderer.send("runtime-desktop:simulator-pointer", event)
