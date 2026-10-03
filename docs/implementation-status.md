@@ -428,3 +428,26 @@ Not done yet:
 2. before/after comparison of two replays;
 3. reworking the Inspector around the selected animation.
 
+
+## Scenes — RFC 0006
+
+**Implemented on `feat/runtime-workbench-desktop`; validated on the iOS Simulator (Expo Go 2.32, SDK 52) on 2026-10-03 through the web panel and the desktop Workbench.**
+
+A scene is a named moment of motion: where to go and what to play once there.
+
+- **Protocol (additive, RIP 0.3):** scenes are `trigger` controls in the reserved `scenes` schema with an optional `scene` field (`url`, `active`, `reachable`); `scene.status` (Lifecycle) reports `navigating` / `playing` / `failed` with a code and reason. Fixtures and broker tests cover both.
+- **Runtime:** `defineScene`, `defineScenes`, `useScene`, `configureScenes`. The `scenes` schema is republished **in place** on its open connection (`updatePanelSchema`) whenever a screen mounts or unmounts, so navigation never reconnects or drops a status. Opening: play now when on screen, else `open()` or `Linking.openURL(url)`, wait up to 5 s for the screen, play one frame later — not again if the screen already ran its entrance.
+- **Links:** absolute as is; paths via `linkPrefix`, Expo Go `exp://host/--/path` (host from the Metro script url when the experience url is a bare `exp://`), or the Expo development build's scheme. No `require("expo-linking")`: Metro reported the missing optional module as an uncaught error even inside `try/catch`.
+- **Expo Go caveat:** opening `exp://…/--/path` for the running project reloads the bundle. The example therefore navigates with `open()` and keeps `link` for copy and cold start.
+- **panel-core:** `listScenes`, `openScene`, `sceneStatus`, plus panel-local failures when the app disconnects mid-open or never answers (8 s).
+- **MCP:** `list_scenes`, `open_scene` (waits for `playing` and returns the observed animations with start, call time and duration relative to the scene).
+- **Workbench:** a sidebar with **Scenes | Controls**. Scenes are grouped rows with a thumbnail captured from the live framebuffer after each play, a dot for the scene on screen, opening/failed state, ↑/↓ + Enter, and Copy link on hover. **Play** and Space replay the selected scene (or the one on screen); the timeline shows only the motion called from the scene's `playing` time, is cleared when another scene opens, and holds still across replays of the same scene. With the app disconnected, a scene with a url opens on the Simulator through `simctl openurl` (cold start).
+- **Example app:** a home list and five scenes in three groups (Product reveal, Like, Checkout sheet, Welcome, Card transition) on a dependency-free router.
+
+Validated live: a click in the web panel navigated the app to the checkout sheet and played it; in the Workbench, clicking scenes switched the app and the timeline (4, 8 and 10 rows) and filled the thumbnails.
+
+Not done yet:
+
+1. a physical-device run and a development build with its own scheme (link delivered without reload);
+2. the copy-link and Simulator cold-start paths were unit-tested, not exercised by hand;
+3. scene state is not shown in the web panel beyond the trigger buttons.

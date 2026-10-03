@@ -79,7 +79,7 @@ In this repo: `pnpm --filter @runtime-inspector/example-react-native-reanimated 
 RI_BROKER_URL=ws://127.0.0.1:4577 RI_TOKEN=<token printed by pnpm dev> runtime-inspector-mcp
 ```
 
-Tools: `get_schema`, `set_control_value`, `batch_set`, `trigger`. Agent writes are committed values; stale schemas are refused with an explicit error.
+Tools: `get_schema`, `set_control_value`, `batch_set`, `trigger`, plus `list_scenes` / `open_scene` (open a motion scene and get the timing of the animations it played). Agent writes are committed values; stale schemas are refused with an explicit error.
 
 ## How it fits together
 
@@ -121,7 +121,7 @@ pnpm build && pnpm typecheck && pnpm test
 
 ## Workbench experiment
 
-RFC 0005 defines a future Runtime Workbench around the real running app. The `feat/runtime-workbench-m0` branch contains the first bounded spike: explicit runtime probes → 60 Hz recording → broker → timeline graph. Simulator/emulator embedding starts only after that path passes runtime/performance validation.
+RFC 0005 defines the Runtime Workbench, a macOS desktop app around the real running app: the iOS Simulator embedded with native input, a timeline of the discovered Reanimated animations whose blocks you drag and resize, and live spring/timing editing that replays the app. RFC 0006 adds **scenes**: a storyboard of the app's motion moments — click one and the app navigates there and plays it (`useScene`, see [Getting started](docs/getting-started.md)). Development branch: `feat/runtime-workbench-desktop`; status in [Implementation status](docs/implementation-status.md).
 
 ## Not in scope yet
 

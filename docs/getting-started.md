@@ -90,6 +90,36 @@ const replay = useAction("replay", () => runReplayAnimation());
 
 Actions are declared, not inferred from a function's shape — the same rationale as the `useRuntimeValue` function-initial error above. Same lifecycle as `useRuntimeValue` (register on mount, dispose on unmount, name release, live-collision suffix + warning). Options: `label`.
 
+### `useScene` (motion scenes)
+
+A scene is a named moment of motion — the product page reveal, the like burst, the sheet opening — that any client can open: the app navigates there, waits for the screen to mount, and plays the motion ([RFC 0006](../rfcs/0006-scenes.md)). The Workbench lists scenes as a storyboard; the web panel and React Native DevTools show them as buttons; the MCP agent has `list_scenes` / `open_scene`.
+
+Declare scenes once, at module scope, so they are listed before their screen is visited:
+
+```ts
+import { defineScenes } from "@runtime-inspector/react-native";
+
+defineScenes({
+  "product-reveal": { title: "Product reveal", group: "Store", link: "/product", open: () => router.push("/product") },
+  "checkout-sheet": { title: "Checkout sheet", group: "Store", link: "/sheet" }
+});
+```
+
+Bind the motion where it lives. `useScene` returns a stable function; call it for the screen's own entrance too, so an opened scene does not play twice:
+
+```ts
+const play = useScene("product-reveal", () => {
+  coverOpacity.value = withTiming(1, { duration: 320 });
+  titleY.value = withDelay(140, withTiming(0, { duration: 380 }));
+});
+useEffect(() => play(), []);
+```
+
+- **Opening**: on screen → plays now; otherwise `open()` if declared, else `Linking.openURL(link)`; then waits up to 5 s for `useScene` to mount and plays one frame later. Failures (`UNREACHABLE`, `NAVIGATION_FAILED`, `MOUNT_TIMEOUT`, `PLAY_FAILED`, `SUPERSEDED`) are reported to every client with a reason.
+- **Links**: absolute links are used as is; a path is resolved with `configureScenes({ linkPrefix: "myapp://" })`, else Expo Go's `exp://host/--/path`, else the Expo development build's `scheme`. In **Expo Go** a deep link to the running project reloads the bundle, so declare `open()` for in-app navigation and keep `link` for copying and cold start.
+- **Hidden screens**: navigators that keep screens mounted should pass focus, `useScene(id, play, { active: useIsFocused() })`.
+- **Production**: no-op; `useScene` returns a function that calls `play`.
+
 ### `useInspector` (recommended for multiple controls)
 
 `useInspector` infers the control kind from the shape of each spec value and returns a mutable `SharedValue`-like handle per key — no manual schema, no manual bindings:
