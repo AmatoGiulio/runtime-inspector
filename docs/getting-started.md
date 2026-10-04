@@ -122,6 +122,8 @@ function play() { … }
 function resetPose() { … }
 ```
 
+The numbers of discovered animations (a timing `duration`, a spring's `damping` / `stiffness` / `mass`, a start delay) are editable in the Workbench timeline and Inspector. With `runtime-inspector dev` running, **Apply to code** writes the tuned numbers back into the source file — `withDelay(140, withTiming(0, { duration: 380 }))` becomes `withDelay(180, withTiming(0, { duration: 420 }))` — and Fast Refresh picks them up ([RFC 0007](../rfcs/0007-animation-literal-write-back.md)).
+
 An automatic scene can be replayed while its screen is showing. To open it from elsewhere, add navigation with `defineScene("<file>:<Component>.<function>", { open, link })` or use the explicit API below.
 
 ### `useScene` (motion scenes) — explicit

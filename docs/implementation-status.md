@@ -464,4 +464,17 @@ Not done yet:
 
 Validated live: with Metro on the one-line config and the Workbench started without a token, opening the Like screen in the app listed the scene automatically, Play replayed it (5 rows), and the heart scale curve was available.
 
-Not done yet: opening an automatic scene whose screen is not showing (route inference), exposing `interpolate` ranges and initial values automatically, write-back of animation literals (RFC 0007).
+Not done yet: opening an automatic scene whose screen is not showing (route inference), exposing `interpolate` ranges and initial values automatically.
+
+## Animation literal write-back — RFC 0007
+
+**Implemented on `feat/runtime-workbench-desktop`, covered by unit tests; NOT yet validated live** (no Simulator run of drag → Apply → Fast Refresh yet).
+
+- **Protocol (additive, RIP 0.3):** `LiteralAnchor` and an optional `literal` on controls (at most one of `source` / `literal`); a `source.apply` request carries exactly one of `anchor` / `literal`, and a literal request must be a `slider` with a finite number. Fixtures cover a control with `literal`, a literal request, and the invalid cases (both anchors, neither, non-slider literal, a control with both).
+- **Babel plugin:** every `__riAnimationConfig` binding and every delay binding with a control carries `literal` (assignment line/column/enclosure, left-hand text, callee, parameter, literal text; `init: null` for a bare call's delay).
+- **Runtime:** the three animation helpers copy `literal` onto their `auto` controls.
+- **CLI workspace:** literal requests are re-located by assignment target, callee and enclosure (line/column as tiebreaker), checked against `init`, and written by byte range. A delay on a bare call wraps it in `withDelay(…)`, reusing the module's `withDelay` import (aliases respected) or the callee's object, or adding the specifier to the first Reanimated value import; a delay of 0 writes nothing. A wrap and a literal inside it apply together; anchor and literal requests mix in one batch.
+- **panel-core:** `applySource` sends `literal` for literal-anchored controls; `pendingLiteralChanges()` lists tuned literals that differ from source.
+- **Workbench:** **Apply to code** in the Inspector of a selected animation, **Apply N changes** in the timeline toolbar, and a notice with the outcome.
+
+Not done yet: the end-to-end Simulator run from the RFC test plan (drag a block, Apply, the file changes, Fast Refresh, the change count returns to zero).
