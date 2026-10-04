@@ -61,6 +61,7 @@ interface HolderBinding {
 interface ConfigControlEntry {
   holder: { value: number };
   declared: number;
+  literal?: LiteralAnchor;
   dispose: () => void;
 }
 
@@ -118,7 +119,14 @@ function ensureHolder(binding: HolderBinding): { value: number } {
   const existing = entries.get(binding.controlId);
   if (existing) {
     if (existing.declared === binding.declared) {
-      return existing.holder;
+      if (sameLiteralAnchor(existing.literal, binding.literal)) {
+        return existing.holder;
+      }
+      // Same number, new anchor (enclosing function renamed, literal reformatted):
+      // re-register so write-back targets the current source, keeping the tuned value.
+      entries.delete(binding.controlId);
+      existing.dispose();
+      return registerHolder(binding, existing.holder);
     }
     // The source literal changed (Fast Refresh): drop the stale tuned value and
     // re-register with the new default.
@@ -126,7 +134,10 @@ function ensureHolder(binding: HolderBinding): { value: number } {
     existing.dispose();
   }
 
-  const holder = { value: binding.declared };
+  return registerHolder(binding, { value: binding.declared });
+}
+
+function registerHolder(binding: HolderBinding, holder: { value: number }): { value: number } {
   const dispose = registerRuntimeValue(
     {
       kind: "value",
@@ -138,14 +149,36 @@ function ensureHolder(binding: HolderBinding): { value: number } {
         step: binding.step,
         unit: binding.unit,
         label: binding.label,
+        defaultValue: binding.declared,
         ...(binding.literal !== undefined ? { literal: binding.literal } : {})
       },
-      target: binding.declared
+      target: holder.value
     },
     "replace"
   );
-  entries.set(binding.controlId, { holder, declared: binding.declared, dispose });
+  entries.set(binding.controlId, {
+    holder,
+    declared: binding.declared,
+    literal: binding.literal,
+    dispose
+  });
   return holder;
+}
+
+function sameLiteralAnchor(a: LiteralAnchor | undefined, b: LiteralAnchor | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.file === b.file &&
+    a.line === b.line &&
+    a.column === b.column &&
+    a.target === b.target &&
+    a.callee === b.callee &&
+    a.parameter === b.parameter &&
+    a.init === b.init &&
+    a.enclosure.length === b.enclosure.length &&
+    a.enclosure.every((name, index) => name === b.enclosure[index])
+  );
 }
 
 /**

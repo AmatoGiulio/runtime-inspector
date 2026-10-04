@@ -693,6 +693,55 @@ describe("literal anchors (RFC 0007)", () => {
     expect(controlById(schema, "duration")).not.toHaveProperty("source");
   });
 
+  it("re-registers a new anchor for the same literal, keeping the tuned value", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { applyControlPatch } = await import("./index");
+    const { __riAnimationConfig } = await import("./animation-config");
+    const before = { ...literalBase, parameter: "duration" as const, init: "380" };
+    const after = { ...before, enclosure: ["WelcomeDemo", "intro"], init: "380.0" };
+    const config = { duration: 380 };
+
+    __riAnimationConfig(config, [durationBinding({ declared: 380, literal: before })]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: CONTROL_ID, value: 420 });
+
+    // Same anchor: nothing is republished.
+    __riAnimationConfig(config, [durationBinding({ declared: 380, literal: { ...before } })]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(definePanelSpy).toHaveBeenCalledTimes(1);
+
+    const tuned = __riAnimationConfig(config, [durationBinding({ declared: 380, literal: after })]);
+    expect(tuned).toEqual({ duration: 420 });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(definePanelSpy).toHaveBeenCalledTimes(2);
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(schema.groups[0].controls).toHaveLength(1);
+    expect(controlById(schema, CONTROL_ID)).toMatchObject({
+      defaultValue: 380,
+      value: 420,
+      literal: after
+    });
+  });
+
+  it("publishes the declared literal as the default when the schema republishes while tuned", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { applyControlPatch } = await import("./index");
+    const { __riAnimationConfig } = await import("./animation-config");
+
+    __riAnimationConfig({ duration: 260 }, [durationBinding()]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: CONTROL_ID, value: 400 });
+
+    // Another call site registers, which republishes the whole auto schema.
+    __riAnimationConfig({ duration: 100 }, [durationBinding({ controlId: "other", declared: 100 })]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, CONTROL_ID)).toMatchObject({ defaultValue: 260, value: 400 });
+    expect(controlById(schema, "other")).toMatchObject({ defaultValue: 100, value: 100 });
+  });
+
   it("publishes no literal field for a binding without one", async () => {
     const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
     const { __riAnimationConfig } = await import("./animation-config");

@@ -45,6 +45,10 @@ export interface InspectMeta {
   /** Animation literal anchor emitted by the babel plugin (RFC 0007). Forwarded as-is onto
    * the published control's `literal` field, like `source`. */
   literal?: LiteralAnchor;
+  /** Slider default when it is not the live value: the declared animation literal (RFC 0007),
+   * so a control re-registered while tuned still publishes the literal in source as its default
+   * and the tuned number as its value. */
+  defaultValue?: number;
 }
 
 /** Registration mode: "replace" (lifecycle-less, e.g. __riInspect) overwrites its own prior
@@ -316,10 +320,12 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
             `Sliders require an explicit range - annotate with "// @inspect min=<number> max=<number>".`
         );
       }
+      const defaultValue = meta.defaultValue ?? (value as number);
       const control: SliderControl = sliderControl({
         id: name,
         label,
-        defaultValue: value as number,
+        defaultValue,
+        ...(value !== defaultValue ? { value: value as number } : {}),
         min: meta.min,
         max: meta.max,
         ...(meta.step !== undefined ? { step: meta.step } : {}),
