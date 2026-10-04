@@ -503,6 +503,108 @@ describe("createPanelSession applySource", () => {
   });
 });
 
+describe("animation literal write-back (RFC 0007)", () => {
+  const durationLiteral = {
+    file: "src/WelcomeDemo.tsx",
+    line: 41,
+    column: 4,
+    enclosure: ["WelcomeDemo", "play"],
+    target: "titleY.value",
+    callee: "withTiming" as const,
+    parameter: "duration" as const,
+    init: "380"
+  };
+  const delayLiteral = { ...durationLiteral, parameter: "delay" as const, init: null };
+  const autoSchema: PanelSchema = {
+    id: "auto",
+    title: "Inspected values",
+    groups: [
+      {
+        id: "auto",
+        label: "Auto-inspected",
+        controls: [
+          {
+            id: "duration",
+            kind: "slider",
+            label: "titleY duration",
+            defaultValue: 380,
+            min: 0,
+            max: 10000,
+            literal: durationLiteral
+          },
+          {
+            id: "delay",
+            kind: "slider",
+            label: "titleY delay",
+            defaultValue: 0,
+            min: 0,
+            max: 10000,
+            literal: delayLiteral
+          },
+          { id: "speed", kind: "slider", label: "Speed", defaultValue: 1, min: 0, max: 10, source: anchor }
+        ]
+      }
+    ]
+  };
+
+  it("sends literal instead of anchor for literal-anchored controls", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, autoSchema);
+    session.setValue("auto", "duration", 420);
+
+    session.applySource("auto");
+
+    const applies = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "source.apply")
+      .map((raw) => JSON.parse(raw));
+    expect(applies).toHaveLength(1);
+    expect(applies[0].requests).toEqual([
+      { controlId: "duration", kind: "slider", literal: durationLiteral, value: 420 },
+      { controlId: "delay", kind: "slider", literal: delayLiteral, value: 0 },
+      { controlId: "speed", kind: "slider", anchor, value: 1 }
+    ]);
+  });
+
+  it("lists literal controls whose value differs from their default", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, autoSchema);
+    publishSchema(socket, anchoredSchema);
+
+    expect(session.pendingLiteralChanges()).toEqual([]);
+
+    session.setValue("auto", "delay", 140);
+    session.setValue("auto", "speed", 5);
+    session.setValue("anchored-demo", "speed", 7);
+
+    expect(session.pendingLiteralChanges()).toEqual([
+      { schemaId: "auto", controlId: "delay", label: "titleY delay", from: 0, to: 140 }
+    ]);
+    expect(session.pendingLiteralChanges("auto")).toHaveLength(1);
+    expect(session.pendingLiteralChanges("anchored-demo")).toEqual([]);
+
+    session.setValue("auto", "delay", 0);
+    expect(session.pendingLiteralChanges()).toEqual([]);
+  });
+
+  it("skips stale schemas", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, autoSchema);
+    session.setValue("auto", "duration", 420);
+    expect(session.pendingLiteralChanges()).toHaveLength(1);
+
+    socket.receive({ type: "runtime.status", online: false, clientId: "runtime-demo", schemaId: "auto" });
+
+    expect(session.pendingLiteralChanges()).toEqual([]);
+    expect(session.pendingLiteralChanges("auto")).toEqual([]);
+  });
+});
+
 describe("createPanelSession with multiple schemas sharing control ids", () => {
   const schemaA: PanelSchema = {
     id: "schema-a",

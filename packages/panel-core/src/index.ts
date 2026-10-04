@@ -149,6 +149,15 @@ function pendingKey(schemaId: string, controlId: string): string {
   return `${schemaId}:${controlId}`;
 }
 
+/** A tuned animation literal not yet written back to source (RFC 0007). */
+export interface PendingLiteralChange {
+  schemaId: string;
+  controlId: string;
+  label: string;
+  from: number;
+  to: number;
+}
+
 export interface PanelSession {
   getState(): PanelState;
   subscribe(listener: () => void): () => void;
@@ -163,6 +172,12 @@ export interface PanelSession {
   applyCompareSlot(slot: CompareSlotId, schemaId: string): void;
   exportTypeScript(schemaId: string): string;
   applySource(schemaId: string, controlIds?: string[]): void;
+  /**
+   * Literal-anchored slider controls (RFC 0007) whose current value differs
+   * from their default, i.e. from the literal in source. Stale schemas are
+   * skipped; without `schemaId`, every schema is listed.
+   */
+  pendingLiteralChanges(schemaId?: string): PendingLiteralChange[];
   startRecording(schemaId: string, probeIds: string[], sampleRateHz?: number): string | undefined;
   stopRecording(): void;
   clearRecording(): void;
@@ -967,8 +982,14 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
     for (const control of candidateControls) {
       if (!isValueControl(control)) continue;
-      if (!control.source) continue;
       const value = schemaValues[control.id] ?? control.value ?? control.defaultValue;
+      if (control.literal) {
+        // RFC 0007: animation literals are always sliders.
+        if (control.kind !== "slider") continue;
+        requests.push({ controlId: control.id, kind: control.kind, literal: control.literal, value });
+        continue;
+      }
+      if (!control.source) continue;
       requests.push({
         controlId: control.id,
         kind: control.kind,
@@ -984,6 +1005,28 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       schemaId,
       requests
     });
+  }
+
+  function pendingLiteralChanges(schemaId?: string): PendingLiteralChange[] {
+    const changes: PendingLiteralChange[] = [];
+    for (const schema of state.schemas) {
+      if (schemaId !== undefined && schema.id !== schemaId) continue;
+      if (isStale(schema.id)) continue;
+      const schemaValues = state.values[schema.id] ?? {};
+      for (const control of controlsByIdForSchema(schema).values()) {
+        if (control.kind !== "slider" || !control.literal) continue;
+        const current = schemaValues[control.id] ?? control.value ?? control.defaultValue;
+        if (typeof current !== "number" || current === control.defaultValue) continue;
+        changes.push({
+          schemaId: schema.id,
+          controlId: control.id,
+          label: control.label,
+          from: control.defaultValue,
+          to: current
+        });
+      }
+    }
+    return changes;
   }
 
   function startRecording(
@@ -1071,6 +1114,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
     applyCompareSlot,
     exportTypeScript,
     applySource,
+    pendingLiteralChanges,
     startRecording,
     stopRecording,
     clearRecording
