@@ -22,7 +22,10 @@ interface AnimationInspectorProps {
   controls: AnimationInspectorControl[];
   /** Spring curve to draw above the parameters; undefined for timing, or when a spring control draws its own. */
   springPreview?: SpringValue;
-  session: Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger" | "applySource">;
+  session: Pick<
+    PanelSession,
+    "setValue" | "commitValue" | "fireTrigger" | "applySource" | "pendingLiteralChanges"
+  >;
   theme: "light" | "dark";
 }
 
@@ -59,7 +62,7 @@ export function AnimationInspector({
   ].join(" · ");
   const source = animation.source;
   // RFC 0007: parameters tuned away from the literal in source can be written back.
-  const applyGroups = literalApplyGroups(controls);
+  const applyGroups = literalApplyGroups(controls, session.pendingLiteralChanges());
 
   return (
     <div className="animation-inspector">

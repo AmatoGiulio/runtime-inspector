@@ -849,21 +849,24 @@ describe("animation literal write-back helpers (RFC 0007)", () => {
     };
   }
 
-  it("groups only changed, live, literal-anchored sliders by schema", () => {
+  it("groups the entries the session lists as pending, by schema", () => {
+    const entries = [
+      { schemaId: "auto", control: slider("duration", 380) },
+      { schemaId: "auto", control: slider("delay", 0) },
+      { schemaId: "auto", control: slider("anchored", 5, false) },
+      { schemaId: "other", control: slider("delay", 0) }
+    ];
     expect(
-      literalApplyGroups([
-        { schemaId: "auto", control: slider("duration", 380), value: 420 },
-        { schemaId: "auto", control: slider("delay", 0), value: undefined },
-        { schemaId: "auto", control: slider("mass", 1), value: 1 },
-        { schemaId: "auto", control: slider("anchored", 5, false), value: 9 },
-        { schemaId: "auto", control: slider("stale", 0), value: 40, disabled: true },
-        { schemaId: "other", control: slider("delay", 0), value: 120 }
+      literalApplyGroups(entries, [
+        { schemaId: "auto", controlId: "duration" },
+        { schemaId: "other", controlId: "delay" },
+        { schemaId: "auto", controlId: "elsewhere" }
       ])
     ).toEqual([
       { schemaId: "auto", controlIds: ["duration"] },
       { schemaId: "other", controlIds: ["delay"] }
     ]);
-    expect(literalApplyGroups([{ schemaId: "auto", control: slider("d", 380), value: 380 }])).toEqual([]);
+    expect(literalApplyGroups(entries, [])).toEqual([]);
   });
 
   it("groups control ids by schema without duplicates", () => {

@@ -149,6 +149,12 @@ function pendingKey(schemaId: string, controlId: string): string {
   return `${schemaId}:${controlId}`;
 }
 
+interface LiteralWrite {
+  from: number;
+  to: number;
+  applied: boolean;
+}
+
 /** A tuned animation literal not yet written back to source (RFC 0007). */
 export interface PendingLiteralChange {
   schemaId: string;
@@ -213,6 +219,13 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
   const listeners = new Set<() => void>();
   const schemasById = new Map<string, PanelSchema>();
+  /**
+   * RFC 0007: literal values sent through `applySource`, keyed by schema and
+   * control. Marked applied on an ok result, so `pendingLiteralChanges` does
+   * not list a change already written while the control still carries the old
+   * literal as its default (it re-registers only when the animation next runs).
+   */
+  const literalWritesByKey = new Map<string, LiteralWrite>();
   const pendingPatches = new Map<string, PendingPatch>();
   const sceneTimers = new Map<string, ReturnType<typeof setTimeout>>();
   let recordingCounter = 0;
@@ -757,6 +770,17 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
   }
 
   function applySourceResult(message: SourceApplyResult) {
+    for (const entry of message.results) {
+      const key = pendingKey(message.schemaId, entry.controlId);
+      const write = literalWritesByKey.get(key);
+      if (!write) continue;
+      if (entry.ok) {
+        write.applied = true;
+      } else {
+        literalWritesByKey.delete(key);
+      }
+    }
+
     const expressionMismatch = message.results.find(
       (entry): entry is Extract<SourceApplyResultEntry, { ok: false }> =>
         !entry.ok && entry.code === "EXPRESSION_MISMATCH"
@@ -979,6 +1003,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
     const schemaValues = state.values[schemaId] ?? {};
     const requests: SourceApplyRequest[] = [];
+    const literalWrites: Array<[string, LiteralWrite]> = [];
 
     for (const control of candidateControls) {
       if (!isValueControl(control)) continue;
@@ -987,6 +1012,12 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
         // RFC 0007: animation literals are always sliders.
         if (control.kind !== "slider") continue;
         requests.push({ controlId: control.id, kind: control.kind, literal: control.literal, value });
+        if (typeof value === "number") {
+          literalWrites.push([
+            pendingKey(schemaId, control.id),
+            { from: control.defaultValue, to: value, applied: false }
+          ]);
+        }
         continue;
       }
       if (!control.source) continue;
@@ -1000,6 +1031,7 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
 
     if (requests.length === 0) return;
 
+    for (const [key, write] of literalWrites) literalWritesByKey.set(key, write);
     send({
       type: "source.apply",
       schemaId,
@@ -1015,8 +1047,16 @@ export function createPanelSession(options: CreatePanelSessionOptions): PanelSes
       const schemaValues = state.values[schema.id] ?? {};
       for (const control of controlsByIdForSchema(schema).values()) {
         if (control.kind !== "slider" || !control.literal) continue;
+        const key = pendingKey(schema.id, control.id);
+        const write = literalWritesByKey.get(key);
+        if (write && write.from !== control.defaultValue) {
+          // The control re-registered with the new literal: the record has served its purpose.
+          literalWritesByKey.delete(key);
+        }
         const current = schemaValues[control.id] ?? control.value ?? control.defaultValue;
         if (typeof current !== "number" || current === control.defaultValue) continue;
+        // Written to source; the control keeps its old default until the animation runs again.
+        if (write?.applied && write.from === control.defaultValue && write.to === current) continue;
         changes.push({
           schemaId: schema.id,
           controlId: control.id,

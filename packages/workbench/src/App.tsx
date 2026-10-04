@@ -705,10 +705,14 @@ function App() {
   };
   /** Forwards to the real session; a commit also restores the selection and replays once. */
   const animationSession = useMemo<
-    Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger" | "applySource">
+    Pick<
+      PanelSession,
+      "setValue" | "commitValue" | "fireTrigger" | "applySource" | "pendingLiteralChanges"
+    >
   >(
     () => ({
       applySource: (schemaId, controlIds) => session.applySource(schemaId, controlIds),
+      pendingLiteralChanges: (schemaId) => session.pendingLiteralChanges(schemaId),
       setValue: (schemaId, controlId, value) =>
         session.setValue(schemaId, controlId, value),
       fireTrigger: (schemaId, controlId) =>

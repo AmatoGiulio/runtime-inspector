@@ -590,6 +590,94 @@ describe("animation literal write-back (RFC 0007)", () => {
     expect(session.pendingLiteralChanges()).toEqual([]);
   });
 
+  function appliedSession() {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, autoSchema);
+    session.setValue("auto", "duration", 420);
+    session.applySource("auto", ["duration"]);
+    return { session, socket };
+  }
+
+  it("hides a change once the workspace wrote it", () => {
+    const { session, socket } = appliedSession();
+    expect(session.pendingLiteralChanges()).toHaveLength(1);
+
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "auto",
+      results: [{ controlId: "duration", ok: true, written: "420", previous: "380" }]
+    });
+
+    expect(session.pendingLiteralChanges()).toEqual([]);
+  });
+
+  it("keeps a change listed after a failed result", () => {
+    const { session, socket } = appliedSession();
+
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "auto",
+      results: [{ controlId: "duration", ok: false, code: "EXPRESSION_MISMATCH" }]
+    });
+
+    expect(session.pendingLiteralChanges()).toEqual([
+      { schemaId: "auto", controlId: "duration", label: "titleY duration", from: 380, to: 420 }
+    ]);
+  });
+
+  it("lists the control again when it is dragged to another value after the write", () => {
+    const { session, socket } = appliedSession();
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "auto",
+      results: [{ controlId: "duration", ok: true, written: "420", previous: "380" }]
+    });
+
+    session.setValue("auto", "duration", 500);
+
+    expect(session.pendingLiteralChanges()).toEqual([
+      { schemaId: "auto", controlId: "duration", label: "titleY duration", from: 380, to: 500 }
+    ]);
+  });
+
+  it("drops the record once the control re-registers with the new literal", () => {
+    const { session, socket } = appliedSession();
+    socket.receive({
+      type: "source.applyResult",
+      schemaId: "auto",
+      results: [{ controlId: "duration", ok: true, written: "420", previous: "380" }]
+    });
+    const withDefault = (defaultValue: number): PanelSchema => ({
+      ...autoSchema,
+      groups: [
+        {
+          ...autoSchema.groups[0],
+          controls: autoSchema.groups[0].controls.map((control) =>
+            control.id === "duration" && control.kind === "slider"
+              ? { ...control, defaultValue, literal: { ...durationLiteral, init: String(defaultValue) } }
+              : control
+          )
+        }
+      ]
+    });
+
+    // Re-registered at 420: nothing pending, and the record is gone.
+    publishSchema(socket, withDefault(420));
+    expect(session.pendingLiteralChanges()).toEqual([]);
+    session.setValue("auto", "duration", 500);
+    expect(session.pendingLiteralChanges()).toHaveLength(1);
+
+    // A later change back to 380 is a real change from the new literal 420, not the old record.
+    session.setValue("auto", "duration", 380);
+    publishSchema(socket, withDefault(420));
+    session.setValue("auto", "duration", 380);
+    expect(session.pendingLiteralChanges()).toEqual([
+      { schemaId: "auto", controlId: "duration", label: "titleY duration", from: 420, to: 380 }
+    ]);
+  });
+
   it("skips stale schemas", () => {
     const { session } = createSession();
     session.connect();

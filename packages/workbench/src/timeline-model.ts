@@ -561,27 +561,19 @@ export function resizedFromStart(input: {
 }
 
 /**
- * RFC 0007: the literal-anchored controls among `entries` whose current value
- * differs from their default (the literal in source), grouped by schema for
- * `session.applySource`. Disabled (stale) entries are left out.
+ * RFC 0007: the controls among `entries` that the session lists as pending
+ * literal changes, grouped by schema for `session.applySource`. The session's
+ * list is the single source of truth, so the Inspector and the timeline
+ * toolbar agree (stale schemas and changes already written are left out there).
  */
 export function literalApplyGroups(
-  entries: ReadonlyArray<{
-    schemaId: string;
-    control: InspectorControl;
-    value: unknown;
-    disabled?: boolean;
-  }>
+  entries: ReadonlyArray<{ schemaId: string; control: InspectorControl }>,
+  pending: ReadonlyArray<{ schemaId: string; controlId: string }>
 ): Array<{ schemaId: string; controlIds: string[] }> {
+  const pendingKeys = new Set(pending.map((change) => `${change.schemaId}\u0000${change.controlId}`));
   return groupControlIdsBySchema(
     entries
-      .filter((entry) => {
-        if (entry.disabled || entry.control.kind !== "slider" || !entry.control.literal) {
-          return false;
-        }
-        const current = entry.value ?? entry.control.value ?? entry.control.defaultValue;
-        return current !== entry.control.defaultValue;
-      })
+      .filter((entry) => pendingKeys.has(`${entry.schemaId}\u0000${entry.control.id}`))
       .map((entry) => ({ schemaId: entry.schemaId, controlId: entry.control.id }))
   );
 }
