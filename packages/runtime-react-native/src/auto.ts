@@ -2,6 +2,7 @@ import type {
   BezierControl,
   ColorControl,
   InspectorControl,
+  LiteralAnchor,
   PanelSchema,
   SliderControl,
   SourceAnchor,
@@ -41,6 +42,9 @@ export interface InspectMeta {
    * as-is onto the published control's `source` field; not validated here (the schema's Zod
    * validates on publish). */
   source?: SourceAnchor;
+  /** Animation literal anchor emitted by the babel plugin (RFC 0007). Forwarded as-is onto
+   * the published control's `literal` field, like `source`. */
+  literal?: LiteralAnchor;
 }
 
 /** Registration mode: "replace" (lifecycle-less, e.g. __riInspect) overwrites its own prior
@@ -290,7 +294,10 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
   const label = meta.label ?? deriveLabel(name);
   const value = sharedValue.value;
   const kind = inferKindFromValue(value);
-  const sourceField = meta.source !== undefined ? { source: meta.source } : {};
+  const sourceField = {
+    ...(meta.source !== undefined ? { source: meta.source } : {}),
+    ...(meta.literal !== undefined ? { literal: meta.literal } : {})
+  };
 
   if (!kind) {
     warnDev(

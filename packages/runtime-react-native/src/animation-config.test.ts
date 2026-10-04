@@ -614,3 +614,93 @@ describe("__riObserveAnimation start reporting (RFC 0005 3c)", () => {
     expect("startDelayMs" in emitted[1]).toBe(false);
   });
 });
+
+describe("literal anchors (RFC 0007)", () => {
+  const literalBase = {
+    file: "src/WelcomeDemo.tsx",
+    line: 41,
+    column: 4,
+    enclosure: ["WelcomeDemo", "play"],
+    target: "titleY.value",
+    callee: "withTiming" as const
+  };
+
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    const { __resetAnimationConfigForTests } = await import("./animation-config");
+    const { __resetAnimationStartStateForTests } = await import("./animation-start-state");
+    const { __resetAutoRegistryForTests } = await import("./auto");
+    __resetAnimationConfigForTests();
+    __resetAnimationStartStateForTests();
+    __resetAutoRegistryForTests();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("copies the literal of every helper's binding onto its control", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riAnimationConfig, __riAnimationDelay, __riAnimationStart } = await import(
+      "./animation-config"
+    );
+    const durationLiteral = { ...literalBase, parameter: "duration" as const, init: "380" };
+    const delayLiteral = { ...literalBase, parameter: "delay" as const, init: "140" };
+    const startLiteral = {
+      ...literalBase,
+      line: 42,
+      target: "logo.value",
+      parameter: "delay" as const,
+      init: null
+    };
+
+    __riAnimationConfig({ duration: 380 }, [
+      durationBinding({ controlId: "duration", declared: 380, literal: durationLiteral })
+    ]);
+    __riAnimationDelay(140, {
+      callsiteId: "titleY",
+      controlId: "delay",
+      label: "titleY delay",
+      declared: 140,
+      min: 0,
+      max: 10000,
+      literal: delayLiteral
+    });
+    __riAnimationStart(
+      {},
+      {
+        callsiteId: "logo",
+        controlId: "start",
+        label: "logo delay",
+        declared: 0,
+        min: 0,
+        max: 10000,
+        literal: startLiteral
+      },
+      vi.fn()
+    );
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, "duration")).toMatchObject({ literal: durationLiteral });
+    expect(controlById(schema, "delay")).toMatchObject({ literal: delayLiteral });
+    expect(controlById(schema, "start")).toMatchObject({ literal: startLiteral });
+    expect(controlById(schema, "duration")).not.toHaveProperty("source");
+  });
+
+  it("publishes no literal field for a binding without one", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riAnimationConfig } = await import("./animation-config");
+
+    __riAnimationConfig({ duration: 260 }, [durationBinding()]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(controlById(schema, CONTROL_ID)).not.toHaveProperty("literal");
+  });
+});

@@ -1,3 +1,4 @@
+import type { LiteralAnchor } from "@runtime-inspector/protocol";
 import { recordAppliedStartDelay } from "./animation-start-state";
 import { registerRuntimeValue } from "./auto";
 
@@ -13,6 +14,8 @@ export interface RuntimeAnimationConfigBinding {
   max: number;
   step?: number;
   unit?: string;
+  /** Literal anchor for write-back (RFC 0007), copied onto the control. */
+  literal?: LiteralAnchor;
 }
 
 /** The slider a call site's delay is backed by (RFC 0005 §3c). */
@@ -25,6 +28,8 @@ export interface RuntimeAnimationStartBinding {
   max?: number;
   step?: number;
   unit?: string;
+  /** Literal anchor for write-back (RFC 0007), copied onto the control. */
+  literal?: LiteralAnchor;
 }
 
 /** Binding for `__riAnimationStart`: the control is always present and declared is 0. */
@@ -37,6 +42,8 @@ export interface RuntimeAnimationStartWrapBinding {
   max: number;
   step?: number;
   unit?: string;
+  /** Literal anchor for write-back (RFC 0007), copied onto the control. */
+  literal?: LiteralAnchor;
 }
 
 interface HolderBinding {
@@ -47,6 +54,8 @@ interface HolderBinding {
   max: number;
   step?: number;
   unit?: string;
+  /** Literal anchor for write-back (RFC 0007), copied onto the control. */
+  literal?: LiteralAnchor;
 }
 
 interface ConfigControlEntry {
@@ -128,7 +137,8 @@ function ensureHolder(binding: HolderBinding): { value: number } {
         max: binding.max,
         step: binding.step,
         unit: binding.unit,
-        label: binding.label
+        label: binding.label,
+        ...(binding.literal !== undefined ? { literal: binding.literal } : {})
       },
       target: binding.declared
     },
@@ -167,7 +177,8 @@ export function __riAnimationDelay<T>(delay: T, binding: RuntimeAnimationStartBi
         min: binding.min ?? 0,
         max: binding.max ?? 10000,
         step: binding.step,
-        unit: binding.unit
+        unit: binding.unit,
+        literal: binding.literal
       });
       const value = holder.value;
       if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value !== binding.declared) {
