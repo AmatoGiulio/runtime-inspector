@@ -1,5 +1,10 @@
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
-import type { PanelSchema } from "@runtime-inspector/protocol";
+import type {
+  InspectorControl,
+  PanelSchema,
+  SourceApplyErrorCode,
+  SourceApplyResultEntry
+} from "@runtime-inspector/protocol";
 
 export interface AnimationRow {
   animation: RuntimeAnimationTrace;
@@ -553,4 +558,65 @@ export function resizedFromStart(input: {
   }
 
   return { delay, duration };
+}
+
+/**
+ * RFC 0007: the literal-anchored controls among `entries` whose current value
+ * differs from their default (the literal in source), grouped by schema for
+ * `session.applySource`. Disabled (stale) entries are left out.
+ */
+export function literalApplyGroups(
+  entries: ReadonlyArray<{
+    schemaId: string;
+    control: InspectorControl;
+    value: unknown;
+    disabled?: boolean;
+  }>
+): Array<{ schemaId: string; controlIds: string[] }> {
+  return groupControlIdsBySchema(
+    entries
+      .filter((entry) => {
+        if (entry.disabled || entry.control.kind !== "slider" || !entry.control.literal) {
+          return false;
+        }
+        const current = entry.value ?? entry.control.value ?? entry.control.defaultValue;
+        return current !== entry.control.defaultValue;
+      })
+      .map((entry) => ({ schemaId: entry.schemaId, controlId: entry.control.id }))
+  );
+}
+
+/** Control ids grouped by schema, in first-seen order. */
+export function groupControlIdsBySchema(
+  items: ReadonlyArray<{ schemaId: string; controlId: string }>
+): Array<{ schemaId: string; controlIds: string[] }> {
+  const groups = new Map<string, string[]>();
+  for (const { schemaId, controlId } of items) {
+    const ids = groups.get(schemaId) ?? [];
+    if (!ids.includes(controlId)) ids.push(controlId);
+    groups.set(schemaId, ids);
+  }
+  return Array.from(groups, ([schemaId, controlIds]) => ({ schemaId, controlIds }));
+}
+
+const APPLY_FAILURE_TEXT: Record<SourceApplyErrorCode, string> = {
+  PARSE_FAILURE: "The file no longer parses — fix it and try again",
+  DECLARATION_MISSING: "The code was not found in the file",
+  DECLARATION_MOVED: "The code moved in the file — reload the app and try again",
+  DECLARATION_AMBIGUOUS: "The code appears more than once in the file",
+  EXPRESSION_MISMATCH: "The file changed since the app was built — reload the app and try again",
+  WRITE_FAILURE: "The file could not be written"
+};
+
+/** The notice shown after a `source.applyResult`. */
+export function applyResultNotice(results: readonly SourceApplyResultEntry[]): string {
+  const applied = results.filter((result) => result.ok).length;
+  const failure = results.find(
+    (result): result is Extract<SourceApplyResultEntry, { ok: false }> => !result.ok
+  );
+  if (!failure) {
+    return `Applied ${applied} ${applied === 1 ? "change" : "changes"} to code`;
+  }
+  const reason = APPLY_FAILURE_TEXT[failure.code] ?? "The change could not be applied";
+  return applied > 0 ? `Applied ${applied} of ${results.length} changes. ${reason}` : reason;
 }

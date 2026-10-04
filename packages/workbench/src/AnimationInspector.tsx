@@ -5,7 +5,7 @@ import type {
 import type { InspectorControl, SpringValue } from "@runtime-inspector/protocol";
 import { InspectorControlRow, SpringPreview } from "@runtime-inspector/panel-dialkit";
 import { DialKitScope } from "./DialKitScope";
-import { splitAnimationTarget } from "./timeline-model";
+import { literalApplyGroups, splitAnimationTarget } from "./timeline-model";
 
 export interface AnimationInspectorControl {
   key: string;
@@ -22,7 +22,7 @@ interface AnimationInspectorProps {
   controls: AnimationInspectorControl[];
   /** Spring curve to draw above the parameters; undefined for timing, or when a spring control draws its own. */
   springPreview?: SpringValue;
-  session: Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger">;
+  session: Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger" | "applySource">;
   theme: "light" | "dark";
 }
 
@@ -58,6 +58,8 @@ export function AnimationInspector({
       : [])
   ].join(" · ");
   const source = animation.source;
+  // RFC 0007: parameters tuned away from the literal in source can be written back.
+  const applyGroups = literalApplyGroups(controls);
 
   return (
     <div className="animation-inspector">
@@ -91,6 +93,19 @@ export function AnimationInspector({
           </DialKitScope>
           {controls.length > 0 ? (
             <div className="animation-inspector-note">Applies on the next replay.</div>
+          ) : null}
+          {applyGroups.length > 0 ? (
+            <button
+              type="button"
+              className="wb-button secondary animation-inspector-apply"
+              onClick={() => {
+                for (const group of applyGroups) {
+                  session.applySource(group.schemaId, group.controlIds);
+                }
+              }}
+            >
+              Apply to code
+            </button>
           ) : null}
         </div>
       ) : null}

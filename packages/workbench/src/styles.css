@@ -1762,3 +1762,7 @@ button {
   font: var(--wb-type-small);
   line-height: 1.45;
 }
+
+.wb-button.animation-inspector-apply {
+  margin-top: 10px;
+}

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RuntimeAnimationTrace } from "@runtime-inspector/panel-core";
-import type { PanelSchema } from "@runtime-inspector/protocol";
+import type { InspectorControl, PanelSchema } from "@runtime-inspector/protocol";
 import {
   PENDING_PREVIEW_TTL_MS,
   animationKeys,
   animationsSince,
+  applyResultNotice,
+  groupControlIdsBySchema,
+  literalApplyGroups,
   mergeBurst,
   type PendingPreview,
   buildTimelineModel,
@@ -819,5 +822,83 @@ describe("resizedFromStart", () => {
         deltaMs: 5
       })
     ).toEqual({ delay: 20, duration: 110 });
+  });
+});
+
+describe("animation literal write-back helpers (RFC 0007)", () => {
+  const literal = {
+    file: "src/WelcomeDemo.tsx",
+    line: 41,
+    column: 4,
+    enclosure: ["WelcomeDemo", "play"],
+    target: "titleY.value",
+    callee: "withTiming" as const,
+    parameter: "duration" as const,
+    init: "380"
+  };
+
+  function slider(id: string, defaultValue: number, withLiteral = true): InspectorControl {
+    return {
+      id,
+      kind: "slider",
+      label: id,
+      defaultValue,
+      min: 0,
+      max: 10000,
+      ...(withLiteral ? { literal } : {})
+    };
+  }
+
+  it("groups only changed, live, literal-anchored sliders by schema", () => {
+    expect(
+      literalApplyGroups([
+        { schemaId: "auto", control: slider("duration", 380), value: 420 },
+        { schemaId: "auto", control: slider("delay", 0), value: undefined },
+        { schemaId: "auto", control: slider("mass", 1), value: 1 },
+        { schemaId: "auto", control: slider("anchored", 5, false), value: 9 },
+        { schemaId: "auto", control: slider("stale", 0), value: 40, disabled: true },
+        { schemaId: "other", control: slider("delay", 0), value: 120 }
+      ])
+    ).toEqual([
+      { schemaId: "auto", controlIds: ["duration"] },
+      { schemaId: "other", controlIds: ["delay"] }
+    ]);
+    expect(literalApplyGroups([{ schemaId: "auto", control: slider("d", 380), value: 380 }])).toEqual([]);
+  });
+
+  it("groups control ids by schema without duplicates", () => {
+    expect(
+      groupControlIdsBySchema([
+        { schemaId: "a", controlId: "x" },
+        { schemaId: "b", controlId: "y" },
+        { schemaId: "a", controlId: "x" },
+        { schemaId: "a", controlId: "z" }
+      ])
+    ).toEqual([
+      { schemaId: "a", controlIds: ["x", "z"] },
+      { schemaId: "b", controlIds: ["y"] }
+    ]);
+  });
+
+  it("words the apply result notice", () => {
+    expect(applyResultNotice([{ controlId: "a", ok: true, written: "1", previous: "0" }])).toBe(
+      "Applied 1 change to code"
+    );
+    expect(
+      applyResultNotice([
+        { controlId: "a", ok: true, written: "1", previous: "0" },
+        { controlId: "b", ok: true, written: "2", previous: "0" }
+      ])
+    ).toBe("Applied 2 changes to code");
+    expect(applyResultNotice([{ controlId: "a", ok: false, code: "EXPRESSION_MISMATCH" }])).toBe(
+      "The file changed since the app was built — reload the app and try again"
+    );
+    expect(
+      applyResultNotice([
+        { controlId: "a", ok: true, written: "1", previous: "0" },
+        { controlId: "b", ok: false, code: "DECLARATION_MISSING" },
+        { controlId: "c", ok: false, code: "EXPRESSION_MISMATCH" }
+      ])
+    ).toBe("Applied 1 of 3 changes. The code was not found in the file");
   });
 });

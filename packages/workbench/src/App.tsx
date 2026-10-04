@@ -31,8 +31,10 @@ import { AnimationTimeline } from "./AnimationTimeline";
 import { ScenesPanel } from "./ScenesPanel";
 import {
   animationsSince,
+  applyResultNotice,
   buildTimelineModel,
   clamp,
+  groupControlIdsBySchema,
   latestAnimationBurst,
   mergeBurst,
   nextStickyDuration,
@@ -101,6 +103,8 @@ function App() {
   const { choice: themeChoice, resolved: resolvedTheme, cycle: cycleTheme } = useWorkbenchTheme();
   const themeLabel = themeChoiceLabel(themeChoice);
   const state = useSyncExternalStore(session.subscribe, session.getState);
+  // RFC 0007: tuned animation literals not yet written back, across every schema.
+  const pendingLiteralChanges = session.pendingLiteralChanges();
   // The Controls tab (and its automatic first selection) never lists the reserved scenes schema.
   const schemaIds = useMemo(
     () =>
@@ -701,9 +705,10 @@ function App() {
   };
   /** Forwards to the real session; a commit also restores the selection and replays once. */
   const animationSession = useMemo<
-    Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger">
+    Pick<PanelSession, "setValue" | "commitValue" | "fireTrigger" | "applySource">
   >(
     () => ({
+      applySource: (schemaId, controlIds) => session.applySource(schemaId, controlIds),
       setValue: (schemaId, controlId, value) =>
         session.setValue(schemaId, controlId, value),
       fireTrigger: (schemaId, controlId) =>
@@ -795,6 +800,12 @@ function App() {
   useEffect(() => {
     if (!scenesStale) setWorkbenchNotice(undefined);
   }, [scenesStale]);
+
+  // RFC 0004/0007: say what "Apply to code" did once the workspace answers.
+  const lastApplyResult = state.lastApplyResult;
+  useEffect(() => {
+    if (lastApplyResult) setWorkbenchNotice(applyResultNotice(lastApplyResult.results));
+  }, [lastApplyResult]);
 
   useEffect(
     () => () => {
@@ -1717,6 +1728,20 @@ function App() {
                   ? `${displayedAnimations.length} animations`
                   : "No interaction"}
           </div>
+          {pendingLiteralChanges.length > 0 ? (
+            <button
+              className="wb-button secondary"
+              type="button"
+              onClick={() => {
+                for (const group of groupControlIdsBySchema(pendingLiteralChanges)) {
+                  session.applySource(group.schemaId, group.controlIds);
+                }
+              }}
+            >
+              Apply {pendingLiteralChanges.length}{" "}
+              {pendingLiteralChanges.length === 1 ? "change" : "changes"}
+            </button>
+          ) : null}
           <details className="timeline-dev">
             <summary className="wb-button secondary">Developer</summary>
             <div className="timeline-dev-menu">
