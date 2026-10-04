@@ -148,6 +148,23 @@ Every non-`trigger` control may carry an optional `source: SourceAnchor` field *
 
 `file` is relative to the Babel root/cwd; `line`/`column` are a tiebreaker only, never trusted offsets — re-location always re-parses the current file. `enclosure` is the enclosing function/component chain, outermost first. `init` is the exact source text of the original initializer argument, used as the safety check before overwriting (see `source.apply` below). A control without a `source` field simply has no anchor: panels show no "Apply to code" affordance for it. Panels that predate this field ignore it (tolerant reader).
 
+A slider control may instead carry an optional `literal: LiteralAnchor` field *(since RFC 0007, additive)*: the anchor of a numeric literal inside a discovered animation assignment. Only the `auto` schema sliders registered for animation parameters (timing `duration`, spring `damping` / `stiffness` / `mass`, start `delay`) carry it. A control carries at most one of `source` and `literal`; a control with both is rejected.
+
+```json
+"literal": {
+  "file": "src/WelcomeDemo.tsx",
+  "line": 41,
+  "column": 4,
+  "enclosure": ["WelcomeDemo", "play"],
+  "target": "titleY.value",
+  "callee": "withTiming",
+  "parameter": "duration",
+  "init": "380"
+}
+```
+
+`line`/`column` are the start of the assignment (tiebreaker only). `target` is the assignment's left-hand source text, `callee` is `withTiming` or `withSpring`, and `parameter` is one of `duration | damping | stiffness | mass | delay`. `init` is the literal's source text as built; it is `null` only for `delay` on a bare call (no `withDelay` in source), where writing a delay wraps the call. See [RFC 0007](../rfcs/0007-animation-literal-write-back.md).
+
 A `trigger` control may carry an optional `scene: SceneDescriptor` field *(since RFC 0006, additive)*: `{ url?: string, active: boolean, reachable: boolean }`. It marks the trigger as a **scene**; the runtime sets it only on the triggers of the reserved schema with id `scenes` (title `Scenes`), which it publishes for scenes the way it publishes Runtime Values in the reserved `auto` schema. `url`, when present, is a non-empty string; `active` and `reachable` are required inside `scene`. See [Scenes](#scenes-rfc-0006) below and [RFC 0006](../rfcs/0006-scenes.md).
 
 ### `schema.dispose`
@@ -453,6 +470,22 @@ Known codes today: `INVALID_MESSAGE`, `VERSION_MISMATCH`, `UNAUTHORIZED`.
 
 Each request carries `kind: SerializableControlKind` — the control's kind (`slider | toggle | color | bezier | spring`), needed by the workspace to call `serializeValueExpression(kind, value)`. `trigger` is excluded: a trigger has no value expression to write back, and the panel never offers "Apply to code" for one.
 
+*(Since RFC 0007, additive.)* A request carries exactly one of `anchor` (a `SourceAnchor`, RFC 0004) and `literal` (a `LiteralAnchor`, see the control fields above). With `literal`, `kind` must be `slider` and `value` a finite number; the workspace writes it with `String(value)`, never rounding or clamping. Anchor and literal requests may be mixed in one message.
+
+```json
+{
+  "controlId": "src/WelcomeDemo.tsx:41:4:timing:titleY:delay",
+  "kind": "slider",
+  "value": 180,
+  "literal": {
+    "file": "src/WelcomeDemo.tsx", "line": 41, "column": 4, "enclosure": ["WelcomeDemo", "play"],
+    "target": "titleY.value", "callee": "withTiming", "parameter": "delay", "init": "140"
+  }
+}
+```
+
+The workspace re-parses the file and looks for an `=` assignment whose left-hand text equals `target` (whitespace-insensitive), inside the `enclosure` chain, whose right side is `callee(...)` or `withDelay(<arg>, callee(...))`; line/column break ties. A `duration` / `damping` / `stiffness` / `mass` literal is the matching plain property of the animation call's object-literal config; a `delay` literal is the first argument of `withDelay`. A delay on a bare call (`init: null`) wraps the right side in `withDelay(<value>, …)`, reusing an existing `withDelay` import from `react-native-reanimated` (or the callee's object for a member callee such as `Reanimated.withTiming`), or adding the specifier to the first value import of that module; a delay of `0` on a bare call writes nothing and reports `written: "0"`, `previous: "0"`.
+
 ### `source.applyResult`
 
 *(Since RFC 0004, additive.)* Sent by a `workspace` client back to `panel` clients (family: Event) with a per-request outcome for a `source.apply`.
@@ -482,6 +515,8 @@ Each result entry is either `{ controlId, ok: true, written, previous }` (the ne
 | `WRITE_FAILURE` | filesystem error |
 
 `EXPRESSION_MISMATCH` is the load-bearing guard: the workspace only replaces an expression it can prove is the one the running app was built from. A hot-reload after the edit republishes the schema with a fresh anchor, clearing the mismatch naturally.
+
+For `literal` requests the same codes apply with these meanings: `DECLARATION_MISSING` — no assignment with this target, callee and enclosure, the parameter is no longer a numeric literal there, or a delay wrap has no `react-native-reanimated` value import to extend; `DECLARATION_MOVED` / `DECLARATION_AMBIGUOUS` — as above, for assignments; `EXPRESSION_MISMATCH` — the literal text differs from `init`, or a bare call now has a `withDelay` (or a delayed call is now bare).
 
 ## Broker rules
 

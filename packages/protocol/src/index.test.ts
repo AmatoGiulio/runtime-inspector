@@ -691,3 +691,80 @@ describe("scenes protocol (RFC 0006)", () => {
     }
   });
 });
+
+describe("animation literal anchors (RFC 0007)", () => {
+  const literal = {
+    file: "src/WelcomeDemo.tsx",
+    line: 41,
+    column: 4,
+    enclosure: ["WelcomeDemo", "play"],
+    target: "titleY.value",
+    callee: "withTiming",
+    parameter: "duration",
+    init: "380"
+  } as const;
+
+  function literalRequest(overrides: Record<string, unknown> = {}) {
+    return {
+      type: "source.apply",
+      schemaId: "auto",
+      requests: [
+        {
+          controlId: "src/WelcomeDemo.tsx:41:4:timing:titleY:duration",
+          kind: "slider",
+          value: 420,
+          literal,
+          ...overrides
+        }
+      ]
+    };
+  }
+
+  it("keeps literal on a slider control through parse", () => {
+    const schema = PanelSchemaSchema.parse({
+      id: "auto",
+      title: "Animations",
+      groups: [
+        {
+          id: "animations",
+          label: "Animations",
+          controls: [
+            {
+              id: "duration",
+              kind: "slider",
+              label: "Duration",
+              defaultValue: 380,
+              min: 0,
+              max: 2000,
+              literal
+            }
+          ]
+        }
+      ]
+    });
+    expect(schema.groups[0].controls[0]).toMatchObject({ literal });
+  });
+
+  it("accepts a literal request, including a bare-call delay with init null", () => {
+    expect(() => parseRIPMessage(literalRequest())).not.toThrow();
+    expect(() =>
+      parseRIPMessage(literalRequest({ literal: { ...literal, parameter: "delay", init: null } }))
+    ).not.toThrow();
+  });
+
+  it("rejects a literal request whose value is not a finite number", () => {
+    expect(() => parseRIPMessage(literalRequest({ value: Number.NaN }))).toThrow();
+    expect(() => parseRIPMessage(literalRequest({ value: "420" }))).toThrow();
+    expect(safeParseRIPMessage(JSON.stringify(literalRequest({ value: null })))).toBeUndefined();
+  });
+
+  it("rejects malformed literal anchors", () => {
+    expect(() =>
+      parseRIPMessage(literalRequest({ literal: { ...literal, callee: "withDecay" } }))
+    ).toThrow();
+    expect(() =>
+      parseRIPMessage(literalRequest({ literal: { ...literal, parameter: "toValue" } }))
+    ).toThrow();
+    expect(() => parseRIPMessage(literalRequest({ literal: { ...literal, target: "" } }))).toThrow();
+  });
+});

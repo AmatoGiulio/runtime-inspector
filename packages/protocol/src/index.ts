@@ -48,6 +48,51 @@ export const SourceAnchorSchema = z.object({
   init: z.string()
 });
 
+export type AnimationLiteralParameter = "duration" | "damping" | "stiffness" | "mass" | "delay";
+
+/**
+ * Structural identity of a numeric literal inside a discovered animation
+ * assignment: file + enclosing function chain + assignment target text +
+ * animation callee + parameter key. Line/column of the assignment are only a
+ * tiebreaker. See rfcs/0007-animation-literal-write-back.md.
+ */
+export interface LiteralAnchor {
+  /** File relative to the Babel root, as in SourceAnchor. */
+  file: string;
+  /** Start of the assignment expression (tiebreaker only). */
+  line: number;
+  column: number;
+  /** Enclosing function/component names, outermost first. */
+  enclosure: string[];
+  /** Source text of the assignment target, e.g. "titleY.value". */
+  target: string;
+  /** The animation call inside the assignment. */
+  callee: "withTiming" | "withSpring";
+  parameter: AnimationLiteralParameter;
+  /**
+   * Source text of the literal as built. `null` only for `delay` on a bare call
+   * (no `withDelay` in source): writing a delay then wraps the call.
+   */
+  init: string | null;
+}
+
+export const LiteralAnchorSchema = z.object({
+  file: z.string().min(1),
+  line: z.number().int().min(1),
+  column: z.number().int().min(0),
+  enclosure: z.array(z.string()),
+  target: z.string().min(1),
+  callee: z.union([z.literal("withTiming"), z.literal("withSpring")]),
+  parameter: z.union([
+    z.literal("duration"),
+    z.literal("damping"),
+    z.literal("stiffness"),
+    z.literal("mass"),
+    z.literal("delay")
+  ]),
+  init: z.string().nullable()
+});
+
 export interface BaseControl<TKind extends string, TValue> {
   id: string;
   kind: TKind;
@@ -57,6 +102,8 @@ export interface BaseControl<TKind extends string, TValue> {
   value?: TValue;
   binding?: string;
   source?: SourceAnchor;
+  /** Animation literal anchor (RFC 0007). A control carries at most one of `source` and `literal`. */
+  literal?: LiteralAnchor;
 }
 
 export interface SliderControl extends BaseControl<"slider", number> {
@@ -200,12 +247,16 @@ export interface SchemaDispose {
  */
 export type SerializableControlKind = Exclude<ControlKind, "trigger">;
 
-export interface SourceApplyRequest {
+/**
+ * One write-back request: either a declaration anchor (RFC 0004) or an
+ * animation literal anchor (RFC 0007), never both. A literal request is
+ * always a slider with a finite number value.
+ */
+export type SourceApplyRequest = {
   controlId: string;
   kind: SerializableControlKind;
-  anchor: SourceAnchor;
   value: unknown;
-}
+} & ({ anchor: SourceAnchor; literal?: never } | { literal: LiteralAnchor; anchor?: never });
 
 export interface SourceApply {
   type: "source.apply";
@@ -472,7 +523,8 @@ const baseControlSchema = {
   label: z.string().min(1),
   description: z.string().optional(),
   binding: z.string().optional(),
-  source: SourceAnchorSchema.optional()
+  source: SourceAnchorSchema.optional(),
+  literal: LiteralAnchorSchema.optional()
 };
 
 const finiteNumberSchema = z.number().finite();
@@ -562,7 +614,17 @@ export const ControlGroupSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().optional(),
-  controls: z.array(InspectorControlSchema)
+  controls: z.array(
+    InspectorControlSchema.superRefine((control, ctx) => {
+      const anchors = control as { source?: unknown; literal?: unknown };
+      if (anchors.source !== undefined && anchors.literal !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a control carries at most one of source and literal"
+        });
+      }
+    })
+  )
 });
 
 export const PanelSchemaSchema = z.object({
@@ -629,12 +691,37 @@ const serializableControlKindSchema = z.union([
   z.literal("spring")
 ]);
 
-export const SourceApplyRequestSchema = z.object({
-  controlId: z.string().min(1),
-  kind: serializableControlKindSchema,
-  anchor: SourceAnchorSchema,
-  value: z.unknown()
-});
+export const SourceApplyRequestSchema = z
+  .object({
+    controlId: z.string().min(1),
+    kind: serializableControlKindSchema,
+    anchor: SourceAnchorSchema.optional(),
+    literal: LiteralAnchorSchema.optional(),
+    value: z.unknown()
+  })
+  .superRefine((request, ctx) => {
+    if ((request.anchor === undefined) === (request.literal === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "a source.apply request carries exactly one of anchor and literal"
+      });
+      return;
+    }
+    if (request.literal !== undefined) {
+      if (request.kind !== "slider") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a literal request must have kind slider"
+        });
+      }
+      if (typeof request.value !== "number" || !Number.isFinite(request.value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a literal request value must be a finite number"
+        });
+      }
+    }
+  });
 
 export const SourceApplySchema = z.object({
   type: z.literal("source.apply"),

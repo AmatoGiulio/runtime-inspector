@@ -1,0 +1,11 @@
+{
+  "type": "source.apply",
+  "schemaId": "auto",
+  "requests": [
+    {
+      "controlId": "moveX",
+      "kind": "slider",
+      "value": 42
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "type": "source.apply",
+  "schemaId": "auto",
+  "requests": [
+    {
+      "controlId": "moveX",
+      "kind": "slider",
+      "value": 42,
+      "anchor": {
+        "file": "src/Card.tsx",
+        "line": 42,
+        "column": 8,
+        "enclosure": [
+          "Card"
+        ],
+        "name": "moveX",
+        "init": "0"
+      },
+      "literal": {
+        "file": "src/WelcomeDemo.tsx",
+        "line": 41,
+        "column": 4,
+        "enclosure": [
+          "WelcomeDemo",
+          "play"
+        ],
+        "target": "titleY.value",
+        "callee": "withTiming",
+        "parameter": "duration",
+        "init": "380"
+      }
+    }
+  ]
+}

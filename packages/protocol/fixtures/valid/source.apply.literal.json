@@ -1,0 +1,24 @@
+{
+  "type": "source.apply",
+  "schemaId": "auto",
+  "requests": [
+    {
+      "controlId": "src/WelcomeDemo.tsx:41:4:timing:titleY:delay",
+      "kind": "slider",
+      "value": 180,
+      "literal": {
+        "file": "src/WelcomeDemo.tsx",
+        "line": 41,
+        "column": 4,
+        "enclosure": [
+          "WelcomeDemo",
+          "play"
+        ],
+        "target": "titleY.value",
+        "callee": "withTiming",
+        "parameter": "delay",
+        "init": "140"
+      }
+    }
+  ]
+}

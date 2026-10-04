@@ -1,0 +1,38 @@
+{
+  "type": "schema.publish",
+  "schema": {
+    "id": "auto",
+    "title": "Animations",
+    "groups": [
+      {
+        "id": "animations",
+        "label": "Animations",
+        "controls": [
+          {
+            "id": "src/WelcomeDemo.tsx:41:4:timing:titleY:duration",
+            "kind": "slider",
+            "label": "titleY duration",
+            "defaultValue": 380,
+            "min": 0,
+            "max": 2000,
+            "step": 10,
+            "unit": "ms",
+            "literal": {
+              "file": "src/WelcomeDemo.tsx",
+              "line": 41,
+              "column": 4,
+              "enclosure": [
+                "WelcomeDemo",
+                "play"
+              ],
+              "target": "titleY.value",
+              "callee": "withTiming",
+              "parameter": "duration",
+              "init": "380"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
