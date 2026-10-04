@@ -468,7 +468,7 @@ Not done yet: opening an automatic scene whose screen is not showing (route infe
 
 ## Animation literal write-back — RFC 0007
 
-**Implemented on `feat/runtime-workbench-desktop`, covered by unit tests; NOT yet validated live** (no Simulator run of drag → Apply → Fast Refresh yet).
+**Implemented on `feat/runtime-workbench-desktop`; the timing-duration path was validated on the iOS Simulator on 2026-10-04.**
 
 - **Protocol (additive, RIP 0.3):** `LiteralAnchor` and an optional `literal` on controls (at most one of `source` / `literal`); a `source.apply` request carries exactly one of `anchor` / `literal`, and a literal request must be a `slider` with a finite number. Fixtures cover a control with `literal`, a literal request, and the invalid cases (both anchors, neither, non-slider literal, a control with both).
 - **Babel plugin:** every `__riAnimationConfig` binding and every delay binding with a control carries `literal` (assignment line/column/enclosure, left-hand text, callee, parameter, literal text; `init: null` for a bare call's delay).
@@ -477,4 +477,8 @@ Not done yet: opening an automatic scene whose screen is not showing (route infe
 - **panel-core:** `applySource` sends `literal` for literal-anchored controls; `pendingLiteralChanges()` lists tuned literals that differ from source.
 - **Workbench:** **Apply to code** in the Inspector of a selected animation, **Apply N changes** in the timeline toolbar, and a notice with the outcome.
 
-Not done yet: the end-to-end Simulator run from the RFC test plan (drag a block, Apply, the file changes, Fast Refresh, the change count returns to zero).
+Validated live (Expo Go, iPhone 17 Pro Max simulator, Workbench desktop): dragging the `cover · Opacity` block from 320 to 403 ms showed both Apply buttons; **Apply 1 change** rewrote only `duration: 320` → `duration: 403` in `ProductRevealDemo.tsx`, Fast Refresh reloaded the module, the notice read "Applied 1 change to code", the buttons disappeared, and the next Play kept the block at 403 ms with 403 as the new default.
+
+The example app loads `@runtime-inspector/babel-plugin` from `dist`: rebuild it (`pnpm --filter @runtime-inspector/babel-plugin build`) and restart Metro with `--clear` after plugin changes, or controls carry no `literal`.
+
+Not done yet: live runs of the spring keys, an existing `withDelay`, and the bare-call wrap (all covered by unit tests only).
