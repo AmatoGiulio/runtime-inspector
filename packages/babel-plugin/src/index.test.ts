@@ -31,6 +31,27 @@ function transformWithOpts(code: string, opts: Partial<TransformOptions>): strin
   return result.code;
 }
 
+/** The normalized `literal` property an RFC 0007 binding descriptor carries. */
+function literalProperty(fields: {
+  file?: string;
+  line?: number;
+  column?: number;
+  enclosure?: string[];
+  target?: string;
+  callee: string;
+  parameter: string;
+  init: string | null;
+}): string {
+  const enclosure = (fields.enclosure ?? []).map((entry) => `"${entry}"`).join(", ");
+  const init = fields.init === null ? "null" : `"${fields.init}"`;
+  return (
+    `literal: { file: "${fields.file ?? "src/Card.tsx"}", line: ${fields.line ?? 9}, ` +
+    `column: ${fields.column ?? 6}, enclosure: [${enclosure}], ` +
+    `target: "${fields.target ?? "card.moveX.value"}", callee: "${fields.callee}", ` +
+    `parameter: "${fields.parameter}", init: ${init} }`
+  );
+}
+
 describe("runtime-inspector babel plugin", () => {
   it("transforms an annotated useSharedValue declaration and adds the auto-import", () => {
     const code = transform(`
@@ -388,7 +409,9 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).toContain(
         "card.moveX.value = __riObserveAnimation(__riAnimationStart(withTiming(-110, __riAnimationConfig({ duration: 260, easing }, [{ " +
           `key: "duration", controlId: "${controlId}", label: "card.moveX duration", ` +
-          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms" }])), {'
+          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms", ' +
+          literalProperty({ callee: "withTiming", parameter: "duration", init: "260" }) +
+          " }])), {"
       );
       expect(normalized).toContain(
         `parameterControls: { duration: { schemaId: "auto", controlId: "${controlId}" } }`
@@ -517,7 +540,9 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).toContain(
         "card.moveX.value = __riObserveAnimation(withDelay(__riAnimationDelay(120, { " +
           `callsiteId: "${callsiteId}", controlId: "${callsiteId}:delay", label: "card.moveX delay", ` +
-          'declared: 120, min: 0, max: 10000, step: 1, unit: "ms" }), withTiming(-110, __riAnimationConfig({ duration: 260 }, ['
+          'declared: 120, min: 0, max: 10000, step: 1, unit: "ms", ' +
+          literalProperty({ callee: "withTiming", parameter: "delay", init: "120" }) +
+          " }), withTiming(-110, __riAnimationConfig({ duration: 260 }, ["
       );
       expect(normalized).toContain(
         `startControl: { schemaId: "auto", controlId: "${callsiteId}:delay" }`
@@ -595,7 +620,9 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).toContain(
         "card.moveX.value = __riObserveAnimation(__riAnimationStart(withTiming(-110, timing), { " +
           `callsiteId: "${callsiteId}", controlId: "${callsiteId}:delay", label: "card.moveX delay", ` +
-          'declared: 0, min: 0, max: 10000, step: 1, unit: "ms" }, __riWithDelay), {'
+          'declared: 0, min: 0, max: 10000, step: 1, unit: "ms", ' +
+          literalProperty({ callee: "withTiming", parameter: "delay", init: null }) +
+          " }, __riWithDelay), {"
       );
       expect(normalized).toContain(
         `startControl: { schemaId: "auto", controlId: "${callsiteId}:delay" }`
@@ -664,9 +691,15 @@ describe("runtime-inspector babel plugin", () => {
 
       expect(normalized).toContain(
         "__riAnimationConfig({ damping: 14, stiffness: 160, mass: 0.5 }, [" +
-          `{ key: "damping", controlId: "${callsiteId}:damping", label: "card.moveX damping", declared: 14, min: 0, max: 100, step: 0.1 }, ` +
-          `{ key: "stiffness", controlId: "${callsiteId}:stiffness", label: "card.moveX stiffness", declared: 160, min: 1, max: 1000, step: 1 }, ` +
-          `{ key: "mass", controlId: "${callsiteId}:mass", label: "card.moveX mass", declared: 0.5, min: 0.1, max: 10, step: 0.1 }])`
+          `{ key: "damping", controlId: "${callsiteId}:damping", label: "card.moveX damping", declared: 14, min: 0, max: 100, step: 0.1, ` +
+          literalProperty({ callee: "withSpring", parameter: "damping", init: "14" }) +
+          " }, " +
+          `{ key: "stiffness", controlId: "${callsiteId}:stiffness", label: "card.moveX stiffness", declared: 160, min: 1, max: 1000, step: 1, ` +
+          literalProperty({ callee: "withSpring", parameter: "stiffness", init: "160" }) +
+          " }, " +
+          `{ key: "mass", controlId: "${callsiteId}:mass", label: "card.moveX mass", declared: 0.5, min: 0.1, max: 10, step: 0.1, ` +
+          literalProperty({ callee: "withSpring", parameter: "mass", init: "0.5" }) +
+          " }])"
       );
       expect(normalized).toContain(
         "parameterControls: { " +
@@ -742,7 +775,9 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).toContain(
         "withTiming(-110, __riAnimationConfig({ duration: 260 }, [{ " +
           `key: "duration", controlId: "${callsiteId}:duration", label: "card.moveX duration", ` +
-          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms" }]))'
+          'declared: 260, min: 0, max: 10000, step: 1, unit: "ms", ' +
+          literalProperty({ callee: "withTiming", parameter: "duration", init: "260" }) +
+          " }]))"
       );
     });
 
@@ -1289,5 +1324,100 @@ describe("automatic motions and probes (RFC 0008)", () => {
     // Reanimated still workletizes the style callback, and the output parses.
     expect(code).toContain("__workletHash");
     expect(() => parseSync(code, { babelrc: false, configFile: false, filename: "out.js" })).not.toThrow();
+  });
+});
+
+describe("animation literal anchors (RFC 0007)", () => {
+  const OPTS = { filename: "/repo/src/Demo.tsx", root: "/repo" };
+  const IMPORTS = `
+      import * as Reanimated from "react-native-reanimated";
+      import { useSharedValue, withDelay, withSpring, withTiming } from "react-native-reanimated";`;
+
+  function build(body: string): string {
+    return transformWithOpts(`${IMPORTS}\n${body}`, OPTS).replace(/\s+/g, " ");
+  }
+
+  it("anchors every literal of a function-declaration motion to its enclosure", () => {
+    const normalized = build(`
+      export function ProductRevealDemo() {
+        const titleY = useSharedValue(24);
+        function play() {
+          titleY.value = withDelay(140, withTiming(0, { duration: 380 }));
+        }
+        return play;
+      }
+    `);
+
+    const base = {
+      file: "src/Demo.tsx",
+      line: 8,
+      column: 10,
+      enclosure: ["ProductRevealDemo", "play"],
+      target: "titleY.value",
+      callee: "withTiming"
+    };
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "delay", init: "140" }));
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "duration", init: "380" }));
+    expect(normalized).toContain(
+      'source: { file: "src/Demo.tsx", line: 8, column: 10, enclosure: ["ProductRevealDemo", "play"]'
+    );
+  });
+
+  it("anchors a bare call in a wrapped const arrow with init null for its delay", () => {
+    const normalized = build(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        const play = () => { opacity.value = withSpring(1, { damping: 12 }); };
+        return play;
+      }
+    `);
+
+    expect(normalized).toContain("const play = __riMotion(");
+    const base = {
+      file: "src/Demo.tsx",
+      line: 7,
+      column: 29,
+      enclosure: ["Card", "play"],
+      target: "opacity.value",
+      callee: "withSpring"
+    };
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "damping", init: "12" }));
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "delay", init: null }));
+  });
+
+  it("keeps the literal text as written and the callee name of a member call", () => {
+    const normalized = build(`
+      function Card() {
+        const opacity = useSharedValue(0);
+        function play() {
+          opacity.value = Reanimated.withDelay(1.50e2, Reanimated.withTiming(1, { "duration": 0x10 }));
+        }
+        return play;
+      }
+    `);
+
+    const base = {
+      file: "src/Demo.tsx",
+      line: 8,
+      column: 10,
+      enclosure: ["Card", "play"],
+      target: "opacity.value",
+      callee: "withTiming"
+    };
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "delay", init: "1.50e2" }));
+    expect(normalized).toContain(literalProperty({ ...base, parameter: "duration", init: "0x10" }));
+  });
+
+  it("emits no literal for a delay that has no control", () => {
+    const normalized = build(`
+      function Card({ stagger }) {
+        const opacity = useSharedValue(0);
+        function play() { opacity.value = withDelay(stagger, withTiming(1, { duration: 200 })); }
+        return play;
+      }
+    `);
+
+    expect(normalized).not.toContain('parameter: "delay"');
+    expect(normalized).toContain('parameter: "duration", init: "200"');
   });
 });

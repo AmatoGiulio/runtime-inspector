@@ -52,6 +52,23 @@ const LITERAL_PARAMETER_SPECS: Record<AnimationKind, readonly LiteralParameterSp
 interface LiteralParameterBinding {
   spec: LiteralParameterSpec;
   declared: number;
+  /** Source text of the literal as written, or undefined when its range is unknown. */
+  init: string | undefined;
+}
+
+/**
+ * The assignment-level part of an RFC 0007 literal anchor, shared by every
+ * literal of one discovered assignment. Line/column/enclosure are the same
+ * values as the meta's `source`.
+ */
+interface LiteralAnchorBase {
+  file: string;
+  line: number;
+  column: number;
+  enclosure: string[];
+  /** Source text of the assignment's left-hand side, e.g. "titleY.value". */
+  target: string;
+  callee: "withTiming" | "withSpring";
 }
 
 /**
@@ -210,7 +227,7 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           api
         );
         if (!built) return;
-        const { meta, callsiteId } = built;
+        const { meta, callsiteId, literalBase } = built;
 
         // Preserve the application's original Reanimated call exactly. Runtime
         // Inspector observes the animation object *after* Reanimated constructs it
@@ -221,7 +238,12 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
         // slider control. Only the config argument is wrapped; the application still
         // makes its own `withTiming` / `withSpring` call.
-        const bindings = literalParameterBindings(animationKind, animationCall.arguments[1]);
+        // Bindings come from the original call so each literal's source text is known.
+        const bindings = literalParameterBindings(
+          animationKind,
+          innerAnimationCall(right, delayed).arguments[1],
+          state.file.code
+        );
         if (bindings.length > 0) {
           animationCall.arguments[1] = t.callExpression(
             t.identifier(ANIMATION_CONFIG_HELPER_NAME),
@@ -229,7 +251,7 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
               animationCall.arguments[1],
               t.arrayExpression(
                 bindings.map((binding) =>
-                  parameterBindingExpression(t, callsiteId, target.target, binding)
+                  parameterBindingExpression(t, callsiteId, target.target, binding, literalBase)
                 )
               )
             ]
@@ -244,9 +266,18 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         let startHelperName: string | undefined;
         if (delayed) {
           const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
+          const delayInit = sourceText(right.arguments[0], state.file.code);
           transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
             transformed.arguments[0],
-            startBindingExpression(t, callsiteId, target.target, declaredDelay)
+            startBindingExpression(
+              t,
+              callsiteId,
+              target.target,
+              declaredDelay,
+              literalBase && delayInit !== undefined
+                ? { ...literalBase, parameter: "delay", init: delayInit }
+                : undefined
+            )
           ]);
           if (declaredDelay !== undefined) {
             meta.properties.push(startControlProperty(t, callsiteId));
@@ -255,7 +286,13 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         } else if (hasReanimatedImport(path)) {
           observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
             transformed,
-            startBindingExpression(t, callsiteId, target.target, 0),
+            startBindingExpression(
+              t,
+              callsiteId,
+              target.target,
+              0,
+              literalBase && { ...literalBase, parameter: "delay", init: null }
+            ),
             t.identifier(WITH_DELAY_LOCAL_NAME)
           ]);
           meta.properties.push(startControlProperty(t, callsiteId));
@@ -471,6 +508,7 @@ function buildAnimationMeta(
       : "";
 
   const t = api.types;
+  const enclosure = collectEnclosure(path);
   const properties = [
     t.objectProperty(t.identifier("callsiteId"), t.stringLiteral(callsiteId)),
     t.objectProperty(t.identifier("target"), t.stringLiteral(target.target)),
@@ -483,7 +521,7 @@ function buildAnimationMeta(
         t.objectProperty(t.identifier("column"), t.numericLiteral(loc.start.column)),
         t.objectProperty(
           t.identifier("enclosure"),
-          t.arrayExpression(collectEnclosure(path).map((entry) => t.stringLiteral(entry)))
+          t.arrayExpression(enclosure.map((entry) => t.stringLiteral(entry)))
         ),
         t.objectProperty(t.identifier("expression"), t.stringLiteral(expression))
       ])
@@ -530,7 +568,20 @@ function buildAnimationMeta(
     );
   }
 
-  return { meta: t.objectExpression(properties), callsiteId };
+  const left = path.node.left;
+  const literalBase: LiteralAnchorBase | undefined =
+    left.start != null && left.end != null
+      ? {
+          file,
+          line: loc.start.line,
+          column: loc.start.column,
+          enclosure,
+          target: state.file.code.slice(left.start, left.end),
+          callee: animationKind === "timing" ? "withTiming" : "withSpring"
+        }
+      : undefined;
+
+  return { meta: t.objectExpression(properties), callsiteId, literalBase };
 }
 
 type PrimitiveMetaValue = string | number | boolean | null;
@@ -595,7 +646,8 @@ function staticConfigObject(
  */
 function literalParameterBindings(
   animationKind: AnimationKind,
-  config: Node | null | undefined
+  config: Node | null | undefined,
+  code: string
 ): LiteralParameterBinding[] {
   if (!config || config.type !== "ObjectExpression") return [];
   if (config.properties.some((property) => property.type === "SpreadElement")) return [];
@@ -612,9 +664,41 @@ function literalParameterBindings(
     const declared = member.value.value;
     if (!Number.isFinite(declared)) continue;
     if (declared < spec.min || declared > spec.max) continue;
-    bindings.push({ spec, declared });
+    bindings.push({ spec, declared, init: sourceText(member.value, code) });
   }
   return bindings;
+}
+
+/** The original source text of `node`, or undefined when its range is unknown. */
+function sourceText(node: Node | null | undefined, code: string): string | undefined {
+  if (!node || node.start == null || node.end == null) return undefined;
+  return code.slice(node.start, node.end);
+}
+
+/** RFC 0007: the `literal` anchor property of a binding descriptor. */
+function literalAnchorProperty(
+  t: BabelAPI["types"],
+  anchor: LiteralAnchorBase & { parameter: string; init: string | null }
+) {
+  return t.objectProperty(
+    t.identifier("literal"),
+    t.objectExpression([
+      t.objectProperty(t.identifier("file"), t.stringLiteral(anchor.file)),
+      t.objectProperty(t.identifier("line"), t.numericLiteral(anchor.line)),
+      t.objectProperty(t.identifier("column"), t.numericLiteral(anchor.column)),
+      t.objectProperty(
+        t.identifier("enclosure"),
+        t.arrayExpression(anchor.enclosure.map((entry) => t.stringLiteral(entry)))
+      ),
+      t.objectProperty(t.identifier("target"), t.stringLiteral(anchor.target)),
+      t.objectProperty(t.identifier("callee"), t.stringLiteral(anchor.callee)),
+      t.objectProperty(t.identifier("parameter"), t.stringLiteral(anchor.parameter)),
+      t.objectProperty(
+        t.identifier("init"),
+        anchor.init === null ? t.nullLiteral() : t.stringLiteral(anchor.init)
+      )
+    ])
+  );
 }
 
 function isMemberKeyed(
@@ -631,7 +715,8 @@ function parameterBindingExpression(
   t: BabelAPI["types"],
   callsiteId: string,
   target: string,
-  { spec, declared }: LiteralParameterBinding
+  { spec, declared, init }: LiteralParameterBinding,
+  literalBase: LiteralAnchorBase | undefined
 ) {
   const properties = [
     t.objectProperty(t.identifier("key"), t.stringLiteral(spec.key)),
@@ -644,6 +729,9 @@ function parameterBindingExpression(
   ];
   if (spec.unit !== undefined) {
     properties.push(t.objectProperty(t.identifier("unit"), t.stringLiteral(spec.unit)));
+  }
+  if (literalBase && init !== undefined) {
+    properties.push(literalAnchorProperty(t, { ...literalBase, parameter: spec.key, init }));
   }
   return t.objectExpression(properties);
 }
@@ -693,7 +781,8 @@ function startBindingExpression(
   t: BabelAPI["types"],
   callsiteId: string,
   target: string,
-  declared: number | undefined
+  declared: number | undefined,
+  literal: (LiteralAnchorBase & { parameter: "delay"; init: string | null }) | undefined
 ) {
   const properties = [t.objectProperty(t.identifier("callsiteId"), t.stringLiteral(callsiteId))];
   if (declared !== undefined) {
@@ -706,6 +795,9 @@ function startBindingExpression(
       t.objectProperty(t.identifier("step"), t.numericLiteral(1)),
       t.objectProperty(t.identifier("unit"), t.stringLiteral("ms"))
     );
+    if (literal) {
+      properties.push(literalAnchorProperty(t, literal));
+    }
   }
   return t.objectExpression(properties);
 }
