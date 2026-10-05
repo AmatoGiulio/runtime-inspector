@@ -468,7 +468,7 @@ Not done yet: opening an automatic scene whose screen is not showing (route infe
 
 ## Animation literal write-back — RFC 0007
 
-**Implemented on `feat/runtime-workbench-desktop`; the timing-duration path was validated on the iOS Simulator on 2026-10-04.**
+**Implemented on `feat/runtime-workbench-desktop`; validated on the iOS Simulator on 2026-10-04 (timing duration) and 2026-10-05 (spring, existing delay, bare-call wrap, `withDelay` import added).**
 
 - **Protocol (additive, RIP 0.3):** `LiteralAnchor` and an optional `literal` on controls (at most one of `source` / `literal`); a `source.apply` request carries exactly one of `anchor` / `literal`, and a literal request must be a `slider` with a finite number. Fixtures cover a control with `literal`, a literal request, and the invalid cases (both anchors, neither, non-slider literal, a control with both).
 - **Babel plugin:** every `__riAnimationConfig` binding and every delay binding with a control carries `literal` (assignment line/column/enclosure, left-hand text, callee, parameter, literal text; `init: null` for a bare call's delay).
@@ -481,4 +481,11 @@ Validated live (Expo Go, iPhone 17 Pro Max simulator, Workbench desktop): draggi
 
 The example app loads `@runtime-inspector/babel-plugin` from `dist`: rebuild it (`pnpm --filter @runtime-inspector/babel-plugin build`) and restart Metro with `--clear` after plugin changes, or controls carry no `literal`.
 
-Not done yet: live runs of the spring keys, an existing `withDelay`, and the bare-call wrap (all covered by unit tests only).
+Validated live on 2026-10-05: in `ProductRevealDemo.tsx` one **Apply 3 changes** wrote `withTiming(1, …)` → `withDelay(58, withTiming(1, …))` (bare call; `withDelay` already imported), `damping: 14` → `36.9`, and `withDelay(140, …)` → `withDelay(198, …)`, nothing else in the file changed; the replay after Fast Refresh kept all three and no change was pending. In `CardTransitionLab.tsx`, which did not import `withDelay`, **Apply to code** in the Inspector wrapped `card.moveX.value = withTiming(…)` in `withDelay(77, …)` and added `withDelay` to the existing Reanimated import; the app reloaded without errors.
+
+Known rough edges seen in those runs:
+
+- after moving a block's start, the block is drawn back at its old start until the next replay (the value and the pending count are correct);
+- the added `withDelay` specifier is appended on the same line as the last one (`withTiming, withDelay`) even when the import lists one specifier per line;
+- Play targets the scene selected in the sidebar, which can differ from the screen the app is showing;
+- the Inspector can keep showing a control from the previous scene.
