@@ -1272,3 +1272,73 @@ describe("stabilizeBurst", () => {
     expect(geometry(last)).toEqual(geometry(previous));
   });
 });
+
+describe("stabilizeBurst while a row is running", () => {
+  const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+
+  it("draws a running spring with the previous observed duration, not its estimate", () => {
+    const running = cardRun("n", { originMs: 9000, jitterMs: [0, 0, 0, 0, 6] });
+    const stabilized = stabilizeBurst(previous, running);
+    const spring = stabilized[4]!;
+    expect(spring.instanceId).toBe("n-4");
+    expect(spring.endedAtRuntimeMs).toBeUndefined();
+    expect(spring.startedAtRuntimeMs).toBe(9220);
+    expect(spring.expectedDurationMs).toBe(540);
+    expect(running[4]!.expectedDurationMs).toBe(700);
+    const row = buildTimelineModel(stabilized)
+      .groups.flatMap((group) => group.rows)
+      .find((candidate) => candidate.key === animationKeys(stabilized)[4])!;
+    expect(row.durationMs).toBe(540);
+    expect(row.estimated).toBe(false);
+  });
+
+  it("keeps the new start beyond the tolerance, still with the observed duration", () => {
+    const running = cardRun("n", { originMs: 9000, jitterMs: [0, 0, 0, 0, 40] });
+    const spring = stabilizeBurst(previous, running)[4]!;
+    expect(spring.startedAtRuntimeMs).toBe(9260);
+    expect(spring.expectedDurationMs).toBe(540);
+  });
+
+  it("keeps the estimate when a parameter changed or the previous run never ended", () => {
+    const running = cardRun("n", { originMs: 9000 });
+    const edited = { ...running[4]!, resolvedConfig: { damping: 10, stiffness: 180 } };
+    expect(stabilizeBurst(previous, [...running.slice(0, 4), edited])[4]).toBe(edited);
+    const unfinished = cardRun("p", { originMs: 5000 });
+    expect(stabilizeBurst(unfinished, running)).toBe(running);
+  });
+
+  it("moves nothing but the playhead during a jittered Card transition replay", () => {
+    function rows(animations: RuntimeAnimationTrace[]) {
+      return buildTimelineModel(animations).groups.flatMap((group) =>
+        group.rows.map((row) => ({
+          key: row.key,
+          startMs: row.startMs,
+          durationMs: row.durationMs,
+          estimated: row.estimated
+        }))
+      );
+    }
+    const expected = rows(previous);
+    let scale: { signature: string; durationMs: number } | undefined;
+    const rulers: number[] = [];
+    const frames: RuntimeAnimationTrace[][] = [];
+    playStream(
+      initialSettledBurst(previous, "card"),
+      cardStream("n", { originMs: 9000, jitterMs: [0, 4, 2, 1, 9, 14, 6, 11] }),
+      (displayed) => {
+        frames.push(displayed);
+        expect(rows(displayed)).toEqual(expected);
+        scale = nextStickyDuration(
+          scale,
+          timelineScaleKey("card", displayed),
+          buildTimelineModel(displayed).durationMs
+        );
+        rulers.push(buildTimelineModel(displayed, { minDurationMs: scale.durationMs }).durationMs);
+      }
+    );
+    expect(new Set(rulers).size).toBe(1);
+    expect(frames.at(-1)!.map((animation) => animation.instanceId)).toEqual(
+      previous.map((_, index) => `n-${index}`)
+    );
+  });
+});

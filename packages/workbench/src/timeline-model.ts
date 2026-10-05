@@ -352,9 +352,11 @@ function withGeometry(
  * Holds run-to-run jitter: each `next` row whose key was in `previous` (the previous run) with the
  * same parameters, and whose start offset (from its run's call-time origin) and drawn duration
  * each differ from the previous run's by at most `RUN_JITTER_TOLERANCE_MS`, keeps the previous
- * run's start offset and duration, rebased to the new origin. Rows with changed parameters (an
- * edit) or larger differences show their own values. Never mutates; returns `next` itself when
- * nothing was held.
+ * run's start offset and duration, rebased to the new origin. A row still running, whose previous
+ * run (same parameters) had an observed end, is drawn with that observed duration instead of its
+ * expected one, so a spring does not jump from its estimate when it ends; it is no longer flagged
+ * as an estimate. Rows with changed parameters (an edit) or larger differences show their own
+ * values. Never mutates; returns `next` itself when nothing was held.
  */
 export function stabilizeBurst(
   previous: RuntimeAnimationTrace[],
@@ -377,11 +379,21 @@ export function stabilizeBurst(
     const beforeStartMs = before.startedAtRuntimeMs - previousOriginMs;
     const beforeDurationMs = displayDurationMs(before);
     const startMs = animation.startedAtRuntimeMs - nextOriginMs;
+    const startHeld = Math.abs(startMs - beforeStartMs) <= RUN_JITTER_TOLERANCE_MS;
+
+    if (animation.endedAtRuntimeMs === undefined && before.endedAtRuntimeMs !== undefined) {
+      held = true;
+      const { durationBasis: _estimate, ...running } = animation;
+      return withGeometry(
+        running,
+        nextOriginMs,
+        startHeld ? beforeStartMs : startMs,
+        Math.max(0, before.endedAtRuntimeMs - before.startedAtRuntimeMs)
+      );
+    }
+
     const durationMs = displayDurationMs(animation);
-    if (
-      Math.abs(startMs - beforeStartMs) > RUN_JITTER_TOLERANCE_MS ||
-      Math.abs(durationMs - beforeDurationMs) > RUN_JITTER_TOLERANCE_MS
-    ) {
+    if (!startHeld || Math.abs(durationMs - beforeDurationMs) > RUN_JITTER_TOLERANCE_MS) {
       return animation;
     }
     if (startMs === beforeStartMs && durationMs === beforeDurationMs) return animation;
