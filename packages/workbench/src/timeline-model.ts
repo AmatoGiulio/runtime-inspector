@@ -839,3 +839,20 @@ export function playbackTargetScene<
   if (selected && (selected.active || selected.reachable)) return selected;
   return scenes.find((scene) => scene.active) ?? selected;
 }
+
+/**
+ * Tracks the last defined playback target so the Inspector can drop a selection that belongs to
+ * another scene. `switched` is true only when the target moves from one defined scene to a
+ * different one; the first scene, a momentary `undefined` (e.g. a reload) and replays of the same
+ * scene keep the selection.
+ */
+export function inspectedSceneStep(
+  lastSceneId: string | undefined,
+  targetSceneId: string | undefined
+): { sceneId: string | undefined; switched: boolean } {
+  if (targetSceneId === undefined) return { sceneId: lastSceneId, switched: false };
+  return {
+    sceneId: targetSceneId,
+    switched: lastSceneId !== undefined && lastSceneId !== targetSceneId
+  };
+}

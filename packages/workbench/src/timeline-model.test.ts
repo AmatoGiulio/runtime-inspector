@@ -8,6 +8,7 @@ import {
   applyResultNotice,
   groupControlIdsBySchema,
   initialSettledBurst,
+  inspectedSceneStep,
   literalApplyGroups,
   receiveBurst,
   settleBurst,
@@ -950,6 +951,36 @@ describe("playbackTargetScene", () => {
   it("returns undefined for an empty list", () => {
     expect(playbackTargetScene([], "a")).toBeUndefined();
     expect(playbackTargetScene([], undefined)).toBeUndefined();
+  });
+});
+
+describe("inspectedSceneStep", () => {
+  it("switches when the target moves to a different defined scene", () => {
+    expect(inspectedSceneStep("product-reveal", "card-transition")).toEqual({
+      sceneId: "card-transition",
+      switched: true
+    });
+  });
+
+  it("does not switch on a replay of the same scene", () => {
+    expect(inspectedSceneStep("card-transition", "card-transition")).toEqual({
+      sceneId: "card-transition",
+      switched: false
+    });
+  });
+
+  it("does not switch for the first scene", () => {
+    expect(inspectedSceneStep(undefined, "card-transition")).toEqual({
+      sceneId: "card-transition",
+      switched: false
+    });
+  });
+
+  it("remembers the last scene across a momentary undefined target", () => {
+    const gap = inspectedSceneStep("product-reveal", undefined);
+    expect(gap).toEqual({ sceneId: "product-reveal", switched: false });
+    expect(inspectedSceneStep(gap.sceneId, "product-reveal").switched).toBe(false);
+    expect(inspectedSceneStep(gap.sceneId, "card-transition").switched).toBe(true);
   });
 });
 

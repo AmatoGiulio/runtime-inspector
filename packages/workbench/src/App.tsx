@@ -36,6 +36,7 @@ import {
   clamp,
   groupControlIdsBySchema,
   initialSettledBurst,
+  inspectedSceneStep,
   latestAnimationBurst,
   nextStickyDuration,
   parameterControl,
@@ -728,6 +729,19 @@ function App() {
     }),
     []
   );
+
+  // Switching to another scene drops the Inspector's animation and control selection: they
+  // belong to the previous screen. Replays of the same scene keep it.
+  const inspectedSceneIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const step = inspectedSceneStep(inspectedSceneIdRef.current, targetSceneId);
+    inspectedSceneIdRef.current = step.sceneId;
+    if (!step.switched) return;
+    pendingAnimationSelectionRef.current = undefined;
+    setSelectedAnimationId(undefined);
+    setSelectedControlId(undefined);
+    setInspectorMode("probe");
+  }, [targetSceneId]);
 
   useEffect(() => {
     const pending = pendingAnimationSelectionRef.current;
