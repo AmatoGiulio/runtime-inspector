@@ -576,6 +576,56 @@ export function animationsSince(
   );
 }
 
+/** The parts of an automatic scene id (RFC 0008): `<file>:<Component>.<name>`. */
+export interface AutomaticSceneId {
+  file: string;
+  component: string;
+  /** The motion function name, or `effect@<line>` for a pure-motion effect. */
+  name: string;
+  effect: boolean;
+}
+
+const AUTOMATIC_SCENE_ID =
+  /^(.+\.[cm]?[jt]sx?):([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*|effect@\d+)$/;
+
+/**
+ * Parses an automatic scene id as the Babel plugin builds it (`<file>:<Component>.<name>`, the
+ * file relative to the Babel root, `effect@<line>` for effects). Explicit `defineScenes` ids, and
+ * anything else that is not a source file followed by two identifiers, return `undefined`.
+ */
+export function parseAutomaticSceneId(sceneId: string): AutomaticSceneId | undefined {
+  const match = AUTOMATIC_SCENE_ID.exec(sceneId);
+  if (!match) return undefined;
+  const [, file, component, name] = match;
+  return { file: file!, component: component!, name: name!, effect: name!.startsWith("effect@") };
+}
+
+/**
+ * The animations that belong to `sceneId`. For an automatic motion-function scene: the ones
+ * called from that file whose enclosing named functions include `Component` immediately followed
+ * by the motion function (anonymous callbacks inside it are skipped by the enclosure, so they
+ * count); an animation without `source` cannot be attributed and is dropped. An effect scene or
+ * an explicit scene id cannot be attributed by source: the input is returned unchanged.
+ */
+export function animationsOfScene(
+  animations: RuntimeAnimationTrace[],
+  sceneId: string
+): RuntimeAnimationTrace[] {
+  const parsed = parseAutomaticSceneId(sceneId);
+  if (!parsed || parsed.effect) return animations;
+  return animations.filter((animation) => {
+    const source = animation.source;
+    if (!source || source.file !== parsed.file) return false;
+    const { enclosure } = source;
+    for (let index = 0; index + 1 < enclosure.length; index += 1) {
+      if (enclosure[index] === parsed.component && enclosure[index + 1] === parsed.name) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
 /**
  * The animations of the last interaction: clusters by call time, a gap larger than
  * `idleGapMs` between consecutive calls starts a new cluster. Original relative order is kept.

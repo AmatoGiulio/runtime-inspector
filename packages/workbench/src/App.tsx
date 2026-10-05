@@ -30,6 +30,7 @@ import {
 import { AnimationTimeline } from "./AnimationTimeline";
 import { ScenesPanel } from "./ScenesPanel";
 import {
+  animationsOfScene,
   animationsSince,
   applyResultNotice,
   buildTimelineModel,
@@ -515,18 +516,21 @@ function App() {
     shownSceneIdRef.current !== undefined &&
     shownSceneIdRef.current !== targetSceneId &&
     targetPlayingAtRuntimeMs === undefined;
-  // A playing scene shows only the motion called from its `playing` time on (RFC 0006 §5).
-  const latestBurst = useMemo(
-    () =>
-      openingOtherScene
-        ? []
-        : latestAnimationBurst(
-            targetPlayingAtRuntimeMs !== undefined
-              ? animationsSince(state.runtimeAnimations, targetPlayingAtRuntimeMs)
-              : state.runtimeAnimations
-          ),
-    [state.runtimeAnimations, targetPlayingAtRuntimeMs, openingOtherScene]
-  );
+  // A playing scene shows only the motion called from its `playing` time on (RFC 0006 §5). An
+  // automatic scene (RFC 0008) also shows only its own motion function's animations, so another
+  // scene of the same component that ran right after it does not mix into its rows.
+  const latestBurst = useMemo(() => {
+    if (openingOtherScene) return [];
+    const sceneAnimations =
+      targetSceneId !== undefined
+        ? animationsOfScene(state.runtimeAnimations, targetSceneId)
+        : state.runtimeAnimations;
+    return latestAnimationBurst(
+      targetPlayingAtRuntimeMs !== undefined
+        ? animationsSince(sceneAnimations, targetPlayingAtRuntimeMs)
+        : sceneAnimations
+    );
+  }, [state.runtimeAnimations, targetSceneId, targetPlayingAtRuntimeMs, openingOtherScene]);
   // What the timeline renders: a replay's events arrive one render at a time, so the latest burst
   // alone would unmount every row but the first. Rows that have not come back yet stay (rebased).
   // A different scene starts clean: no rows carried over from the previous scene. Replays of the

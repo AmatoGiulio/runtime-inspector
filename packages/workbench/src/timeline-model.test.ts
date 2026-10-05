@@ -4,6 +4,7 @@ import type { InspectorControl, PanelSchema } from "@runtime-inspector/protocol"
 import {
   PENDING_PREVIEW_TTL_MS,
   animationKeys,
+  animationsOfScene,
   animationsSince,
   applyResultNotice,
   groupControlIdsBySchema,
@@ -22,6 +23,7 @@ import {
   nextStickyDuration,
   orderAnimations,
   parameterControl,
+  parseAutomaticSceneId,
   playbackTargetScene,
   resizedDurationMs,
   resizedFromStart,
@@ -634,6 +636,79 @@ describe("timelineOriginMs", () => {
       model.groups[0]!.rows.map((row) => [row.animation.instanceId, row.startMs])
     );
     expect(rows).toEqual({ delayed: 500, later: 200 });
+  });
+});
+
+describe("parseAutomaticSceneId", () => {
+  it("parses a motion function scene", () => {
+    expect(
+      parseAutomaticSceneId("src/vinyl/VinylLibraryScreen.tsx:VinylLibraryScreen.openRecord")
+    ).toEqual({
+      file: "src/vinyl/VinylLibraryScreen.tsx",
+      component: "VinylLibraryScreen",
+      name: "openRecord",
+      effect: false
+    });
+  });
+
+  it("parses an effect scene", () => {
+    expect(parseAutomaticSceneId("App.tsx:Card.effect@42")).toEqual({
+      file: "App.tsx",
+      component: "Card",
+      name: "effect@42",
+      effect: true
+    });
+  });
+
+  it("rejects explicit scene ids", () => {
+    expect(parseAutomaticSceneId("intro")).toBeUndefined();
+    expect(parseAutomaticSceneId("vinyl.open")).toBeUndefined();
+    expect(parseAutomaticSceneId("library:Grid.reveal")).toBeUndefined();
+    expect(parseAutomaticSceneId("App.tsx:Card")).toBeUndefined();
+  });
+});
+
+describe("animationsOfScene", () => {
+  const file = "src/vinyl/VinylLibraryScreen.tsx";
+  const at = (enclosure: string[], sourceFile = file) => ({
+    file: sourceFile,
+    line: 1,
+    column: 1,
+    enclosure,
+    expression: "x.value = withTiming(1)"
+  });
+  const animations = [
+    trace({ instanceId: "open", source: at(["VinylLibraryScreen", "openRecord"]) }),
+    trace({ instanceId: "close", source: at(["VinylLibraryScreen", "closeRecord"]) }),
+    // A `setTimeout` callback inside openRecord: anonymous, so the enclosure is unchanged.
+    trace({ instanceId: "openLater", source: at(["VinylLibraryScreen", "openRecord"]) }),
+    trace({ instanceId: "nested", source: at(["VinylLibraryScreen", "openRecord", "settle"]) }),
+    trace({ instanceId: "otherFile", source: at(["VinylLibraryScreen", "openRecord"], "App.tsx") }),
+    trace({ instanceId: "notAdjacent", source: at(["VinylLibraryScreen", "helper", "openRecord"]) }),
+    trace({ instanceId: "noSource" })
+  ];
+  const ids = (list: RuntimeAnimationTrace[]) => list.map((a) => a.instanceId);
+
+  it("keeps only the motion of the open scene", () => {
+    expect(ids(animationsOfScene(animations, `${file}:VinylLibraryScreen.openRecord`))).toEqual([
+      "open",
+      "openLater",
+      "nested"
+    ]);
+  });
+
+  it("keeps only the motion of the close scene", () => {
+    expect(ids(animationsOfScene(animations, `${file}:VinylLibraryScreen.closeRecord`))).toEqual([
+      "close"
+    ]);
+  });
+
+  it("returns explicit scene ids unchanged, including animations without source", () => {
+    expect(animationsOfScene(animations, "vinyl.open")).toBe(animations);
+  });
+
+  it("returns effect scenes unchanged", () => {
+    expect(animationsOfScene(animations, `${file}:VinylLibraryScreen.effect@12`)).toBe(animations);
   });
 });
 
