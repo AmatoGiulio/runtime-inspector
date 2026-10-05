@@ -476,6 +476,108 @@ describe("applySourceRequests with literal anchors (RFC 0007)", () => {
       expect(output).toContain("logo.value = withDelay(120, withSpring(1,");
     });
 
+    describe("withDelay import layout", () => {
+      const WRAPPED_LOGO =
+        "logo.value = withDelay(120, withSpring(1, { damping: 14, stiffness: 160, mass: 0.5 }));";
+
+      it("puts withDelay on its own line in a one-specifier-per-line import", async () => {
+        const imports = [
+          "import Animated, {",
+          "  Easing,",
+          "  withSpring,",
+          "  withTiming",
+          '} from "react-native-reanimated";'
+        ].join("\n");
+        const { output } = await run(demo(imports, TITLE, LOGO), [literalRequest(bareLiteral, 120)]);
+
+        expect(output).toBe(
+          demo(
+            [
+              "import Animated, {",
+              "  Easing,",
+              "  withSpring,",
+              "  withTiming,",
+              "  withDelay",
+              '} from "react-native-reanimated";'
+            ].join("\n"),
+            TITLE,
+            WRAPPED_LOGO
+          )
+        );
+      });
+
+      it("keeps a trailing comma after the new specifier", async () => {
+        const imports = [
+          "import {",
+          "  Easing,",
+          "  withSpring,",
+          "  withTiming,",
+          '} from "react-native-reanimated";'
+        ].join("\n");
+        const { output } = await run(demo(imports, TITLE, LOGO), [literalRequest(bareLiteral, 120)]);
+
+        expect(output).toBe(
+          demo(
+            [
+              "import {",
+              "  Easing,",
+              "  withSpring,",
+              "  withTiming,",
+              "  withDelay,",
+              '} from "react-native-reanimated";'
+            ].join("\n"),
+            TITLE,
+            WRAPPED_LOGO
+          )
+        );
+      });
+
+      it("handles a lone specifier on its own line", async () => {
+        const imports = ["import {", "    withSpring", '} from "react-native-reanimated";'].join("\n");
+        const { output } = await run(demo(imports, TITLE, LOGO), [literalRequest(bareLiteral, 120)]);
+
+        expect(output.split("\n").slice(0, 4)).toEqual([
+          "import {",
+          "    withSpring,",
+          "    withDelay",
+          '} from "react-native-reanimated";'
+        ]);
+      });
+
+      it("keeps a single-line import on one line", async () => {
+        const imports = 'import { Easing, withSpring } from "react-native-reanimated";';
+        const { output } = await run(demo(imports, TITLE, LOGO), [literalRequest(bareLiteral, 120)]);
+
+        expect(output.split("\n")[0]).toBe(
+          'import { Easing, withSpring, withDelay } from "react-native-reanimated";'
+        );
+      });
+
+      it("uses CRLF line breaks in a CRLF file", async () => {
+        const imports = [
+          "import {",
+          "  Easing,",
+          "  withSpring",
+          '} from "react-native-reanimated";'
+        ].join("\n");
+        const source = demo(imports, TITLE, LOGO).replace(/\n/g, "\r\n");
+        const { output } = await run(source, [literalRequest(bareLiteral, 120)]);
+
+        const expected = demo(
+          [
+            "import {",
+            "  Easing,",
+            "  withSpring,",
+            "  withDelay",
+            '} from "react-native-reanimated";'
+          ].join("\n"),
+          TITLE,
+          WRAPPED_LOGO
+        ).replace(/\n/g, "\r\n");
+        expect(output).toBe(expected);
+      });
+    });
+
     it("reports DECLARATION_MISSING without a value import from Reanimated", async () => {
       const imports = 'import { useSharedValue, withSpring, withTiming } from "./motion";';
       const source = demo(imports, TITLE, LOGO);

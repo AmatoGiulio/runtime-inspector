@@ -297,13 +297,42 @@ type WithDelayImport =
   | { ok: true; name: string; insertion?: { at: number; text: string } }
   | { ok: false; message: string };
 
+function startLine(node: AnyNode): number | undefined {
+  const line = node.loc?.start?.line;
+  return typeof line === "number" ? line : undefined;
+}
+
+/**
+ * What goes between the last named specifier and a new `withDelay`: `, ` for a single-line list;
+ * for one specifier per line, a line break plus the last specifier's own indentation, in the
+ * file's line ending style.
+ */
+function namedSpecifierSeparator(source: string, named: AnyNode[]): string {
+  const last = named[named.length - 1];
+  const lastLine = startLine(last);
+  let previousLine: number | undefined;
+  if (named.length > 1) {
+    previousLine = startLine(named[named.length - 2]);
+  } else if (typeof last.start === "number") {
+    // A lone specifier is compared with the `{` that opens the list.
+    const brace = source.lastIndexOf("{", last.start);
+    if (brace >= 0) previousLine = source.slice(0, brace).split("\n").length;
+  }
+  if (lastLine === undefined || previousLine === undefined || lastLine === previousLine) {
+    return ", withDelay";
+  }
+  const lineStart = source.lastIndexOf("\n", (last.start as number) - 1) + 1;
+  const indent = /^[ \t]*/.exec(source.slice(lineStart, last.start as number))?.[0] ?? "";
+  return `,${source.includes("\r\n") ? "\r\n" : "\n"}${indent}withDelay`;
+}
+
 /**
  * RFC 0007 §3 step 5: the local name of an existing value `withDelay` import
  * from Reanimated (aliases respected), or `withDelay` added as a specifier to
  * the module's first value import from Reanimated that can take one (a
  * default-only import gains `, { withDelay }`).
  */
-function resolveWithDelayImport(ast: unknown): WithDelayImport {
+function resolveWithDelayImport(ast: unknown, source: string): WithDelayImport {
   const program = isNode(ast) && isNode(ast.program) ? ast.program : undefined;
   const body = program && Array.isArray(program.body) ? program.body : [];
   const imports = body.filter(isValueImportFromReanimated);
@@ -329,11 +358,14 @@ function resolveWithDelayImport(ast: unknown): WithDelayImport {
 
     const last = specifiers[specifiers.length - 1];
     if (last.end == null) continue;
-    const named = specifiers.some((specifier) => specifier.type === "ImportSpecifier");
+    const named = specifiers.filter((specifier) => specifier.type === "ImportSpecifier");
     return {
       ok: true,
       name: "withDelay",
-      insertion: { at: last.end, text: named ? ", withDelay" : ", { withDelay }" }
+      insertion: {
+        at: last.end,
+        text: named.length > 0 ? namedSpecifierSeparator(source, named) : ", { withDelay }"
+      }
     };
   }
 
@@ -595,7 +627,7 @@ async function processFileGroup(
   }
 
   let withDelayImport: WithDelayImport | undefined;
-  const resolveImportOnce = () => (withDelayImport ??= resolveWithDelayImport(ast));
+  const resolveImportOnce = () => (withDelayImport ??= resolveWithDelayImport(ast, content));
 
   const accepted: AcceptedEdit[] = [];
   // At most one import insertion per file, however many wraps share it.
