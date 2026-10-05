@@ -487,4 +487,8 @@ Known rough edges seen in those runs:
 
 - the Inspector can keep showing a control from the previous scene.
 
+Timeline stability during replay (2026-10-05, commits 2b4a660..3b12700): a MutationObserver on `.timeline` during Play of "Card transition" (4 timings, then 4 springs from a `setTimeout(…, 220)`) first showed the 4 spring rows dropping at ~220 ms, the ruler rescaling 200 ms → 100 ms ticks, the rows coming back one per render, and spring bars shifting a few px every run. After the fixes (rows kept until the replay can re-call them, ruler sticky per scene, run-to-run jitter ≤ 24 ms held, springs drawn with the previous observed duration) three consecutive Plays changed no bar position or width and no ruler tick; a moved block stayed where it was dropped and the next Play changed nothing.
+
+Open: once, with two Workbench windows connected and a block just moved in one of them, the app received delays nobody set (Move X 81 → 323 → 490 ms, three replays in 2 s). A second identical attempt, with outgoing messages of both windows logged, did not reproduce it. Cause unknown.
+
 Fixed and re-checked live on 2026-10-05: Play and the replay after a timeline edit now target the selected scene only when it is on screen or reachable, else the scene on screen (before, a selected scene that could not open made Play do nothing and a moved block snap back after the 2 s preview timeout); an added `withDelay` keeps a multi-line import one specifier per line.
