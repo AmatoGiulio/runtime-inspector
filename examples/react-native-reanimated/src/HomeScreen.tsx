@@ -9,6 +9,10 @@ interface SceneRow {
 
 const SECTIONS: { group: string; rows: SceneRow[] }[] = [
   {
+    group: "Music",
+    rows: [{ title: "Vinyl library", description: "Records lift out of the grid", route: "vinyl" }]
+  },
+  {
     group: "Store",
     rows: [
       { title: "Product reveal", description: "Staggered album entrance", route: "product" },

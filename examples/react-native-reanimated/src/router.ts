@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
 import { Linking } from "react-native";
 
-export type Route = "home" | "product" | "like" | "sheet" | "welcome" | "lab";
+export type Route = "home" | "vinyl" | "product" | "like" | "sheet" | "welcome" | "lab";
 
-const ROUTES: readonly Route[] = ["home", "product", "like", "sheet", "welcome", "lab"];
+const ROUTES: readonly Route[] = ["home", "vinyl", "product", "like", "sheet", "welcome", "lab"];
 
 let current: Route = "home";
 const listeners = new Set<() => void>();

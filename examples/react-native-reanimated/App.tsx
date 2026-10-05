@@ -5,10 +5,13 @@ import { HomeScreen } from "./src/HomeScreen";
 import { LikeBurstDemo } from "./src/LikeBurstDemo";
 import { ProductRevealDemo } from "./src/ProductRevealDemo";
 import { navigate, useRoute, type Route } from "./src/router";
+import { VinylLibraryScreen } from "./src/vinyl/VinylLibraryScreen";
 import { WelcomeDemo } from "./src/WelcomeDemo";
 
 function renderScreen(route: Route) {
   switch (route) {
+    case "vinyl":
+      return <VinylLibraryScreen />;
     case "product":
       return <ProductRevealDemo />;
     case "like":
