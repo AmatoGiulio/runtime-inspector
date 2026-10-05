@@ -1,5 +1,5 @@
 import type { LiteralAnchor } from "@runtime-inspector/protocol";
-import { recordAppliedStartDelay } from "./animation-start-state";
+import { dropAppliedStartDelays, recordAppliedStartDelay } from "./animation-start-state";
 import { registerRuntimeValue } from "./auto";
 
 declare const __DEV__: boolean | undefined;
@@ -265,19 +265,64 @@ export function __riAnimationStart<T>(
   }
 }
 
+/**
+ * Development-only seam the Babel plugin injects once per Reanimated module,
+ * right after its imports: `file` is the module's source path and `callsiteIds`
+ * every animation call site the plugin discovered in it.
+ *
+ * On a Fast Refresh re-evaluation, call sites that moved (a line shift) or
+ * disappeared get new ids, so their old `auto` controls would otherwise stay
+ * registered - with their tuned values - until a full reload. This disposes
+ * every control of `file` whose call site is no longer listed. Controls of
+ * still-present call sites keep their holders and tuned values; controls of
+ * other files are untouched.
+ *
+ * No-op in production, and never throws into application code.
+ */
+export function __riModuleCallsites(file: string, callsiteIds: readonly string[]): void {
+  if (!isDev()) return;
+
+  try {
+    if (typeof file !== "string" || file.length === 0) return;
+    const prefix = `${file}:`;
+    const present = new Set(callsiteIds);
+    const isOrphan = (callsiteId: string) =>
+      callsiteId.startsWith(prefix) && !present.has(callsiteId);
+
+    for (const [controlId, entry] of [...entries]) {
+      const callsiteId = callsiteOfControl(controlId);
+      if (callsiteId === undefined || !isOrphan(callsiteId)) continue;
+      entries.delete(controlId);
+      entry.dispose();
+    }
+    dropAppliedStartDelays(isOrphan);
+  } catch (error) {
+    warnInternalFailureOnce("__riModuleCallsites", undefined, error);
+  }
+}
+
+/** A control id is `${callsiteId}:${key}`; the key never contains a colon. */
+function callsiteOfControl(controlId: string): string | undefined {
+  const separator = controlId.lastIndexOf(":");
+  return separator > 0 ? controlId.slice(0, separator) : undefined;
+}
+
 /** Test-only: clears module-level state between test runs. */
 export function __resetAnimationConfigForTests(): void {
   entries.clear();
   warnedInternalFailure = false;
 }
 
-function warnInternalFailureOnce(helper: string, subject: string, error: unknown): void {
+function warnInternalFailureOnce(
+  helper: string,
+  subject: string | undefined,
+  error: unknown
+): void {
   if (warnedInternalFailure) return;
   warnedInternalFailure = true;
   const reason = error instanceof Error ? error.message : String(error);
-  console.warn(
-    `[Runtime Inspector] ${helper} failed and returned the original ${subject}: ${reason}`
-  );
+  const outcome = subject === undefined ? "failed" : `failed and returned the original ${subject}`;
+  console.warn(`[Runtime Inspector] ${helper} ${outcome}: ${reason}`);
 }
 
 function isDev() {

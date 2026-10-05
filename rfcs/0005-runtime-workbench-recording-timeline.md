@@ -222,6 +222,8 @@ shared.value = withTiming(target, config);                    // bare
 
 **Spring literals.** A discovered `withSpring` whose config is an object literal gets `parameterControls` for each of `damping` (0–100, step 0.1), `stiffness` (1–1000, step 1) and `mass` (0.1–10, step 0.1) that is a numeric literal inside its range, using the 3b mechanism unchanged. A spring driven by an Inspector `spring` control keeps using `configControlId`.
 
+**Call-site lifetime (runtime detail, no protocol change).** Call-site ids carry the source line and column, so a line shift on Fast Refresh gives a call site a new id. In development the plugin injects, after the imports of every module with a value import from Reanimated, `__riModuleCallsites("<file>", [<callsite ids>])`. Each (re-)evaluation disposes the `auto` controls of that file whose call site is no longer listed; still-present call sites keep their tuned values, and other files are untouched.
+
 Out of scope for 3c:
 
 - stagger produced by `setTimeout` or by application state — it stays invisible to discovery;

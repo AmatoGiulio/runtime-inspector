@@ -60,7 +60,9 @@ describe("runtime-inspector babel plugin", () => {
       const moveX = useSharedValue(0);
     `);
 
-    expect(code).toContain('import { __riInspect } from "@runtime-inspector/react-native"');
+    expect(code).toContain(
+      'import { __riInspect, __riModuleCallsites } from "@runtime-inspector/react-native"'
+    );
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain(
       '__riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, step: 1, unit: "px", label: "Move X", source: { file: "test.tsx", line: 4, column: 12, enclosure: [], name: "moveX", init: "0" } })'
@@ -74,7 +76,8 @@ describe("runtime-inspector babel plugin", () => {
     `);
 
     expect(code).not.toContain("__riInspect");
-    expect(code).not.toContain(SOURCE_IMPORT);
+    // Only the per-module call-site report of a Reanimated module remains.
+    expect(code.replace(/\s+/g, " ")).toContain('__riModuleCallsites("test.tsx", []);');
   });
 
   it("throws a build-time error for a numeric initial value without min/max", () => {
@@ -499,7 +502,7 @@ describe("runtime-inspector babel plugin", () => {
       expect(normalized).toContain("opacity.value = withTiming(1, { duration: 180 });");
       expect(normalized).not.toContain("__riAnimationConfig");
       expect(normalized).not.toContain("__riObserveAnimation");
-      expect(normalized).not.toContain(SOURCE_IMPORT);
+      expect(normalized).toContain('__riModuleCallsites("src/Card.tsx", []);');
     });
   });
 
@@ -813,7 +816,9 @@ describe("runtime-inspector babel plugin", () => {
         "opacity.value = withDelay(120, withTiming(1, { duration: 180 }));"
       );
       expect(normalized).toContain("opacity.value = withSpring(1, { damping: 14 });");
-      expect(normalized).not.toContain("__ri");
+      // Only the per-module call-site report remains, with no call sites.
+      expect(normalized.replace(/__riModuleCallsites/g, "")).not.toContain("__ri");
+      expect(normalized).toContain('__riModuleCallsites("src/Card.tsx", []);');
     });
   });
 });
@@ -1419,5 +1424,120 @@ describe("animation literal anchors (RFC 0007)", () => {
 
     expect(normalized).not.toContain('parameter: "delay"');
     expect(normalized).toContain('parameter: "duration", init: "200"');
+  });
+});
+
+describe("module call-site report (Fast Refresh orphan cleanup)", () => {
+  const CARD_OPTS = { filename: "/repo/src/Card.tsx", root: "/repo" };
+
+  function build(code: string, envName = "development"): string {
+    return transformWithOpts(code, { ...CARD_OPTS, envName }).replace(/\s+/g, " ");
+  }
+
+  function reportedIds(normalized: string): string[] | undefined {
+    const match = normalized.match(/__riModuleCallsites\("src\/Card\.tsx", \[([^\]]*)\]\);/);
+    if (!match) return undefined;
+    return match[1]
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => JSON.parse(entry) as string);
+  }
+
+  it("reports every discovered call site, delayed and bare, right after the imports", () => {
+    const normalized = build(`
+      import { withDelay, withSpring, withTiming } from "react-native-reanimated";
+      import { helper } from "./helper";
+      function Card({ x, y }) {
+        function play() {
+          x.value = withDelay(120, withTiming(1, { duration: 200 }));
+          y.value = withSpring(0, { damping: 14 });
+          x.value = withTiming(0, helper);
+        }
+        return play;
+      }
+    `);
+
+    expect(reportedIds(normalized)).toEqual([
+      "src/Card.tsx:6:10:timing:x",
+      "src/Card.tsx:7:10:spring:y",
+      "src/Card.tsx:8:10:timing:x"
+    ]);
+    expect(normalized.match(/__riModuleCallsites\(/g)).toHaveLength(1);
+    // After the last import, before the module body.
+    expect(normalized).toMatch(
+      /import \{ helper \} from "\.\/helper"; __riModuleCallsites\("src\/Card\.tsx", \[/
+    );
+    const runtimeImport = normalized.match(
+      /import \{[^}]*\} from "@runtime-inspector\/react-native"/g
+    );
+    expect(runtimeImport).toHaveLength(1);
+    expect(runtimeImport![0]).toContain("__riModuleCallsites");
+  });
+
+  it("reports an empty list for a Reanimated module without discovered assignments", () => {
+    const normalized = build(`
+      import { useSharedValue } from "react-native-reanimated";
+      export function useThing() { return useSharedValue(0); }
+    `);
+
+    expect(reportedIds(normalized)).toEqual([]);
+    expect(normalized).toContain(
+      'import { __riModuleCallsites } from "@runtime-inspector/react-native";'
+    );
+  });
+
+  it("emits nothing for a module without a value import from Reanimated", () => {
+    const plain = build(`
+      import { withTiming } from "./my-animations";
+      function play(x) { x.value = withTiming(1, { duration: 200 }); }
+    `);
+    const typeOnly = build(`
+      import type { SharedValue } from "react-native-reanimated";
+      export function read(x: SharedValue<number>) { return x.value; }
+    `);
+
+    expect(plain).toContain("__riObserveAnimation(");
+    expect(plain).not.toContain("__riModuleCallsites");
+    expect(typeOnly).not.toContain("__riModuleCallsites");
+  });
+
+  it("emits nothing in production", () => {
+    const normalized = build(
+      `
+      import { withTiming } from "react-native-reanimated";
+      function play(x) { x.value = withTiming(1, { duration: 200 }); }
+    `,
+      "production"
+    );
+
+    expect(normalized).not.toContain("__ri");
+  });
+
+  it("emits nothing for a dependency under node_modules", () => {
+    const normalized = transformWithOpts(
+      `
+      import { withTiming } from "react-native-reanimated";
+      export function play(x) { x.value = withTiming(1, { duration: 200 }); }
+    `,
+      { filename: "/repo/node_modules/some-lib/src/index.js", root: "/repo" }
+    );
+
+    expect(normalized).not.toContain("__riModuleCallsites");
+  });
+
+  it("emits nothing for the runtime package itself", () => {
+    const normalized = transformWithOpts(
+      `
+      import { withTiming } from "react-native-reanimated";
+      function play(x) { x.value = withTiming(1, { duration: 200 }); }
+    `,
+      {
+        filename: "/repo/packages/runtime-react-native/src/thing.ts",
+        root: "/repo"
+      }
+    );
+
+    expect(normalized).not.toContain("__riModuleCallsites");
   });
 });

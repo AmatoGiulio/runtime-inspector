@@ -418,7 +418,12 @@ export { __riProbe } from "./probe-auto";
 export type { AutoProbeMeta } from "./probe-auto";
 
 export { __riObserveAnimation } from "./animation-observer";
-export { __riAnimationConfig, __riAnimationDelay, __riAnimationStart } from "./animation-config";
+export {
+  __riAnimationConfig,
+  __riAnimationDelay,
+  __riAnimationStart,
+  __riModuleCallsites
+} from "./animation-config";
 export type {
   RuntimeAnimationConfigBinding,
   RuntimeAnimationStartBinding,

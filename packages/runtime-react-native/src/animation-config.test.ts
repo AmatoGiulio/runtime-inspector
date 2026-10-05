@@ -753,3 +753,153 @@ describe("literal anchors (RFC 0007)", () => {
     expect(controlById(schema, CONTROL_ID)).not.toHaveProperty("literal");
   });
 });
+
+describe("__riModuleCallsites (Fast Refresh orphan cleanup)", () => {
+  const OLD_SITE = "src/Card.tsx:9:6:timing:card.moveX";
+  const MOVED_SITE = "src/Card.tsx:10:6:timing:card.moveX";
+  const KEPT_SITE = "src/Card.tsx:14:6:spring:card.scale";
+  const OTHER_SITE = "src/Other.tsx:9:6:timing:card.moveX";
+
+  function siteDuration(callsiteId: string): RuntimeAnimationConfigBinding {
+    return durationBinding({ controlId: `${callsiteId}:duration` });
+  }
+
+  function siteStart(callsiteId: string): RuntimeAnimationStartWrapBinding {
+    return {
+      callsiteId,
+      controlId: `${callsiteId}:delay`,
+      label: "card.scale delay",
+      declared: 0,
+      min: 0,
+      max: 10000,
+      step: 1,
+      unit: "ms"
+    };
+  }
+
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    const { __resetAnimationConfigForTests } = await import("./animation-config");
+    const { __resetAnimationStartStateForTests } = await import("./animation-start-state");
+    const { __resetAutoRegistryForTests } = await import("./auto");
+    __resetAnimationConfigForTests();
+    __resetAnimationStartStateForTests();
+    __resetAutoRegistryForTests();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("disposes only the orphan controls of that file and republishes the auto schema", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { applyControlPatch } = await import("./index");
+    const { __riAnimationConfig, __riAnimationStart, __riModuleCallsites } = await import(
+      "./animation-config"
+    );
+    const withDelay = (ms: number, animation: object) => ({ delayed: ms, animation });
+
+    __riAnimationConfig({ duration: 260 }, [siteDuration(OLD_SITE)]);
+    __riAnimationStart({}, siteStart(KEPT_SITE), withDelay);
+    __riAnimationConfig({ duration: 260 }, [siteDuration(OTHER_SITE)]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "auto",
+      controlId: `${OLD_SITE}:duration`,
+      value: 400
+    });
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "auto",
+      controlId: `${KEPT_SITE}:delay`,
+      value: 90
+    });
+    applyControlPatch({
+      type: "control.patch",
+      schemaId: "auto",
+      controlId: `${OTHER_SITE}:duration`,
+      value: 500
+    });
+
+    // Fast Refresh: a line was inserted above the timing call, the spring stayed put.
+    __riModuleCallsites("src/Card.tsx", [MOVED_SITE, KEPT_SITE]);
+    __riAnimationConfig({ duration: 260 }, [siteDuration(MOVED_SITE)]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    const schema = definePanelSpy.mock.calls.at(-1)![0];
+    expect(schema.groups[0].controls.map((control) => control.id).sort()).toEqual(
+      [`${MOVED_SITE}:duration`, `${KEPT_SITE}:delay`, `${OTHER_SITE}:duration`].sort()
+    );
+    // The surviving call site and the other file keep their tuned values.
+    expect(__riAnimationStart({}, siteStart(KEPT_SITE), withDelay)).toEqual({
+      delayed: 90,
+      animation: {}
+    });
+    expect(__riAnimationConfig({ duration: 260 }, [siteDuration(OTHER_SITE)])).toEqual({
+      duration: 500
+    });
+    // The moved call site starts again from its declared literal.
+    const config = { duration: 260 };
+    expect(__riAnimationConfig(config, [siteDuration(MOVED_SITE)])).toBe(config);
+  });
+
+  it("does not touch a file whose name is a prefix of another file", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riAnimationConfig, __riModuleCallsites } = await import("./animation-config");
+    const longer = "src/Card.tsx.bak:9:6:timing:card.moveX";
+
+    __riAnimationConfig({ duration: 260 }, [siteDuration(longer)]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    __riModuleCallsites("src/Card.tsx", []);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(definePanelSpy).toHaveBeenCalledTimes(1);
+    expect(controlById(definePanelSpy.mock.calls[0][0], `${longer}:duration`)).toBeDefined();
+  });
+
+  it("clears the applied start delay recorded for a removed call site only", async () => {
+    const { __riModuleCallsites } = await import("./animation-config");
+    const { recordAppliedStartDelay, consumeAppliedStartDelay } = await import(
+      "./animation-start-state"
+    );
+
+    recordAppliedStartDelay(OLD_SITE, 120);
+    recordAppliedStartDelay(KEPT_SITE, 80);
+    recordAppliedStartDelay(OTHER_SITE, 40);
+    __riModuleCallsites("src/Card.tsx", [KEPT_SITE]);
+
+    expect(consumeAppliedStartDelay(OLD_SITE)).toBeUndefined();
+    expect(consumeAppliedStartDelay(KEPT_SITE)).toBe(80);
+    expect(consumeAppliedStartDelay(OTHER_SITE)).toBe(40);
+  });
+
+  it("is a no-op in production", async () => {
+    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const { __riAnimationConfig, __riModuleCallsites } = await import("./animation-config");
+
+    __riAnimationConfig({ duration: 260 }, [siteDuration(OLD_SITE)]);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    vi.stubGlobal("__DEV__", false);
+    __riModuleCallsites("src/Card.tsx", []);
+    vi.stubGlobal("__DEV__", true);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+
+    expect(definePanelSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("never throws into application code", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { __riModuleCallsites } = await import("./animation-config");
+
+    expect(() =>
+      __riModuleCallsites("src/Card.tsx", 42 as unknown as readonly string[])
+    ).not.toThrow();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+});

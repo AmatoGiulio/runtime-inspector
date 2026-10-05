@@ -22,6 +22,7 @@ const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
 const ANIMATION_CONFIG_HELPER_NAME = "__riAnimationConfig";
 const ANIMATION_DELAY_HELPER_NAME = "__riAnimationDelay";
 const ANIMATION_START_HELPER_NAME = "__riAnimationStart";
+const MODULE_CALLSITES_HELPER_NAME = "__riModuleCallsites";
 const WITH_DELAY_LOCAL_NAME = "__riWithDelay";
 const AUTO_SCHEMA_ID = "auto";
 const START_DELAY_MIN_MS = 0;
@@ -109,35 +110,46 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
   return {
     name: "runtime-inspector-auto-binding",
     visitor: {
-      Program(programPath, state) {
-        if (isProduction) return;
-        const stateBag = programPath as unknown as {
-          _riHelperImported?: boolean;
-          _riRuntimeHelpers?: Set<string>;
-          _riInspectorSchemas?: Map<string, string>;
-          _riAutoValueNames?: Set<string>;
-          _riSkipAnimationInstrumentation?: boolean;
-          _riWithDelayImported?: boolean;
-        };
-        stateBag._riHelperImported = false;
-        stateBag._riWithDelayImported = false;
-        stateBag._riRuntimeHelpers = new Set();
-        stateBag._riInspectorSchemas = new Map();
-        stateBag._riAutoValueNames = new Set();
-        stateBag._riSkipAnimationInstrumentation = shouldSkipAnimationInstrumentation(
-          state.filename ?? state.file.opts.filename ?? undefined
-        );
+      Program: {
+        enter(programPath, state) {
+          if (isProduction) return;
+          const stateBag = programPath as unknown as ProgramStateBag;
+          stateBag._riHelperImported = false;
+          stateBag._riWithDelayImported = false;
+          stateBag._riRuntimeHelpers = new Set();
+          stateBag._riInspectorSchemas = new Map();
+          stateBag._riAutoValueNames = new Set();
+          stateBag._riCallsiteIds = new Set();
+          stateBag._riReanimatedModule = programHasReanimatedImport(programPath.node);
+          stateBag._riSkipAnimationInstrumentation = shouldSkipAnimationInstrumentation(
+            state.filename ?? state.file.opts.filename ?? undefined
+          );
 
-        // RFC 0008: automatic motions and probes, decided on the untouched program so the
-        // callsite ids match the ones the AssignmentExpression visitor emits afterwards.
-        const file = relativeSourceFile(state);
-        if (!stateBag._riSkipAnimationInstrumentation && file) {
-          instrumentMotions(programPath, {
-            types: api.types,
-            file,
-            discover: (path) => discoverAnimation(path, state)?.discovered,
-            ensureImport: (path, helperName) => ensureRuntimeHelperImport(path, helperName, api)
-          });
+          // RFC 0008: automatic motions and probes, decided on the untouched program so the
+          // callsite ids match the ones the AssignmentExpression visitor emits afterwards.
+          const file = relativeSourceFile(state);
+          if (!stateBag._riSkipAnimationInstrumentation && file) {
+            instrumentMotions(programPath, {
+              types: api.types,
+              file,
+              discover: (path) => discoverAnimation(path, state)?.discovered,
+              ensureImport: (path, helperName) => ensureRuntimeHelperImport(path, helperName, api)
+            });
+          }
+        },
+        // Fast Refresh: tell the runtime which call sites this module still has, so
+        // the `auto` controls of call sites that moved or disappeared are disposed.
+        exit(programPath, state) {
+          if (isProduction) return;
+          const stateBag = programPath as unknown as ProgramStateBag;
+          if (stateBag._riSkipAnimationInstrumentation) return;
+          if (!stateBag._riReanimatedModule) return;
+          // Dependencies are not edited under Fast Refresh, so they cannot orphan controls;
+          // skipping them keeps the runtime import out of every library using Reanimated.
+          if (isDependencyFile(state.filename ?? state.file.opts.filename ?? undefined)) return;
+          const file = relativeSourceFile(state);
+          if (!file) return;
+          injectModuleCallsites(programPath, file, [...(stateBag._riCallsiteIds ?? [])], api);
         }
       },
       VariableDeclarator(path: NodePath<VariableDeclarator>, state: PluginPass) {
@@ -228,6 +240,7 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
         );
         if (!built) return;
         const { meta, callsiteId, literalBase } = built;
+        programState(path)._riCallsiteIds?.add(callsiteId);
 
         // Preserve the application's original Reanimated call exactly. Runtime
         // Inspector observes the animation object *after* Reanimated constructs it
@@ -814,8 +827,11 @@ function startControlProperty(t: BabelAPI["types"], callsiteId: string) {
 function hasReanimatedImport(path: NodePath): boolean {
   const program = path.findParent((candidate) => candidate.isProgram());
   if (!program || !program.isProgram()) return false;
+  return programHasReanimatedImport(program.node);
+}
 
-  return program.node.body.some(
+function programHasReanimatedImport(program: BabelTypesNamespace.Program): boolean {
+  return program.body.some(
     (statement) =>
       statement.type === "ImportDeclaration" &&
       statement.source.value === REANIMATED_MODULE &&
@@ -947,19 +963,64 @@ function isInsideKnownWorkletContext(path: NodePath): boolean {
   return false;
 }
 
-function programState(path: NodePath) {
+/** Per-file plugin state, stored on the Program path. */
+interface ProgramStateBag {
+  _riHelperImported?: boolean;
+  _riRuntimeHelpers?: Set<string>;
+  _riInspectorSchemas?: Map<string, string>;
+  _riAutoValueNames?: Set<string>;
+  _riSkipAnimationInstrumentation?: boolean;
+  _riWithDelayImported?: boolean;
+  /** Callsite ids of every animation assignment instrumented in this file. */
+  _riCallsiteIds?: Set<string>;
+  /** Whether the untouched module has a value import from Reanimated. */
+  _riReanimatedModule?: boolean;
+}
+
+/** The Program path of `path`, or `path` itself when it is the Program. */
+function programPathOf(path: NodePath): NodePath<BabelTypesNamespace.Program> | undefined {
+  if (path.isProgram()) return path;
   const program = path.findParent((candidate) => candidate.isProgram());
-  if (!program || !program.isProgram()) {
+  return program?.isProgram() ? program : undefined;
+}
+
+function programState(path: NodePath): ProgramStateBag {
+  const program = programPathOf(path);
+  if (!program) {
     throw new Error("@runtime-inspector/babel-plugin: could not resolve Program path.");
   }
-  return program as unknown as {
-    _riHelperImported?: boolean;
-    _riRuntimeHelpers?: Set<string>;
-    _riInspectorSchemas?: Map<string, string>;
-    _riAutoValueNames?: Set<string>;
-    _riSkipAnimationInstrumentation?: boolean;
-    _riWithDelayImported?: boolean;
-  };
+  return program as unknown as ProgramStateBag;
+}
+
+/**
+ * Inserts `__riModuleCallsites("<file>", [...ids])` right after the module's
+ * imports, so every (re-)evaluation reports the call sites the file still has.
+ */
+function injectModuleCallsites(
+  programPath: NodePath<BabelTypesNamespace.Program>,
+  file: string,
+  callsiteIds: readonly string[],
+  api: BabelAPI
+): void {
+  const t = api.types;
+  ensureRuntimeHelperImport(programPath, MODULE_CALLSITES_HELPER_NAME, api);
+
+  const statement = t.expressionStatement(
+    t.callExpression(t.identifier(MODULE_CALLSITES_HELPER_NAME), [
+      t.stringLiteral(file),
+      t.arrayExpression(callsiteIds.map((id) => t.stringLiteral(id)))
+    ])
+  );
+
+  let lastImport: NodePath | undefined;
+  for (const statementPath of programPath.get("body")) {
+    if (statementPath.isImportDeclaration()) lastImport = statementPath;
+  }
+  if (lastImport) {
+    lastImport.insertAfter(statement);
+  } else {
+    programPath.unshiftContainer("body", statement);
+  }
 }
 
 function shouldSkipAnimationInstrumentation(filename: string | undefined): boolean {
@@ -971,6 +1032,10 @@ function shouldSkipAnimationInstrumentation(filename: string | undefined): boole
   );
 }
 
+function isDependencyFile(filename: string | undefined): boolean {
+  if (!filename) return false;
+  return filename.split(sep).join("/").includes("/node_modules/");
+}
 
 function literalFor(t: BabelAPI["types"], value: unknown) {
   if (typeof value === "number") return t.numericLiteral(value);
@@ -1130,8 +1195,8 @@ function ensureRuntimeHelperImport(
   helperName: string,
   api: BabelAPI
 ): void {
-  const program = path.findParent((candidate) => candidate.isProgram());
-  if (!program || !program.isProgram()) return;
+  const program = programPathOf(path);
+  if (!program) return;
 
   const stateBag = programState(path);
   stateBag._riRuntimeHelpers ??= new Set();

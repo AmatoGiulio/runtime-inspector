@@ -17,6 +17,13 @@ export function consumeAppliedStartDelay(callsiteId: string): number | undefined
   return ms;
 }
 
+/** Drops every recorded delay whose call site matches `predicate`. */
+export function dropAppliedStartDelays(predicate: (callsiteId: string) => boolean): void {
+  for (const callsiteId of [...appliedStartDelays.keys()]) {
+    if (predicate(callsiteId)) appliedStartDelays.delete(callsiteId);
+  }
+}
+
 /** Test-only: clears module-level state between test runs. */
 export function __resetAnimationStartStateForTests(): void {
   appliedStartDelays.clear();
