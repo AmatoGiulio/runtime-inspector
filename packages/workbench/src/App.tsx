@@ -39,6 +39,7 @@ import {
   mergeBurst,
   nextStickyDuration,
   parameterControl,
+  playbackTargetScene,
   startControl,
   timelineOriginMs,
   timelineSignature
@@ -124,10 +125,8 @@ function App() {
   );
   const scenesStale = Boolean(state.staleSchemaIds[SCENES_SCHEMA_ID]);
   const [currentSceneId, setCurrentSceneId] = useState<string>();
-  /** Playback target: the selected scene, else the scene on screen. */
-  const targetScene =
-    scenes.find((scene) => scene.id === currentSceneId) ??
-    scenes.find((scene) => scene.active);
+  /** Playback target: the selected scene if the app can show it, else the scene on screen. */
+  const targetScene = playbackTargetScene(scenes, currentSceneId);
   const targetSceneId = targetScene?.id;
   const targetSceneStatus = targetSceneId ? state.sceneStatus[targetSceneId] : undefined;
   const targetPlayingAtRuntimeMs =

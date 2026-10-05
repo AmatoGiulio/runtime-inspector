@@ -612,3 +612,17 @@ export function applyResultNotice(results: readonly SourceApplyResultEntry[]): s
   const reason = APPLY_FAILURE_TEXT[failure.code] ?? "The change could not be applied";
   return applied > 0 ? `Applied ${applied} of ${results.length} changes. ${reason}` : reason;
 }
+
+/**
+ * The scene Play and timeline edits replay: the selected scene when the app can show it (it is on
+ * screen or reachable), else the scene on screen, else the selected scene unchanged so a stale or
+ * cold-start selection still reaches the deep-link path.
+ */
+export function playbackTargetScene<
+  T extends { id: string; active?: boolean; reachable?: boolean }
+>(scenes: readonly T[], selectedId: string | undefined): T | undefined {
+  const selected =
+    selectedId === undefined ? undefined : scenes.find((scene) => scene.id === selectedId);
+  if (selected && (selected.active || selected.reachable)) return selected;
+  return scenes.find((scene) => scene.active) ?? selected;
+}

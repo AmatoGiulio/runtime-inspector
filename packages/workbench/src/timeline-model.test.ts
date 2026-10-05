@@ -16,6 +16,7 @@ import {
   nextStickyDuration,
   orderAnimations,
   parameterControl,
+  playbackTargetScene,
   resizedDurationMs,
   resizedFromStart,
   resolvePendingPreview,
@@ -903,5 +904,44 @@ describe("animation literal write-back helpers (RFC 0007)", () => {
         { controlId: "c", ok: false, code: "EXPRESSION_MISMATCH" }
       ])
     ).toBe("Applied 1 of 3 changes. The code was not found in the file");
+  });
+});
+
+describe("playbackTargetScene", () => {
+  const scene = (id: string, active = false, reachable = false) => ({ id, active, reachable });
+
+  it("keeps the selected scene when it is on screen", () => {
+    const scenes = [scene("a", true), scene("b", false, true)];
+    expect(playbackTargetScene(scenes, "a")?.id).toBe("a");
+  });
+
+  it("keeps the selected scene when it is reachable but not on screen", () => {
+    const scenes = [scene("a", true), scene("b", false, true)];
+    expect(playbackTargetScene(scenes, "b")?.id).toBe("b");
+  });
+
+  it("replays the scene on screen when the selection can neither show nor open", () => {
+    const scenes = [scene("a", true), scene("b")];
+    expect(playbackTargetScene(scenes, "b")?.id).toBe("a");
+  });
+
+  it("falls back to the selected scene when none is on screen", () => {
+    const scenes = [scene("a"), scene("b")];
+    expect(playbackTargetScene(scenes, "b")?.id).toBe("b");
+  });
+
+  it("uses the scene on screen when nothing is selected", () => {
+    const scenes = [scene("a"), scene("b", true)];
+    expect(playbackTargetScene(scenes, undefined)?.id).toBe("b");
+  });
+
+  it("ignores a selection that no longer exists", () => {
+    const scenes = [scene("a", true)];
+    expect(playbackTargetScene(scenes, "gone")?.id).toBe("a");
+  });
+
+  it("returns undefined for an empty list", () => {
+    expect(playbackTargetScene([], "a")).toBeUndefined();
+    expect(playbackTargetScene([], undefined)).toBeUndefined();
   });
 });
