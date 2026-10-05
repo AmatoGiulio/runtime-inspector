@@ -485,7 +485,6 @@ Validated live on 2026-10-05: in `ProductRevealDemo.tsx` one **Apply 3 changes**
 
 Known rough edges seen in those runs:
 
-- after moving a block's start, the block is drawn back at its old start until the next replay (the value and the pending count are correct);
-- the added `withDelay` specifier is appended on the same line as the last one (`withTiming, withDelay`) even when the import lists one specifier per line;
-- Play targets the scene selected in the sidebar, which can differ from the screen the app is showing;
 - the Inspector can keep showing a control from the previous scene.
+
+Fixed and re-checked live on 2026-10-05: Play and the replay after a timeline edit now target the selected scene only when it is on screen or reachable, else the scene on screen (before, a selected scene that could not open made Play do nothing and a moved block snap back after the 2 s preview timeout); an added `withDelay` keeps a multi-line import one specifier per line.
