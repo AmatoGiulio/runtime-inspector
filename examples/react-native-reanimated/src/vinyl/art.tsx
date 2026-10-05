@@ -80,12 +80,30 @@ export function DiscSheen({ size }: ArtProps) {
   );
 }
 
+/** A thin ring sector of the grooves, from `start` to `end` degrees. */
+function grooveSector(start: number, end: number): string {
+  const point = (radius: number, degrees: number) => {
+    const angle = (degrees * Math.PI) / 180;
+    return `${(50 + radius * Math.cos(angle)).toFixed(2)} ${(50 + radius * Math.sin(angle)).toFixed(2)}`;
+  };
+  return `M${point(19, start)} L${point(49, start)} A49 49 0 0 1 ${point(49, end)} L${point(19, end)} A19 19 0 0 0 ${point(19, start)} Z`;
+}
+
+/**
+ * Two faint bands where the grooves catch the light unevenly. They turn with the record,
+ * so a record playing half inside its sleeve still reads as turning.
+ */
+const GROOVE_GLINTS = [grooveSector(-20, -6), grooveSector(160, 170)];
+
 /** The black record inside every sleeve, with a label in the record's colour. */
 export function GenericVinyl({ size, labelColor }: ArtProps & { labelColor: string }) {
   return (
     <Svg height={size} viewBox="0 0 100 100" width={size}>
       <Circle cx={50} cy={50} fill="#0c0c0d" r={50} />
       <Grooves tone="light" />
+      {GROOVE_GLINTS.map((d) => (
+        <Path d={d} fill="#ffffff" fillOpacity={0.05} key={d} />
+      ))}
       <Circle cx={50} cy={50} fill={labelColor} r={16.5} />
       {/* Darker lower half and printed lines make the spin readable. */}
       <Path d="M33.5 50 A16.5 16.5 0 0 0 66.5 50 Z" fill="rgba(0,0,0,0.16)" />
