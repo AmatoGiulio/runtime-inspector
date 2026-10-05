@@ -36,14 +36,20 @@ const BACKGROUND = "#1f1f1f";
 const SIDE_PADDING = 20;
 const GUTTER = 18;
 const TILE_RADIUS = 6;
-const HERO_MARGIN = 32;
+/** The open record sits left of centre, so the record can slide out to the right. */
+const HERO_LEFT = 20;
+/** The smallest gap between the slid-out record and the screen's right edge. */
+const HERO_EDGE = 12;
 /** The record is a little smaller than its sleeve, so it hides fully inside. */
 const DISC_RATIO = 0.96;
-/** Where the record and the sleeve end up once the record has slid out (× sleeve size). */
-const DISC_SLIDE = 0.22;
-const SLEEVE_SHIFT = 0.06;
+/** How much of the record shows beside its sleeve once it has slid out (× record diameter). */
+const DISC_REVEAL = 0.4;
+/** The sleeve gives way to the left by this much (pt) as the record slides out. */
+const SLEEVE_NUDGE = 8;
 /** Two full turns, so the label comes to rest upright and the return to the grid is seamless. */
 const DISC_TURNS = 720;
+/** Height of the fade from the dimmed grid into the solid floor under the tracklist. */
+const INFO_FADE = 36;
 
 /** Strong ease-out: instant response, soft landing. */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -87,16 +93,25 @@ export function VinylLibraryScreen() {
   const [open, setOpen] = useState(false);
 
   const tileSize = (width - SIDE_PADDING * 2 - GUTTER) / 2;
-  const heroSize = width - HERO_MARGIN * 2;
+  // Sized so the slid-out record ends HERO_EDGE from the screen's right edge (on a 393 pt
+  // iPhone: a 270 pt sleeve, the record's right edge at 381 pt).
+  const heroSize = Math.min(
+    width - HERO_LEFT * 2,
+    (width - HERO_EDGE - HERO_LEFT + SLEEVE_NUDGE) /
+      ((1 - DISC_RATIO) / 2 + DISC_RATIO * (1 + DISC_REVEAL))
+  );
   const discSize = heroSize * DISC_RATIO;
+  /** How far the record travels right; with the sleeve's nudge left, DISC_REVEAL of it shows. */
+  const discTravel = DISC_REVEAL * discSize - SLEEVE_NUDGE;
   const heroTop = topInset + 52;
   const heroRadius = (TILE_RADIUS * heroSize) / tileSize;
   const record = RECORDS[selected];
   const isDisc = record.tile === "disc";
   /** The element that flies from the grid: the sleeve, or the bare disc. */
   const liftedSize = isDisc ? discSize : heroSize;
-  const heroCenterX = HERO_MARGIN + heroSize / 2;
+  const heroCenterX = HERO_LEFT + heroSize / 2;
   const heroCenterY = heroTop + heroSize / 2;
+  const infoTop = heroTop + heroSize + 28;
 
   // Library entrance.
   const headerOpacity = useSharedValue(0);
@@ -111,16 +126,16 @@ export function VinylLibraryScreen() {
   const row4Y = useSharedValue(18);
 
   // Open / close record. Each is a 0→1 progress.
-  const backdrop = useSharedValue(0);
-  const lift = useSharedValue(0);
-  const discOut = useSharedValue(0);
+  const backdropFade = useSharedValue(0);
+  const coverLift = useSharedValue(0);
+  const discSlide = useSharedValue(0);
   const discSpin = useSharedValue(0);
-  const titleIn = useSharedValue(0);
-  const metaIn = useSharedValue(0);
-  const track1In = useSharedValue(0);
-  const track2In = useSharedValue(0);
-  const track3In = useSharedValue(0);
-  const track4In = useSharedValue(0);
+  const titleReveal = useSharedValue(0);
+  const metaReveal = useSharedValue(0);
+  const tracksRow1 = useSharedValue(0);
+  const tracksRow2 = useSharedValue(0);
+  const tracksRow3 = useSharedValue(0);
+  const tracksRow4 = useSharedValue(0);
 
   // Where the lifted cover starts from, in window coordinates (plain assignments only).
   const originX = useSharedValue(0);
@@ -176,33 +191,33 @@ export function VinylLibraryScreen() {
     syncOrigin();
     setOpen(true);
 
-    backdrop.value = 0;
-    lift.value = 0;
-    discOut.value = 0;
+    backdropFade.value = 0;
+    coverLift.value = 0;
+    discSlide.value = 0;
     discSpin.value = 0;
-    titleIn.value = 0;
-    metaIn.value = 0;
-    track1In.value = 0;
-    track2In.value = 0;
-    track3In.value = 0;
-    track4In.value = 0;
+    titleReveal.value = 0;
+    metaReveal.value = 0;
+    tracksRow1.value = 0;
+    tracksRow2.value = 0;
+    tracksRow3.value = 0;
+    tracksRow4.value = 0;
 
-    backdrop.value = withTiming(1, { duration: 280, easing: EASE_OUT });
-    lift.value = withSpring(1, {
+    backdropFade.value = withTiming(1, { duration: 280, easing: EASE_OUT });
+    coverLift.value = withSpring(1, {
       damping: 20,
       stiffness: 170,
       mass: 1,
       restDisplacementThreshold: 0.0005,
       restSpeedThreshold: 0.005
     });
-    discOut.value = withDelay(160, withSpring(1, { damping: 16, stiffness: 180, mass: 1 }));
+    discSlide.value = withDelay(160, withSpring(1, { damping: 16, stiffness: 180, mass: 1 }));
     discSpin.value = withDelay(260, withTiming(1, { duration: 1800, easing: EASE_SPIN }));
-    titleIn.value = withDelay(220, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    metaIn.value = withDelay(260, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    track1In.value = withDelay(300, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    track2In.value = withDelay(340, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    track3In.value = withDelay(380, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    track4In.value = withDelay(420, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    titleReveal.value = withDelay(220, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    metaReveal.value = withDelay(260, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    tracksRow1.value = withDelay(300, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    tracksRow2.value = withDelay(340, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    tracksRow3.value = withDelay(380, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    tracksRow4.value = withDelay(420, withTiming(1, { duration: 320, easing: EASE_OUT }));
   }
 
   // @scene "Close record" group="Vinyl"
@@ -210,25 +225,25 @@ export function VinylLibraryScreen() {
     syncOrigin();
     setOpen(false);
 
-    backdrop.value = 1;
-    lift.value = 1;
-    discOut.value = 1;
+    backdropFade.value = 1;
+    coverLift.value = 1;
+    discSlide.value = 1;
     discSpin.value = 1;
-    titleIn.value = 1;
-    metaIn.value = 1;
-    track1In.value = 1;
-    track2In.value = 1;
-    track3In.value = 1;
-    track4In.value = 1;
+    titleReveal.value = 1;
+    metaReveal.value = 1;
+    tracksRow1.value = 1;
+    tracksRow2.value = 1;
+    tracksRow3.value = 1;
+    tracksRow4.value = 1;
 
-    titleIn.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    metaIn.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    track1In.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    track2In.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    track3In.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    track4In.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    discOut.value = withSpring(0, { damping: 26, stiffness: 300, mass: 1 });
-    lift.value = withDelay(
+    titleReveal.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    metaReveal.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    tracksRow1.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    tracksRow2.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    tracksRow3.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    tracksRow4.value = withTiming(0, { duration: 160, easing: EASE_OUT });
+    discSlide.value = withSpring(0, { damping: 26, stiffness: 300, mass: 1 });
+    coverLift.value = withDelay(
       140,
       withSpring(0, {
         damping: 26,
@@ -238,7 +253,7 @@ export function VinylLibraryScreen() {
         restSpeedThreshold: 0.005
       })
     );
-    backdrop.value = withDelay(120, withTiming(0, { duration: 300, easing: EASE_OUT }));
+    backdropFade.value = withDelay(120, withTiming(0, { duration: 300, easing: EASE_OUT }));
   }
 
   useEffect(() => {
@@ -302,14 +317,14 @@ export function VinylLibraryScreen() {
   const rowStyles = [row1Style, row2Style, row3Style, row4Style];
 
   const gridStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - 0.06 * backdrop.value }]
+    transform: [{ scale: 1 - 0.06 * backdropFade.value }]
   }));
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropFade.value }));
 
   const heroStyle = useAnimatedStyle(() => {
-    const t = lift.value;
-    const visible = t > 0.0001 || backdrop.value > 0.0001;
+    const t = coverLift.value;
+    const visible = t > 0.0001 || backdropFade.value > 0.0001;
     const startScale = originSize.value / liftedSize;
     const startDX = originX.value + originSize.value / 2 - heroCenterX;
     const startDY = originY.value + originSize.value / 2 - heroCenterY;
@@ -324,24 +339,24 @@ export function VinylLibraryScreen() {
   });
 
   const sleeveStyle = useAnimatedStyle(() => ({
-    opacity: isDisc ? interpolate(discOut.value, [0, 0.45], [0, 1], Extrapolation.CLAMP) : 1,
-    transform: [{ translateX: -SLEEVE_SHIFT * heroSize * discOut.value }]
+    opacity: isDisc ? interpolate(discSlide.value, [0, 0.45], [0, 1], Extrapolation.CLAMP) : 1,
+    transform: [{ translateX: -SLEEVE_NUDGE * discSlide.value }]
   }));
 
   const discSlideStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: DISC_SLIDE * heroSize * discOut.value }]
+    transform: [{ translateX: discTravel * discSlide.value }]
   }));
 
   const discSpinStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${discSpin.value * DISC_TURNS}deg` }]
   }));
 
-  const titleStyle = useRiseStyle(titleIn, 10);
-  const metaStyle = useRiseStyle(metaIn, 10);
-  const track1Style = useRiseStyle(track1In, 8);
-  const track2Style = useRiseStyle(track2In, 8);
-  const track3Style = useRiseStyle(track3In, 8);
-  const track4Style = useRiseStyle(track4In, 8);
+  const titleStyle = useRiseStyle(titleReveal, 10);
+  const metaStyle = useRiseStyle(metaReveal, 10);
+  const track1Style = useRiseStyle(tracksRow1, 8);
+  const track2Style = useRiseStyle(tracksRow2, 8);
+  const track3Style = useRiseStyle(tracksRow3, 8);
+  const track4Style = useRiseStyle(tracksRow4, 8);
   const trackStyles = [track1Style, track2Style, track3Style, track4Style];
 
   const sleeveLayer = (
@@ -429,10 +444,10 @@ export function VinylLibraryScreen() {
               {pair.map((index) => (
                 <RecordTile
                   activeIndex={activeIndex}
-                  backdrop={backdrop}
+                  backdropFade={backdropFade}
                   index={index}
                   key={RECORDS[index].id}
-                  lift={lift}
+                  coverLift={coverLift}
                   onLayout={index === 0 ? handleFirstTileLayout : undefined}
                   onPress={handleTilePress}
                   record={RECORDS[index]}
@@ -465,6 +480,12 @@ export function VinylLibraryScreen() {
       >
         <BlurView intensity={30} style={StyleSheet.absoluteFill} tint="dark" />
         <View style={styles.dim} />
+        {/* A solid floor under the title and tracklist, so the grid never shows through them. */}
+        <LinearGradient
+          colors={["rgba(10,10,10,0)", "rgba(10,10,10,1)"]}
+          style={[styles.infoFade, { top: infoTop - 12 - INFO_FADE }]}
+        />
+        <View style={[styles.infoFloor, { top: infoTop - 12 }]} />
         <Pressable
           accessibilityLabel="Close record"
           accessibilityRole="button"
@@ -477,14 +498,14 @@ export function VinylLibraryScreen() {
         pointerEvents="none"
         style={[
           styles.hero,
-          { height: heroSize, left: HERO_MARGIN, top: heroTop, width: heroSize },
+          { height: heroSize, left: HERO_LEFT, top: heroTop, width: heroSize },
           heroStyle
         ]}
       >
         {isDisc ? [sleeveLayer, discLayer] : [discLayer, sleeveLayer]}
       </Animated.View>
 
-      <View pointerEvents="none" style={[styles.info, { top: heroTop + heroSize + 28 }]}>
+      <View pointerEvents="none" style={[styles.info, { top: infoTop }]}>
         <Animated.Text numberOfLines={1} style={[styles.heroTitle, titleStyle]}>
           {record.title}
         </Animated.Text>
@@ -537,8 +558,8 @@ interface RecordTileProps {
   index: number;
   size: number;
   activeIndex: SharedValue<number>;
-  lift: SharedValue<number>;
-  backdrop: SharedValue<number>;
+  coverLift: SharedValue<number>;
+  backdropFade: SharedValue<number>;
   onPress(index: number): void;
   onLayout?: (event: LayoutChangeEvent) => void;
   registerNode(node: View | null): void;
@@ -549,8 +570,8 @@ function RecordTile({
   index,
   size,
   activeIndex,
-  lift,
-  backdrop,
+  coverLift,
+  backdropFade,
   onPress,
   onLayout,
   registerNode
@@ -569,7 +590,7 @@ function RecordTile({
   // While its record is lifted, the tile hands its place over to the hero.
   const handoffStyle = useAnimatedStyle(() => ({
     opacity:
-      activeIndex.value === index && (lift.value > 0.0001 || backdrop.value > 0.0001) ? 0 : 1
+      activeIndex.value === index && (coverLift.value > 0.0001 || backdropFade.value > 0.0001) ? 0 : 1
   }));
 
   return (
@@ -679,7 +700,20 @@ const styles = StyleSheet.create({
   },
   dim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10,10,10,0.5)"
+    backgroundColor: "rgba(10,10,10,0.88)"
+  },
+  infoFade: {
+    height: INFO_FADE,
+    left: 0,
+    position: "absolute",
+    right: 0
+  },
+  infoFloor: {
+    backgroundColor: "rgb(10,10,10)",
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0
   },
   hero: {
     position: "absolute"
@@ -701,9 +735,9 @@ const styles = StyleSheet.create({
     shadowRadius: 18
   },
   info: {
-    left: HERO_MARGIN,
+    left: HERO_LEFT,
     position: "absolute",
-    right: HERO_MARGIN
+    right: HERO_LEFT
   },
   heroTitle: {
     color: "#ffffff",
