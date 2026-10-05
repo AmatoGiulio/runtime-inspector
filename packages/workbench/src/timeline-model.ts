@@ -300,6 +300,17 @@ export function timelineSignature(animations: RuntimeAnimationTrace[]): string {
 }
 
 /**
+ * The key the sticky ruler is kept under: the target scene while one is set, so the ruler only
+ * grows across that scene's replays even while rows come and go; else the call-site signature.
+ */
+export function timelineScaleKey(
+  sceneId: string | undefined,
+  animations: RuntimeAnimationTrace[]
+): string {
+  return sceneId !== undefined ? `scene\u0000${sceneId}` : timelineSignature(animations);
+}
+
+/**
  * Sticky ruler length: while the same set of animations is on screen it only grows, so lengthening
  * or moving one block does not rescale the others. A different set resets to its content duration.
  */

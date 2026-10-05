@@ -44,7 +44,7 @@ import {
   settleBurst,
   startControl,
   timelineOriginMs,
-  timelineSignature
+  timelineScaleKey
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
 import { TIMELINE_HEIGHT_STORAGE_KEY, clampTimelineHeight } from "./layout";
@@ -532,8 +532,9 @@ function App() {
   // same scene merge as before, so its rows hold still.
   const displayedAnimations = useSettledBurst(latestBurst, targetSceneId ?? "");
   const detectedAnimationOriginMs = timelineOriginMs(displayedAnimations);
-  // Sticky ruler: while the same set of animations is on screen the scale only grows, so moving or
-  // lengthening one block does not rescale the others.
+  // Sticky ruler: while the same scene is targeted (or, without one, the same set of animations is
+  // on screen) the scale only grows, so moving or lengthening one block, or rows dropping and
+  // coming back during a replay, does not rescale the others.
   const timelineScaleRef = useRef<
     { signature: string; durationMs: number } | undefined
   >(undefined);
@@ -545,8 +546,8 @@ function App() {
     timelineScaleRef.current = undefined;
   }
   const timelineScaleSignature = useMemo(
-    () => timelineSignature(displayedAnimations),
-    [displayedAnimations]
+    () => timelineScaleKey(targetSceneId, displayedAnimations),
+    [targetSceneId, displayedAnimations]
   );
   const timelineContentDurationMs = useMemo(
     () =>

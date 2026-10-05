@@ -29,6 +29,7 @@ import {
   splitAnimationTarget,
   startControl,
   timelineOriginMs,
+  timelineScaleKey,
   timelineSignature,
   timingDurationControl
 } from "./timeline-model";
@@ -1127,5 +1128,61 @@ describe("receiveBurst / settleBurst", () => {
     const previous = cardRun("p", { originMs: 5000 });
     const state = initialSettledBurst(previous, "card");
     expect(receiveBurst(state, previous, "card")).toBe(state);
+  });
+});
+
+describe("timelineScaleKey", () => {
+  /** The App's ruler: `nextStickyDuration` under `timelineScaleKey`, fed each displayed burst. */
+  function rulerDurations(
+    bursts: Array<{ sceneId: string | undefined; animations: RuntimeAnimationTrace[] }>
+  ): number[] {
+    let scale: { signature: string; durationMs: number } | undefined;
+    return bursts.map(({ sceneId, animations }) => {
+      scale = nextStickyDuration(
+        scale,
+        timelineScaleKey(sceneId, animations),
+        buildTimelineModel(animations).durationMs
+      );
+      return buildTimelineModel(animations, { minDurationMs: scale.durationMs }).durationMs;
+    });
+  }
+
+  const full = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+  const timingsOnly = full.slice(0, 4);
+
+  it("is the scene while one is targeted, else the call-site signature", () => {
+    expect(timelineScaleKey("card", full)).toBe(timelineScaleKey("card", timingsOnly));
+    expect(timelineScaleKey("card", full)).not.toBe(timelineScaleKey("list", full));
+    expect(timelineScaleKey(undefined, full)).toBe(timelineSignature(full));
+  });
+
+  it("never shrinks the ruler while rows of the same scene drop and come back", () => {
+    expect(buildTimelineModel(timingsOnly).durationMs).toBeLessThan(
+      buildTimelineModel(full).durationMs
+    );
+    const durations = rulerDurations([
+      { sceneId: "card", animations: full },
+      { sceneId: "card", animations: timingsOnly },
+      { sceneId: "card", animations: full.slice(0, 6) },
+      { sceneId: "card", animations: full }
+    ]);
+    expect(new Set(durations).size).toBe(1);
+  });
+
+  it("resets on a scene change", () => {
+    const durations = rulerDurations([
+      { sceneId: "card", animations: full },
+      { sceneId: "list", animations: timingsOnly }
+    ]);
+    expect(durations[1]).toBe(buildTimelineModel(timingsOnly).durationMs);
+    expect(durations[1]).toBeLessThan(durations[0]!);
+  });
+
+  it("keeps the signature behavior without a target scene", () => {
+    const durations = rulerDurations([
+      { sceneId: undefined, animations: full },
+      { sceneId: undefined, animations: timingsOnly }
+    ]);
+    expect(durations[1]).toBe(buildTimelineModel(timingsOnly).durationMs);
   });
 });
