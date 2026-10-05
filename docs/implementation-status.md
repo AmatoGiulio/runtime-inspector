@@ -492,3 +492,9 @@ Timeline stability during replay (2026-10-05, commits 2b4a660..3b12700): a Mutat
 A suspected "values change by themselves" report from the same session turned out to be edits made by hand in a second Workbench window.
 
 Fixed and re-checked live on 2026-10-05: Play and the replay after a timeline edit now target the selected scene only when it is on screen or reachable, else the scene on screen (before, a selected scene that could not open made Play do nothing and a moved block snap back after the 2 s preview timeout); an added `withDelay` keeps a multi-line import one specifier per line.
+
+## Vinyl library demo (2026-10-05)
+
+`examples/react-native-reanimated/src/vinyl/` is the demo screen: a dark music app with a 2-column grid of 8 records (original procedural artwork, react-native-svg + expo-linear-gradient), opened and closed with a hero transition. Its three motion functions are automatic scenes (Library 10 animations, Open record 10, Close record 9) with no Runtime Inspector code in the screen.
+
+Validated live in the desktop Workbench on the iOS Simulator: the Open record timeline shows only its own 10 rows (`animationsOfScene`); moving `disc › Slide` replayed the app with the new delay; **Apply 1 change** rewrote only `withDelay(160, …)` → `withDelay(595, …)`; the next Play changed no bar and left no pending change; a freshly opened Workbench showed no phantom change. Not exercised live: the orphan cleanup after a line shift (`__riModuleCallsites`), covered by unit tests.
