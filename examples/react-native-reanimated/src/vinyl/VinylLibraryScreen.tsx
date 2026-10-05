@@ -19,15 +19,18 @@ import {
 import Animated, {
   Easing,
   Extrapolation,
+  cancelAnimation,
   interpolate,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSpring,
+  withRepeat,
+  withSequence,
   withTiming,
   type SharedValue
 } from "react-native-reanimated";
-import Svg, { Path, SvgXml } from "react-native-svg";
+import Svg, { Path, Rect, SvgXml } from "react-native-svg";
 import { DiscSheen, GenericVinyl, PlainSleeve } from "./art";
 import { LOGO_XML } from "./logo";
 import { RECORDS, type VinylRecord } from "./records";
@@ -36,45 +39,58 @@ const BACKGROUND = "#1f1f1f";
 const SIDE_PADDING = 20;
 const GUTTER = 18;
 const TILE_RADIUS = 6;
-/** The open record sits left of centre, so the record can slide out to the right. */
+/** The open record sits left of centre, so the record can peek out to the right. */
 const HERO_LEFT = 20;
-/** The smallest gap between the slid-out record and the screen's right edge. */
-const HERO_EDGE = 12;
+/** The open sleeve's width as a share of the screen (270 pt on a 393 pt iPhone). */
+const HERO_RATIO = 0.688;
 /** The record is a little smaller than its sleeve, so it hides fully inside. */
 const DISC_RATIO = 0.96;
-/** How much of the record shows beside its sleeve once it has slid out (× record diameter). */
-const DISC_REVEAL = 0.4;
-/** The sleeve gives way to the left by this much (pt) as the record slides out. */
-const SLEEVE_NUDGE = 8;
-/** Two full turns, so the label comes to rest upright and the return to the grid is seamless. */
-const DISC_TURNS = 720;
-/** Height of the fade from the dimmed grid into the solid floor under the tracklist. */
-const INFO_FADE = 36;
+/** How much of the record shows beside its sleeve once open (× record diameter). */
+const DISC_PEEK = 0.18;
 
-/** Strong ease-out: instant response, soft landing. */
+/** The floating pill at the bottom; the same element becomes the Play button. */
+const PILL_HEIGHT = 52;
+const PILL_PADDING = 10;
+/** Concentric with the pill: inner radius 16 = pill radius 26 − padding 10. */
+const THUMB_SIZE = PILL_HEIGHT - PILL_PADDING * 2;
+const PLAY_HEIGHT = 56;
+const PILL_COLOR = "#2a2a2a";
+const PLAY_COLOR = "#ffffff";
+/** Gap between the pill and the home indicator. */
+const PILL_BOTTOM_GAP = 8;
+
+/** 33⅓ rpm: one turn every 1.8 s. */
+const TURN_MS = 1800;
+const DEG_PER_MS = 360 / TURN_MS;
+/** A quadratic spin-up reaches full speed after SPIN_UP_MS having turned ω·T/2. */
+const SPIN_UP_MS = 400;
+const SPIN_DOWN_MS = 900;
+/** Close stops the record within the close morph. */
+const SPIN_DOWN_ON_CLOSE_MS = 380;
+/** Not a literal on purpose: the decorative spin stays out of the timeline. */
+const UPRIGHT = 0;
+
+/** Strong ease-out (press feedback and other worklet-side motion). */
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
-/** A turntable spinning up and settling. */
-const EASE_SPIN = Easing.bezier(0.33, 0, 0.2, 1);
 
-const ROWS: readonly (readonly [number, number])[] = [
-  [0, 1],
-  [2, 3],
-  [4, 5],
-  [6, 7]
-];
-
-function usePairStyle(opacity: SharedValue<number>, offsetY: SharedValue<number>) {
-  return useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: offsetY.value }]
-  }));
-}
-
-/** One 0→1 progress drives both the fade and a short rise. */
 function useRiseStyle(progress: SharedValue<number>, distance: number) {
   return useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [{ translateY: (1 - progress.value) * distance }]
+  }));
+}
+
+/** Tactile press: in quickly, out a little slower. Not a scene. */
+function usePressStyle(pressed: SharedValue<number>) {
+  return useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale:
+          pressed.value === 1
+            ? withTiming(0.97, { duration: 100, easing: EASE_OUT })
+            : withTiming(1, { duration: 160, easing: EASE_OUT })
+      }
+    ]
   }));
 }
 
@@ -89,59 +105,56 @@ interface RestRect {
 export function VinylLibraryScreen() {
   const { width } = useWindowDimensions();
   const [topInset, setTopInset] = useState(Platform.OS === "ios" ? 59 : StatusBar.currentHeight ?? 24);
+  const [bottomInset, setBottomInset] = useState(Platform.OS === "ios" ? 34 : 0);
   const [selected, setSelected] = useState(0);
   const [open, setOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  /** The record the closed pill shows; none until a record has been opened. */
+  const [pillRecord, setPillRecord] = useState<number | null>(null);
 
   const tileSize = (width - SIDE_PADDING * 2 - GUTTER) / 2;
-  // Sized so the slid-out record ends HERO_EDGE from the screen's right edge (on a 393 pt
-  // iPhone: a 270 pt sleeve, the record's right edge at 381 pt).
-  const heroSize = Math.min(
-    width - HERO_LEFT * 2,
-    (width - HERO_EDGE - HERO_LEFT + SLEEVE_NUDGE) /
-      ((1 - DISC_RATIO) / 2 + DISC_RATIO * (1 + DISC_REVEAL))
-  );
+  const heroSize = Math.min(width - HERO_LEFT * 2, Math.round(width * HERO_RATIO));
   const discSize = heroSize * DISC_RATIO;
-  /** How far the record travels right; with the sleeve's nudge left, DISC_REVEAL of it shows. */
-  const discTravel = DISC_REVEAL * discSize - SLEEVE_NUDGE;
+  /** How far the record travels right so DISC_PEEK of it shows past the sleeve's edge. */
+  const discTravel = DISC_PEEK * discSize + (heroSize - discSize) / 2;
   const heroTop = topInset + 52;
   const heroRadius = (TILE_RADIUS * heroSize) / tileSize;
   const record = RECORDS[selected];
   const isDisc = record.tile === "disc";
-  /** The element that flies from the grid: the sleeve, or the bare disc. */
+  /** The element that morphs from the grid: the sleeve, or the bare disc. */
   const liftedSize = isDisc ? discSize : heroSize;
   const heroCenterX = HERO_LEFT + heroSize / 2;
   const heroCenterY = heroTop + heroSize / 2;
   const infoTop = heroTop + heroSize + 28;
+  const playWidth = width - HERO_LEFT * 2;
 
-  // Library entrance.
-  const headerOpacity = useSharedValue(0);
-  const headerY = useSharedValue(-8);
-  const row1Opacity = useSharedValue(0);
-  const row1Y = useSharedValue(18);
-  const row2Opacity = useSharedValue(0);
-  const row2Y = useSharedValue(18);
-  const row3Opacity = useSharedValue(0);
-  const row3Y = useSharedValue(18);
-  const row4Opacity = useSharedValue(0);
-  const row4Y = useSharedValue(18);
+  // Library entrance: one 0→1 progress per row.
+  const headerFade = useSharedValue(0);
+  const row1Reveal = useSharedValue(0);
+  const row2Reveal = useSharedValue(0);
+  const row3Reveal = useSharedValue(0);
+  const row4Reveal = useSharedValue(0);
 
   // Open / close record. Each is a 0→1 progress.
-  const backdropFade = useSharedValue(0);
-  const coverLift = useSharedValue(0);
-  const discSlide = useSharedValue(0);
-  const discSpin = useSharedValue(0);
-  const titleReveal = useSharedValue(0);
-  const metaReveal = useSharedValue(0);
-  const tracksRow1 = useSharedValue(0);
-  const tracksRow2 = useSharedValue(0);
-  const tracksRow3 = useSharedValue(0);
-  const tracksRow4 = useSharedValue(0);
+  const coverMorph = useSharedValue(0);
+  const gridRecede = useSharedValue(0);
+  const pillMorph = useSharedValue(0);
+  const pillLabel = useSharedValue(0);
+  const discPeek = useSharedValue(0);
+  const detailsReveal = useSharedValue(0);
 
-  // Where the lifted cover starts from, in window coordinates (plain assignments only).
+  // Decorative turntable rotation in degrees, plus the angle each record was left at.
+  const discSpin = useSharedValue(UPRIGHT);
+  const restAngles = useSharedValue<number[]>(RECORDS.map(() => UPRIGHT));
+
+  // Where the morphing cover starts from, in window coordinates (plain assignments only).
   const originX = useSharedValue(0);
   const originY = useSharedValue(0);
   const originSize = useSharedValue(0);
   const activeIndex = useSharedValue(-1);
+  /** Natural width of the closed pill's content, measured. */
+  const pillRestWidth = useSharedValue(160);
+  const pillPressed = useSharedValue(0);
 
   const recordIndex = useRef(0);
   const pendingOpen = useRef(false);
@@ -151,109 +164,119 @@ export function VinylLibraryScreen() {
   const firstRowY = useRef<number | undefined>(undefined);
   const firstTileLayout = useRef<LayoutRectangle | undefined>(undefined);
   const tileNodes = useRef<(View | null)[]>([]);
+  const frameHeight = useRef(0);
+  const safeFrame = useRef<LayoutRectangle | undefined>(undefined);
 
   // @scene "Library" group="Vinyl"
   function revealLibrary() {
-    headerOpacity.value = 0;
-    headerY.value = -8;
-    row1Opacity.value = 0;
-    row1Y.value = 18;
-    row2Opacity.value = 0;
-    row2Y.value = 18;
-    row3Opacity.value = 0;
-    row3Y.value = 18;
-    row4Opacity.value = 0;
-    row4Y.value = 18;
+    headerFade.value = 0;
+    row1Reveal.value = 0;
+    row2Reveal.value = 0;
+    row3Reveal.value = 0;
+    row4Reveal.value = 0;
 
-    headerOpacity.value = withTiming(1, { duration: 320, easing: EASE_OUT });
-    headerY.value = withTiming(0, { duration: 420, easing: EASE_OUT });
-    row1Opacity.value = withDelay(120, withTiming(1, { duration: 300, easing: EASE_OUT }));
-    row1Y.value = withDelay(120, withTiming(0, { duration: 420, easing: EASE_OUT }));
-    row2Opacity.value = withDelay(180, withTiming(1, { duration: 300, easing: EASE_OUT }));
-    row2Y.value = withDelay(180, withTiming(0, { duration: 420, easing: EASE_OUT }));
-    row3Opacity.value = withDelay(240, withTiming(1, { duration: 300, easing: EASE_OUT }));
-    row3Y.value = withDelay(240, withTiming(0, { duration: 420, easing: EASE_OUT }));
-    row4Opacity.value = withDelay(300, withTiming(1, { duration: 300, easing: EASE_OUT }));
-    row4Y.value = withDelay(300, withTiming(0, { duration: 420, easing: EASE_OUT }));
+    headerFade.value = withTiming(1, { duration: 200, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    row1Reveal.value = withTiming(1, { duration: 260, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    row2Reveal.value = withDelay(40, withTiming(1, { duration: 260, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
+    row3Reveal.value = withDelay(80, withTiming(1, { duration: 260, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
+    row4Reveal.value = withDelay(120, withTiming(1, { duration: 260, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
   }
 
-  /** Points the hero at the selected tile's last known rect, corrected for scrolling since. */
+  /**
+   * Points the hero at the selected tile's last known rect, corrected for scrolling since.
+   * When the record changes, the previous one keeps the angle it stopped at.
+   */
   function syncOrigin() {
+    const next = recordIndex.current;
+    const previous = activeIndex.value;
+    if (previous !== next) {
+      const angles = restAngles.value.slice();
+      if (previous >= 0) angles[previous] = discSpin.value % 360;
+      restAngles.value = angles;
+      discSpin.value = angles[next];
+    }
     const rect = restRect.current;
     originX.value = rect.x;
     originY.value = rect.y + rect.scroll - scrollY.current;
     originSize.value = rect.size > 0 ? rect.size : tileSize;
-    activeIndex.value = recordIndex.current;
+    activeIndex.value = next;
   }
 
   // @scene "Open record" group="Vinyl"
   function openRecord() {
+    cancelAnimation(discSpin);
     syncOrigin();
     setOpen(true);
+    setPlaying(false);
 
-    backdropFade.value = 0;
-    coverLift.value = 0;
-    discSlide.value = 0;
-    discSpin.value = 0;
-    titleReveal.value = 0;
-    metaReveal.value = 0;
-    tracksRow1.value = 0;
-    tracksRow2.value = 0;
-    tracksRow3.value = 0;
-    tracksRow4.value = 0;
+    coverMorph.value = 0;
+    gridRecede.value = 0;
+    pillMorph.value = 0;
+    pillLabel.value = 0;
+    discPeek.value = 0;
+    detailsReveal.value = 0;
 
-    backdropFade.value = withTiming(1, { duration: 280, easing: EASE_OUT });
-    coverLift.value = withSpring(1, {
-      damping: 20,
-      stiffness: 170,
-      mass: 1,
-      restDisplacementThreshold: 0.0005,
-      restSpeedThreshold: 0.005
-    });
-    discSlide.value = withDelay(160, withSpring(1, { damping: 16, stiffness: 180, mass: 1 }));
-    discSpin.value = withDelay(260, withTiming(1, { duration: 1800, easing: EASE_SPIN }));
-    titleReveal.value = withDelay(220, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    metaReveal.value = withDelay(260, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    tracksRow1.value = withDelay(300, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    tracksRow2.value = withDelay(340, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    tracksRow3.value = withDelay(380, withTiming(1, { duration: 320, easing: EASE_OUT }));
-    tracksRow4.value = withDelay(420, withTiming(1, { duration: 320, easing: EASE_OUT }));
+    coverMorph.value = withTiming(1, { duration: 300, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    gridRecede.value = withTiming(1, { duration: 140, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    pillMorph.value = withTiming(1, { duration: 300, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    pillLabel.value = withTiming(1, { duration: 240, easing: Easing.linear });
+    discPeek.value = withDelay(80, withTiming(1, { duration: 300, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
+    detailsReveal.value = withDelay(60, withTiming(1, { duration: 200, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
   }
 
   // @scene "Close record" group="Vinyl"
   function closeRecord() {
     syncOrigin();
     setOpen(false);
+    setPillRecord(recordIndex.current);
+    if (playing) stopSpin(SPIN_DOWN_ON_CLOSE_MS);
 
-    backdropFade.value = 1;
-    coverLift.value = 1;
-    discSlide.value = 1;
-    discSpin.value = 1;
-    titleReveal.value = 1;
-    metaReveal.value = 1;
-    tracksRow1.value = 1;
-    tracksRow2.value = 1;
-    tracksRow3.value = 1;
-    tracksRow4.value = 1;
+    coverMorph.value = 1;
+    gridRecede.value = 1;
+    pillMorph.value = 1;
+    pillLabel.value = 1;
+    discPeek.value = 1;
+    detailsReveal.value = 1;
 
-    titleReveal.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    metaReveal.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    tracksRow1.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    tracksRow2.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    tracksRow3.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    tracksRow4.value = withTiming(0, { duration: 160, easing: EASE_OUT });
-    discSlide.value = withSpring(0, { damping: 26, stiffness: 300, mass: 1 });
-    coverLift.value = withDelay(
-      140,
-      withSpring(0, {
-        damping: 26,
-        stiffness: 180,
-        mass: 1,
-        restDisplacementThreshold: 0.0005,
-        restSpeedThreshold: 0.005
-      })
+    detailsReveal.value = withTiming(0, { duration: 120, easing: Easing.bezier(0.23, 1, 0.32, 1) });
+    discPeek.value = withTiming(0, { duration: 240, easing: Easing.bezier(0.32, 0.72, 0, 1) });
+    coverMorph.value = withDelay(60, withTiming(0, { duration: 380, easing: Easing.bezier(0.32, 0.72, 0, 1) }));
+    pillMorph.value = withTiming(0, { duration: 380, easing: Easing.bezier(0.32, 0.72, 0, 1) });
+    pillLabel.value = withTiming(0, { duration: 300, easing: Easing.linear });
+    gridRecede.value = withDelay(60, withTiming(0, { duration: 300, easing: Easing.bezier(0.23, 1, 0.32, 1) }));
+  }
+
+  /** Spins up to 33⅓ rpm over SPIN_UP_MS, then turns linearly until stopped. */
+  function startSpin() {
+    const from = discSpin.value % 360;
+    // Ends at the playing speed: a quadratic ease-in covers ω·T/2 in T.
+    const spinUp = (DEG_PER_MS * SPIN_UP_MS) / 2;
+    discSpin.value = from;
+    discSpin.value = withSequence(
+      withTiming(from + spinUp, { duration: SPIN_UP_MS, easing: Easing.in(Easing.quad) }),
+      withRepeat(
+        withTiming(from + spinUp + 360, { duration: TURN_MS, easing: Easing.linear }),
+        -1,
+        false
+      )
     );
-    backdropFade.value = withDelay(120, withTiming(0, { duration: 300, easing: EASE_OUT }));
+  }
+
+  // @scene off
+  function stopSpin(duration: number) {
+    // Starts at the playing speed: a quadratic ease-out covers ω·T/2 in T.
+    const spinDown = (DEG_PER_MS * duration) / 2;
+    discSpin.value = withTiming(discSpin.value + spinDown, { duration, easing: Easing.out(Easing.quad) });
+  }
+
+  function togglePlay() {
+    if (playing) {
+      stopSpin(SPIN_DOWN_MS);
+      setPlaying(false);
+      return;
+    }
+    startSpin();
+    setPlaying(true);
   }
 
   useEffect(() => {
@@ -287,7 +310,15 @@ export function VinylLibraryScreen() {
     });
   }
 
-  /** Before any press, a replayed "Open record" lifts record 0 from its laid-out rect. */
+  function handlePillPress() {
+    if (open) {
+      togglePlay();
+      return;
+    }
+    if (pillRecord !== null) handleTilePress(pillRecord);
+  }
+
+  /** Before any press, a replayed "Open record" morphs record 0 from its laid-out rect. */
   function updateFirstTileRect() {
     const rowY = firstRowY.current;
     const tile = firstTileLayout.current;
@@ -309,22 +340,43 @@ export function VinylLibraryScreen() {
     scrollY.current = event.nativeEvent.contentOffset.y;
   }
 
-  const headerStyle = usePairStyle(headerOpacity, headerY);
-  const row1Style = usePairStyle(row1Opacity, row1Y);
-  const row2Style = usePairStyle(row2Opacity, row2Y);
-  const row3Style = usePairStyle(row3Opacity, row3Y);
-  const row4Style = usePairStyle(row4Opacity, row4Y);
+  /** The safe area, read from SafeAreaView's padding (no extra dependency). */
+  function applySafeArea() {
+    const frame = safeFrame.current;
+    if (Platform.OS !== "ios" || !frame) return;
+    if (frame.y > 0 && frame.y !== topInset) setTopInset(frame.y);
+    if (frameHeight.current > 0) {
+      const bottom = Math.max(0, frameHeight.current - frame.y - frame.height);
+      if (bottom !== bottomInset) setBottomInset(bottom);
+    }
+  }
+
+  function handleSafeAreaLayout(event: LayoutChangeEvent) {
+    safeFrame.current = event.nativeEvent.layout;
+    applySafeArea();
+  }
+
+  function handleScreenLayout(event: LayoutChangeEvent) {
+    frameHeight.current = event.nativeEvent.layout.height;
+    applySafeArea();
+  }
+
+  const headerStyle = useAnimatedStyle(() => ({ opacity: headerFade.value }));
+  const row1Style = useRiseStyle(row1Reveal, 8);
+  const row2Style = useRiseStyle(row2Reveal, 8);
+  const row3Style = useRiseStyle(row3Reveal, 8);
+  const row4Style = useRiseStyle(row4Reveal, 8);
   const rowStyles = [row1Style, row2Style, row3Style, row4Style];
 
+  // The grid recedes as one surface: it fades and settles back a touch.
   const gridStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - 0.06 * backdropFade.value }]
+    opacity: 1 - gridRecede.value,
+    transform: [{ scale: 1 - 0.02 * gridRecede.value }]
   }));
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropFade.value }));
-
   const heroStyle = useAnimatedStyle(() => {
-    const t = coverLift.value;
-    const visible = t > 0.0001 || backdropFade.value > 0.0001;
+    const t = coverMorph.value;
+    const visible = t > 0.0001 || gridRecede.value > 0.0001;
     const startScale = originSize.value / liftedSize;
     const startDX = originX.value + originSize.value / 2 - heroCenterX;
     const startDY = originY.value + originSize.value / 2 - heroCenterY;
@@ -338,26 +390,45 @@ export function VinylLibraryScreen() {
     };
   });
 
+  // The hero's shadow deepens from the tile's as it grows, so the handoff has no jump.
   const sleeveStyle = useAnimatedStyle(() => ({
-    opacity: isDisc ? interpolate(discSlide.value, [0, 0.45], [0, 1], Extrapolation.CLAMP) : 1,
-    transform: [{ translateX: -SLEEVE_NUDGE * discSlide.value }]
+    opacity: isDisc ? interpolate(discPeek.value, [0, 0.5], [0, 1], Extrapolation.CLAMP) : 1,
+    shadowOpacity: isDisc ? 0.5 : 0.35 + 0.15 * coverMorph.value
   }));
 
-  const discSlideStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: discTravel * discSlide.value }]
+  const discStyle = useAnimatedStyle(() => ({
+    shadowOpacity: isDisc ? 0.3 + 0.15 * coverMorph.value : 0.45,
+    transform: [{ translateX: discTravel * discPeek.value }]
   }));
 
   const discSpinStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${discSpin.value * DISC_TURNS}deg` }]
+    transform: [{ rotate: `${discSpin.value}deg` }]
   }));
 
-  const titleStyle = useRiseStyle(titleReveal, 10);
-  const metaStyle = useRiseStyle(metaReveal, 10);
-  const track1Style = useRiseStyle(tracksRow1, 8);
-  const track2Style = useRiseStyle(tracksRow2, 8);
-  const track3Style = useRiseStyle(tracksRow3, 8);
-  const track4Style = useRiseStyle(tracksRow4, 8);
-  const trackStyles = [track1Style, track2Style, track3Style, track4Style];
+  const detailsStyle = useRiseStyle(detailsReveal, 6);
+  const closeStyle = useAnimatedStyle(() => ({ opacity: detailsReveal.value }));
+
+  const pillStyle = useAnimatedStyle(() => {
+    const t = pillMorph.value;
+    const height = PILL_HEIGHT + (PLAY_HEIGHT - PILL_HEIGHT) * t;
+    return {
+      backgroundColor: interpolateColor(t, [0, 1], [PILL_COLOR, PLAY_COLOR]),
+      borderRadius: height / 2,
+      height,
+      width: pillRestWidth.value + (playWidth - pillRestWidth.value) * t
+    };
+  });
+  const pillPressStyle = usePressStyle(pillPressed);
+
+  // One driver for the crossfade: old content out by 1/3 (80 ms), the label in from 1/2 (120 ms).
+  const pillContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pillLabel.value, [0, 1 / 3], [1, 0], Extrapolation.CLAMP)
+  }));
+  const playLabelStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pillLabel.value, [0.5, 1], [0, 1], Extrapolation.CLAMP)
+  }));
+
+  const nowShowing = pillRecord === null ? undefined : RECORDS[pillRecord];
 
   const sleeveLayer = (
     <Animated.View
@@ -402,7 +473,7 @@ export function VinylLibraryScreen() {
           top: (heroSize - discSize) / 2,
           width: discSize
         },
-        discSlideStyle
+        discStyle
       ]}
     >
       <Animated.View style={discSpinStyle}>
@@ -417,20 +488,21 @@ export function VinylLibraryScreen() {
   );
 
   return (
-    <View style={styles.screen}>
+    <View
+      onLayout={handleScreenLayout}
+      style={styles.screen}
+    >
       <StatusBar barStyle="light-content" />
       <SafeAreaView pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View
-          onLayout={(event) => {
-            const inset = event.nativeEvent.layout.y;
-            if (Platform.OS === "ios" && inset > 0 && inset !== topInset) setTopInset(inset);
-          }}
-        />
+        <View onLayout={handleSafeAreaLayout} style={styles.fill} />
       </SafeAreaView>
 
       <Animated.View style={[styles.fill, gridStyle]}>
         <ScrollView
-          contentContainerStyle={[styles.grid, { paddingTop: topInset + 64 }]}
+          contentContainerStyle={[
+            styles.grid,
+            { paddingBottom: bottomInset + PILL_BOTTOM_GAP + PILL_HEIGHT + 28, paddingTop: topInset + 64 }
+          ]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
@@ -444,16 +516,18 @@ export function VinylLibraryScreen() {
               {pair.map((index) => (
                 <RecordTile
                   activeIndex={activeIndex}
-                  backdropFade={backdropFade}
+                  coverMorph={coverMorph}
+                  discSpin={discSpin}
+                  gridRecede={gridRecede}
                   index={index}
                   key={RECORDS[index].id}
-                  coverLift={coverLift}
                   onLayout={index === 0 ? handleFirstTileLayout : undefined}
                   onPress={handleTilePress}
                   record={RECORDS[index]}
                   registerNode={(node) => {
                     tileNodes.current[index] = node;
                   }}
+                  restAngles={restAngles}
                   size={tileSize}
                 />
               ))}
@@ -474,25 +548,15 @@ export function VinylLibraryScreen() {
         </Animated.View>
       </Animated.View>
 
-      <Animated.View
+      {/* While a record is open, a tap anywhere outside the controls closes it. */}
+      <Pressable
+        accessibilityLabel="Close record"
+        accessibilityRole="button"
+        disabled={!open}
+        onPress={closeRecord}
         pointerEvents={open ? "auto" : "none"}
-        style={[StyleSheet.absoluteFill, backdropStyle]}
-      >
-        <BlurView intensity={30} style={StyleSheet.absoluteFill} tint="dark" />
-        <View style={styles.dim} />
-        {/* A solid floor under the title and tracklist, so the grid never shows through them. */}
-        <LinearGradient
-          colors={["rgba(10,10,10,0)", "rgba(10,10,10,1)"]}
-          style={[styles.infoFade, { top: infoTop - 12 - INFO_FADE }]}
-        />
-        <View style={[styles.infoFloor, { top: infoTop - 12 }]} />
-        <Pressable
-          accessibilityLabel="Close record"
-          accessibilityRole="button"
-          onPress={closeRecord}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
+        style={StyleSheet.absoluteFill}
+      />
 
       <Animated.View
         pointerEvents="none"
@@ -505,31 +569,28 @@ export function VinylLibraryScreen() {
         {isDisc ? [sleeveLayer, discLayer] : [discLayer, sleeveLayer]}
       </Animated.View>
 
-      <View pointerEvents="none" style={[styles.info, { top: infoTop }]}>
-        <Animated.Text numberOfLines={1} style={[styles.heroTitle, titleStyle]}>
+      <Animated.View pointerEvents="none" style={[styles.info, { top: infoTop }, detailsStyle]}>
+        <Text numberOfLines={1} style={styles.heroTitle}>
           {record.title}
-        </Animated.Text>
-        <Animated.Text numberOfLines={1} style={[styles.heroMeta, metaStyle]}>
+        </Text>
+        <Text numberOfLines={1} style={styles.heroMeta}>
           {record.artist} · <Text style={styles.tabular}>{record.year}</Text>
-        </Animated.Text>
+        </Text>
         <View style={styles.tracks}>
           {record.tracks.map((track, index) => (
-            <Animated.View
-              key={track}
-              style={[styles.trackRow, index > 0 && styles.trackDivider, trackStyles[index]]}
-            >
+            <View key={track} style={[styles.trackRow, index > 0 && styles.trackDivider]}>
               <Text style={[styles.trackNumber, styles.tabular]}>{index + 1}</Text>
               <Text numberOfLines={1} style={styles.trackTitle}>
                 {track}
               </Text>
-            </Animated.View>
+            </View>
           ))}
         </View>
-      </View>
+      </Animated.View>
 
       <Animated.View
         pointerEvents={open ? "box-none" : "none"}
-        style={[styles.closeWrap, { top: topInset + 2 }, backdropStyle]}
+        style={[styles.closeWrap, { top: topInset + 2 }, closeStyle]}
       >
         <Pressable
           accessibilityLabel="Close"
@@ -549,17 +610,76 @@ export function VinylLibraryScreen() {
           </View>
         </Pressable>
       </Animated.View>
+
+      <View pointerEvents="box-none" style={[styles.pillDock, { bottom: bottomInset + PILL_BOTTOM_GAP }]}>
+        <Pressable
+          accessibilityLabel={open ? (playing ? "Pause" : "Play") : nowShowing?.title ?? "Not playing"}
+          accessibilityRole="button"
+          disabled={!open && pillRecord === null}
+          onPress={handlePillPress}
+          onPressIn={() => {
+            pillPressed.value = 1;
+          }}
+          onPressOut={() => {
+            pillPressed.value = 0;
+          }}
+        >
+          <Animated.View style={[styles.pill, pillStyle, pillPressStyle]}>
+            <Animated.View
+              onLayout={(event) => {
+                pillRestWidth.value = event.nativeEvent.layout.width;
+              }}
+              style={[styles.pillContent, pillContentStyle]}
+            >
+              <View style={styles.thumb}>
+                {nowShowing ? (
+                  <nowShowing.art size={THUMB_SIZE} />
+                ) : (
+                  <GenericVinyl labelColor="#4a4a4a" size={THUMB_SIZE} />
+                )}
+                <View pointerEvents="none" style={[styles.outline, styles.thumbOutline]} />
+              </View>
+              <Text numberOfLines={1} style={[styles.pillTitle, !nowShowing && styles.pillIdle]}>
+                {nowShowing ? nowShowing.title : "Not playing"}
+              </Text>
+            </Animated.View>
+            <Animated.View pointerEvents="none" style={[styles.playLabel, playLabelStyle]}>
+              <Svg height={14} viewBox="0 0 14 14" width={14}>
+                {playing ? (
+                  <>
+                    <Rect fill="#111111" height={12} rx={1.2} width={3.6} x={2.4} y={1} />
+                    <Rect fill="#111111" height={12} rx={1.2} width={3.6} x={8} y={1} />
+                  </>
+                ) : (
+                  // Nudged right: a triangle's visual centre sits left of its box centre.
+                  <Path d="M4 1.6 L12.8 7 L4 12.4 Z" fill="#111111" />
+                )}
+              </Svg>
+              <Text style={styles.playText}>{playing ? "Pause" : "Play"}</Text>
+            </Animated.View>
+          </Animated.View>
+        </Pressable>
+      </View>
     </View>
   );
 }
+
+const ROWS: readonly (readonly [number, number])[] = [
+  [0, 1],
+  [2, 3],
+  [4, 5],
+  [6, 7]
+];
 
 interface RecordTileProps {
   record: VinylRecord;
   index: number;
   size: number;
   activeIndex: SharedValue<number>;
-  coverLift: SharedValue<number>;
-  backdropFade: SharedValue<number>;
+  coverMorph: SharedValue<number>;
+  gridRecede: SharedValue<number>;
+  discSpin: SharedValue<number>;
+  restAngles: SharedValue<number[]>;
   onPress(index: number): void;
   onLayout?: (event: LayoutChangeEvent) => void;
   registerNode(node: View | null): void;
@@ -570,8 +690,10 @@ function RecordTile({
   index,
   size,
   activeIndex,
-  coverLift,
-  backdropFade,
+  coverMorph,
+  gridRecede,
+  discSpin,
+  restAngles,
   onPress,
   onLayout,
   registerNode
@@ -580,17 +702,19 @@ function RecordTile({
   const isDisc = record.tile === "disc";
   const radius = isDisc ? size / 2 : TILE_RADIUS;
 
-  // Press feedback lives in the style worklet: tactile, but not a scene.
-  const pressStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: withTiming(pressed.value === 1 ? 0.97 : 1, { duration: 140, easing: EASE_OUT }) }
-    ]
-  }));
+  const pressStyle = usePressStyle(pressed);
 
-  // While its record is lifted, the tile hands its place over to the hero.
+  // While its record is open, the tile hands its place over to the hero.
   const handoffStyle = useAnimatedStyle(() => ({
     opacity:
-      activeIndex.value === index && (coverLift.value > 0.0001 || backdropFade.value > 0.0001) ? 0 : 1
+      activeIndex.value === index && (coverMorph.value > 0.0001 || gridRecede.value > 0.0001) ? 0 : 1
+  }));
+
+  // A bare disc rests at the angle its record stopped turning, so the handoff is seamless.
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${activeIndex.value === index ? discSpin.value : restAngles.value[index] ?? 0}deg` }
+    ]
   }));
 
   return (
@@ -615,8 +739,16 @@ function RecordTile({
             ]}
           >
             <View style={[styles.clip, { borderRadius: radius }]}>
-              <record.art size={size} />
-              {isDisc ? <DiscSheen size={size} /> : null}
+              {isDisc ? (
+                <>
+                  <Animated.View style={spinStyle}>
+                    <record.art size={size} />
+                  </Animated.View>
+                  <DiscSheen size={size} />
+                </>
+              ) : (
+                <record.art size={size} />
+              )}
             </View>
             <View pointerEvents="none" style={[styles.outline, { borderRadius: radius }]} />
           </View>
@@ -641,7 +773,6 @@ const styles = StyleSheet.create({
     flex: 1
   },
   grid: {
-    paddingBottom: 48,
     paddingHorizontal: SIDE_PADDING
   },
   row: {
@@ -698,23 +829,6 @@ const styles = StyleSheet.create({
     letterSpacing: -0.08,
     marginTop: 1
   },
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10,10,10,0.88)"
-  },
-  infoFade: {
-    height: INFO_FADE,
-    left: 0,
-    position: "absolute",
-    right: 0
-  },
-  infoFloor: {
-    backgroundColor: "rgb(10,10,10)",
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0
-  },
   hero: {
     position: "absolute"
   },
@@ -723,7 +837,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     shadowColor: "#000000",
     shadowOffset: { height: 18, width: 0 },
-    shadowOpacity: 0.5,
     shadowRadius: 26,
     top: 0
   },
@@ -731,7 +844,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     shadowColor: "#000000",
     shadowOffset: { height: 12, width: 0 },
-    shadowOpacity: 0.45,
     shadowRadius: 18
   },
   info: {
@@ -796,5 +908,61 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: "center",
     width: 30
+  },
+  pillDock: {
+    alignItems: "center",
+    left: 0,
+    position: "absolute",
+    right: 0
+  },
+  pill: {
+    shadowColor: "#000000",
+    shadowOffset: { height: 8, width: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16
+  },
+  pillContent: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10,
+    height: PILL_HEIGHT,
+    left: 0,
+    paddingLeft: PILL_PADDING,
+    paddingRight: 20,
+    position: "absolute",
+    top: 0
+  },
+  thumb: {
+    borderRadius: THUMB_SIZE / 2,
+    height: THUMB_SIZE,
+    overflow: "hidden",
+    width: THUMB_SIZE
+  },
+  thumbOutline: {
+    borderRadius: THUMB_SIZE / 2
+  },
+  pillTitle: {
+    color: "#f5f5f7",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.2,
+    maxWidth: 200
+  },
+  pillIdle: {
+    color: "rgba(235,235,245,0.6)",
+    fontWeight: "500"
+  },
+  playLabel: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center"
+  },
+  playText: {
+    color: "#111111",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: -0.3
   }
 });
