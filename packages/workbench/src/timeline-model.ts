@@ -233,6 +233,11 @@ export interface SettledBurst {
   runOriginMs: number | undefined;
   /** How long `latest` must stay unchanged before `settleBurst` drops rows that did not come back. */
   settleMs: number;
+  /**
+   * What was on screen when the current run started: the previous run's geometry, which
+   * `stabilizeBurst` holds the current run's rows to.
+   */
+  reference: RuntimeAnimationTrace[];
 }
 
 export function initialSettledBurst(
@@ -244,15 +249,17 @@ export function initialSettledBurst(
     displayed: latest,
     resetKey,
     runOriginMs: latest.length > 0 ? timelineOriginMs(latest) : undefined,
-    settleMs: settleDelayMs([])
+    settleMs: settleDelayMs([]),
+    reference: []
   };
 }
 
 /**
  * The next displayed burst when `latest` arrives. A different `resetKey` starts clean. Otherwise
- * the rows not (yet) back are kept via `mergeBurst`, so none unmounts mid-replay; a new run (a
- * new call-time origin) fixes the settle delay from what was on screen when it started. Returns
- * `state` itself when nothing changed.
+ * the rows not (yet) back are kept via `mergeBurst`, so none unmounts mid-replay, and the rows that
+ * are back are held to the previous run's geometry via `stabilizeBurst`. A new run (a new
+ * call-time origin) fixes the settle delay and that reference from what was on screen when it
+ * started. Returns `state` itself when nothing changed.
  */
 export function receiveBurst(
   state: SettledBurst,
@@ -262,21 +269,23 @@ export function receiveBurst(
   if (state.resetKey !== resetKey) return initialSettledBurst(latest, resetKey);
   if (state.latest === latest) return state;
 
-  let { runOriginMs, settleMs } = state;
+  let { runOriginMs, settleMs, reference } = state;
   if (latest.length > 0) {
     const originMs = timelineOriginMs(latest);
     if (originMs !== runOriginMs) {
       runOriginMs = originMs;
       settleMs = settleDelayMs(state.displayed);
+      reference = state.displayed;
     }
   }
 
   return {
     latest,
-    displayed: mergeBurst(state.displayed, latest),
+    displayed: mergeBurst(state.displayed, stabilizeBurst(reference, latest)),
     resetKey,
     runOriginMs,
-    settleMs
+    settleMs,
+    reference
   };
 }
 
@@ -289,6 +298,99 @@ export function settleBurst(state: SettledBurst): SettledBurst {
   const displayed = state.displayed.filter((animation) => latestIds.has(animation.instanceId));
   if (displayed.length === state.displayed.length) return state;
   return { ...state, displayed };
+}
+
+/** Run-to-run noise in a row's start offset or duration that a replay does not show. */
+export const RUN_JITTER_TOLERANCE_MS = 24;
+
+/**
+ * Whether two runs of a row were made with the same parameters: kind, delay, target value and
+ * every resolved config value. A user edit changes one of these.
+ */
+export function sameAnimationParameters(
+  left: RuntimeAnimationTrace,
+  right: RuntimeAnimationTrace
+): boolean {
+  if (left.animationKind !== right.animationKind) return false;
+  if ((left.startDelayMs ?? 0) !== (right.startDelayMs ?? 0)) return false;
+  if (left.toValue !== right.toValue) return false;
+  const leftKeys = Object.keys(left.resolvedConfig);
+  const rightKeys = Object.keys(right.resolvedConfig);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(right.resolvedConfig, key) &&
+        left.resolvedConfig[key] === right.resolvedConfig[key]
+    )
+  );
+}
+
+/** The span the timeline draws: observed when ended, else expected (see `animationDisplayEnd`). */
+function displayDurationMs(animation: RuntimeAnimationTrace): number {
+  return animationDisplayEnd(animation) - animation.startedAtRuntimeMs;
+}
+
+/**
+ * `animation` drawn at `startOffsetMs` from `originMs` for `durationMs`: a shallow copy that keeps
+ * every other field, including `instanceId`. An ended animation's end moves with it; a running
+ * one's expected duration becomes `durationMs`.
+ */
+function withGeometry(
+  animation: RuntimeAnimationTrace,
+  originMs: number,
+  startOffsetMs: number,
+  durationMs: number
+): RuntimeAnimationTrace {
+  const startedAtRuntimeMs = originMs + startOffsetMs;
+  return animation.endedAtRuntimeMs !== undefined
+    ? { ...animation, startedAtRuntimeMs, endedAtRuntimeMs: startedAtRuntimeMs + durationMs }
+    : { ...animation, startedAtRuntimeMs, expectedDurationMs: durationMs };
+}
+
+/**
+ * Holds run-to-run jitter: each `next` row whose key was in `previous` (the previous run) with the
+ * same parameters, and whose start offset (from its run's call-time origin) and drawn duration
+ * each differ from the previous run's by at most `RUN_JITTER_TOLERANCE_MS`, keeps the previous
+ * run's start offset and duration, rebased to the new origin. Rows with changed parameters (an
+ * edit) or larger differences show their own values. Never mutates; returns `next` itself when
+ * nothing was held.
+ */
+export function stabilizeBurst(
+  previous: RuntimeAnimationTrace[],
+  next: RuntimeAnimationTrace[]
+): RuntimeAnimationTrace[] {
+  if (previous.length === 0 || next.length === 0) return next;
+
+  const previousKeys = animationKeys(previous);
+  const previousByKey = new Map<string, RuntimeAnimationTrace>();
+  previous.forEach((animation, index) => previousByKey.set(previousKeys[index]!, animation));
+  const previousOriginMs = timelineOriginMs(previous);
+  const nextOriginMs = timelineOriginMs(next);
+  const nextKeys = animationKeys(next);
+  let held = false;
+
+  const stabilized = next.map((animation, index) => {
+    const before = previousByKey.get(nextKeys[index]!);
+    if (!before || !sameAnimationParameters(before, animation)) return animation;
+
+    const beforeStartMs = before.startedAtRuntimeMs - previousOriginMs;
+    const beforeDurationMs = displayDurationMs(before);
+    const startMs = animation.startedAtRuntimeMs - nextOriginMs;
+    const durationMs = displayDurationMs(animation);
+    if (
+      Math.abs(startMs - beforeStartMs) > RUN_JITTER_TOLERANCE_MS ||
+      Math.abs(durationMs - beforeDurationMs) > RUN_JITTER_TOLERANCE_MS
+    ) {
+      return animation;
+    }
+    if (startMs === beforeStartMs && durationMs === beforeDurationMs) return animation;
+
+    held = true;
+    return withGeometry(animation, nextOriginMs, beforeStartMs, beforeDurationMs);
+  });
+
+  return held ? stabilized : next;
 }
 
 /** Identity of the set of animations on screen: the sorted, joined call site ids. */

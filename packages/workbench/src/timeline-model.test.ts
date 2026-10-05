@@ -27,6 +27,7 @@ import {
   resolvePendingPreview,
   resolveSliderControl,
   splitAnimationTarget,
+  stabilizeBurst,
   startControl,
   timelineOriginMs,
   timelineScaleKey,
@@ -1184,5 +1185,90 @@ describe("timelineScaleKey", () => {
       { sceneId: undefined, animations: timingsOnly }
     ]);
     expect(durations[1]).toBe(buildTimelineModel(timingsOnly).durationMs);
+  });
+});
+
+describe("stabilizeBurst", () => {
+  /** Start offset and drawn duration of each row, in input order. */
+  function geometry(animations: RuntimeAnimationTrace[]) {
+    const model = buildTimelineModel(animations);
+    const rows = new Map(
+      model.groups.flatMap((group) => group.rows).map((row) => [row.key, row] as const)
+    );
+    return animationKeys(animations).map((key) => {
+      const row = rows.get(key)!;
+      return { key, startMs: row.startMs, durationMs: row.durationMs };
+    });
+  }
+
+  const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+
+  it("keeps the previous geometry, with the new instance, within the tolerance", () => {
+    const next = cardRun("n", {
+      originMs: 9000,
+      jitterMs: [0, 3, 0, 0, 7, 12, 24, 10],
+      ended: { ...CARD_ENDED, 0: 280, 7: 520 }
+    });
+    const stabilized = stabilizeBurst(previous, next);
+    expect(geometry(stabilized)).toEqual(geometry(previous));
+    expect(stabilized.map((animation) => animation.instanceId)).toEqual(
+      next.map((animation) => animation.instanceId)
+    );
+    // Every other field is the new animation's.
+    expect(stabilized[6]).toEqual({
+      ...next[6],
+      startedAtRuntimeMs: 9220,
+      endedAtRuntimeMs: 9220 + 540
+    });
+    expect(timelineOriginMs(stabilized)).toBe(9000);
+  });
+
+  it("does not mutate its inputs and returns next itself when nothing moved", () => {
+    const next = cardRun("n", { originMs: 9000, ended: CARD_ENDED });
+    const before = JSON.stringify(next);
+    expect(stabilizeBurst(previous, next)).toBe(next);
+    const jittered = cardRun("n", { originMs: 9000, jitterMs: [0, 0, 0, 0, 5], ended: CARD_ENDED });
+    const jitteredBefore = JSON.stringify(jittered);
+    stabilizeBurst(previous, jittered);
+    expect(JSON.stringify(jittered)).toBe(jitteredBefore);
+    expect(JSON.stringify(next)).toBe(before);
+  });
+
+  it("shows the new values beyond the tolerance", () => {
+    const later = cardRun("n", { originMs: 9000, jitterMs: [0, 0, 0, 0, 25], ended: CARD_ENDED });
+    expect(stabilizeBurst(previous, later)[4]).toBe(later[4]);
+    const longer = cardRun("n", { originMs: 9000, ended: { ...CARD_ENDED, 5: 540 + 25 } });
+    expect(stabilizeBurst(previous, longer)[5]).toBe(longer[5]);
+  });
+
+  it("shows the new values when a parameter changed", () => {
+    const next = cardRun("n", { originMs: 9000, jitterMs: [0, 0, 5, 5, 5, 5, 5, 5], ended: CARD_ENDED });
+    const edited = [
+      next[0]!,
+      next[1]!,
+      { ...next[2]!, resolvedConfig: { duration: 270 } },
+      { ...next[3]!, startDelayMs: 5, startedAtRuntimeMs: next[3]!.startedAtRuntimeMs },
+      { ...next[4]!, resolvedConfig: { damping: 20, stiffness: 180 } },
+      { ...next[5]!, toValue: 0 },
+      { ...next[6]!, animationKind: "timing" as const },
+      { ...next[7]!, resolvedConfig: { damping: 18, stiffness: 180, mass: 1 } }
+    ];
+    const stabilized = stabilizeBurst(previous, edited);
+    for (let index = 2; index < 8; index += 1) expect(stabilized[index]).toBe(edited[index]);
+  });
+
+  it("holds the jitter across a streamed replay", () => {
+    const counts: number[] = [];
+    let last: RuntimeAnimationTrace[] = [];
+    playStream(
+      initialSettledBurst(previous, "card"),
+      cardStream("n", { originMs: 9000, jitterMs: [0, 2, 1, 0, 7, 9, 3, 5] }),
+      (displayed) => {
+        counts.push(displayed.length);
+        last = displayed;
+      }
+    );
+    expect(Math.min(...counts)).toBe(8);
+    expect(geometry(last)).toEqual(geometry(previous));
   });
 });
