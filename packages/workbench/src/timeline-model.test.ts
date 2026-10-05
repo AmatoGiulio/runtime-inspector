@@ -7,7 +7,12 @@ import {
   animationsSince,
   applyResultNotice,
   groupControlIdsBySchema,
+  initialSettledBurst,
   literalApplyGroups,
+  receiveBurst,
+  settleBurst,
+  settleDelayMs,
+  type SettledBurst,
   mergeBurst,
   type PendingPreview,
   buildTimelineModel,
@@ -943,5 +948,184 @@ describe("playbackTargetScene", () => {
   it("returns undefined for an empty list", () => {
     expect(playbackTargetScene([], "a")).toBeUndefined();
     expect(playbackTargetScene([], undefined)).toBeUndefined();
+  });
+});
+
+/**
+ * The Card transition lab's replay (examples/react-native-reanimated/src/CardTransitionLab.tsx):
+ * four `withTiming` at once, then four `withSpring` inside `setTimeout(…, 220)`.
+ */
+const CARD_TIMINGS = ["card.opacity", "card.scale", "card.moveY", "card.radius"];
+const CARD_SPRINGS = ["shadow.opacity", "shadow.scale", "title.moveY", "title.opacity"];
+
+interface CardRunOptions {
+  /** Call time of the run's first animation. */
+  originMs: number;
+  /** Per-row extra start offset (run-to-run noise), by row index 0..7. */
+  jitterMs?: number[];
+  springOffsetMs?: number;
+  /** Rows (by index) that have ended; observed duration per row. */
+  ended?: Record<number, number>;
+}
+
+function cardRun(run: string, options: CardRunOptions): RuntimeAnimationTrace[] {
+  const springOffsetMs = options.springOffsetMs ?? 220;
+  const targets = [...CARD_TIMINGS, ...CARD_SPRINGS];
+  return targets.map((target, index) => {
+    const spring = index >= CARD_TIMINGS.length;
+    const startedAtRuntimeMs =
+      options.originMs + (spring ? springOffsetMs : 0) + (options.jitterMs?.[index] ?? 0);
+    const observed = options.ended?.[index];
+    return trace({
+      instanceId: `${run}-${index}`,
+      callsiteId: `CardTransitionLab.tsx:${100 + index}:7`,
+      target,
+      animationKind: spring ? "spring" : "timing",
+      startedAtRuntimeMs,
+      config: spring ? { damping: 18, stiffness: 180 } : { duration: 260 },
+      resolvedConfig: spring ? { damping: 18, stiffness: 180 } : { duration: 260 },
+      toValue: 1,
+      expectedDurationMs: spring ? 700 : 260,
+      durationBasis: spring ? "spring-estimate" : "declared",
+      parameterControls: undefined,
+      ...(observed !== undefined ? { endedAtRuntimeMs: startedAtRuntimeMs + observed } : {})
+    });
+  });
+}
+
+const CARD_ENDED = { 0: 266, 1: 266, 2: 266, 3: 266, 4: 540, 5: 540, 6: 540, 7: 540 };
+
+/**
+ * Replays `steps` (`latest` bursts at wall-clock times) through `receiveBurst`, settling whenever
+ * `latest` has stayed unchanged for the state's `settleMs`, like `useSettledBurst` does.
+ * `onDisplayed` sees every displayed burst.
+ */
+function playStream(
+  initial: SettledBurst,
+  steps: Array<{ atMs: number; latest: RuntimeAnimationTrace[] }>,
+  onDisplayed: (displayed: RuntimeAnimationTrace[]) => void,
+  resetKey = "card"
+): SettledBurst {
+  let state = initial;
+  let changedAtMs = 0;
+  for (const step of steps) {
+    if (step.atMs - changedAtMs >= state.settleMs) {
+      state = settleBurst(state);
+      onDisplayed(state.displayed);
+    }
+    const next = receiveBurst(state, step.latest, resetKey);
+    if (next.latest !== state.latest) changedAtMs = step.atMs;
+    state = next;
+    onDisplayed(state.displayed);
+  }
+  state = settleBurst(state);
+  onDisplayed(state.displayed);
+  return state;
+}
+
+/** The new run as the runtime delivers it: timings at once, springs one per render 220 ms later, then the ends. */
+function cardStream(run: string, options: CardRunOptions) {
+  const started = cardRun(run, { ...options, ended: undefined });
+  const ended = cardRun(run, { ...options, ended: CARD_ENDED });
+  const timings = started.slice(0, 4);
+  return [
+    { atMs: 0, latest: timings },
+    { atMs: 221, latest: started.slice(0, 5) },
+    { atMs: 246, latest: started.slice(0, 6) },
+    { atMs: 260, latest: started.slice(0, 7) },
+    { atMs: 272, latest: started },
+    { atMs: 280, latest: [...ended.slice(0, 4), ...started.slice(4)] },
+    { atMs: 800, latest: ended }
+  ];
+}
+
+describe("settleDelayMs", () => {
+  it("waits at least the minimum plus the margin", () => {
+    expect(settleDelayMs([])).toBe(400);
+    expect(settleDelayMs([trace({ startedAtRuntimeMs: 1000 })])).toBe(400);
+    expect(
+      settleDelayMs([
+        trace({ instanceId: "a", startedAtRuntimeMs: 1000 }),
+        trace({ instanceId: "b", startedAtRuntimeMs: 1100 })
+      ])
+    ).toBe(400);
+  });
+
+  it("covers the previous run's last call offset", () => {
+    expect(settleDelayMs(cardRun("p", { originMs: 5000, ended: CARD_ENDED }))).toBe(470);
+  });
+
+  it("measures call times, not delayed starts", () => {
+    expect(
+      settleDelayMs([
+        trace({ instanceId: "a", startedAtRuntimeMs: 1000 }),
+        trace({ instanceId: "b", startedAtRuntimeMs: 1900, startDelayMs: 600 })
+      ])
+    ).toBe(550);
+  });
+});
+
+describe("receiveBurst / settleBurst", () => {
+  it("keeps all 8 Card transition rows in place while the replay re-calls them", () => {
+    const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+    const expectedKeys = animationKeys(previous);
+    const counts: number[] = [];
+    const final = playStream(
+      initialSettledBurst(previous, "card"),
+      cardStream("n", { originMs: 9000 }),
+      (displayed) => {
+        counts.push(displayed.length);
+        expect(animationKeys(displayed)).toEqual(expectedKeys);
+        expect(
+          buildTimelineModel(displayed).groups.flatMap((group) => group.rows.map((row) => row.key))
+        ).toEqual(buildTimelineModel(previous).groups.flatMap((group) => group.rows.map((row) => row.key)));
+      }
+    );
+    expect(Math.min(...counts)).toBe(8);
+    expect(final.displayed.map((animation) => animation.instanceId)).toEqual(
+      previous.map((_, index) => `n-${index}`)
+    );
+  });
+
+  it("drops the rows that did not come back once the settle delay has passed", () => {
+    const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+    let state = receiveBurst(
+      initialSettledBurst(previous, "card"),
+      cardRun("n", { originMs: 9000 }).slice(0, 4),
+      "card"
+    );
+    expect(state.settleMs).toBe(470);
+    expect(state.displayed).toHaveLength(8);
+    state = settleBurst(state);
+    expect(state.displayed.map((animation) => animation.instanceId)).toEqual([
+      "n-0",
+      "n-1",
+      "n-2",
+      "n-3"
+    ]);
+    expect(settleBurst(state)).toBe(state);
+  });
+
+  it("fixes the settle delay when the run starts, not as rows come back", () => {
+    const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+    const next = cardRun("n", { originMs: 9000, springOffsetMs: 900 });
+    let state = receiveBurst(initialSettledBurst(previous, "card"), next.slice(0, 4), "card");
+    expect(state.settleMs).toBe(470);
+    state = receiveBurst(state, next.slice(0, 5), "card");
+    expect(state.settleMs).toBe(470);
+  });
+
+  it("starts clean when the reset key changes", () => {
+    const previous = cardRun("p", { originMs: 5000, ended: CARD_ENDED });
+    const other = cardRun("n", { originMs: 9000 }).slice(0, 2);
+    const state = receiveBurst(initialSettledBurst(previous, "card"), other, "list");
+    expect(state.displayed).toBe(other);
+    expect(state.resetKey).toBe("list");
+  });
+
+  it("returns the same state when nothing changed", () => {
+    const previous = cardRun("p", { originMs: 5000 });
+    const state = initialSettledBurst(previous, "card");
+    expect(receiveBurst(state, previous, "card")).toBe(state);
   });
 });

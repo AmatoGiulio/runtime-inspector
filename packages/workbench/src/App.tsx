@@ -35,11 +35,13 @@ import {
   buildTimelineModel,
   clamp,
   groupControlIdsBySchema,
+  initialSettledBurst,
   latestAnimationBurst,
-  mergeBurst,
   nextStickyDuration,
   parameterControl,
   playbackTargetScene,
+  receiveBurst,
+  settleBurst,
   startControl,
   timelineOriginMs,
   timelineSignature
@@ -1894,32 +1896,22 @@ function App() {
 
 /**
  * The latest burst for display: when it changes, the previously displayed animations that have not
- * come back are merged in (see `mergeBurst`) so no row unmounts mid-replay; once it has stopped
- * changing for `settleMs`, the burst itself is shown and rows that never returned go away.
+ * come back are merged in (see `receiveBurst`) so no row unmounts mid-replay; once it has stopped
+ * changing for the run's settle delay (`settleDelayMs`), rows that never returned go away.
  */
 function useSettledBurst(
   latest: RuntimeAnimationTrace[],
   /** When it changes, the displayed burst becomes exactly `latest`: nothing is merged across it. */
-  resetKey: string,
-  settleMs = 150
+  resetKey: string
 ): RuntimeAnimationTrace[] {
-  const [shown, setShown] = useState({ latest, displayed: latest, resetKey });
-  let current = shown;
-  if (shown.resetKey !== resetKey) {
-    current = { latest, displayed: latest, resetKey };
-    setShown(current);
-  } else if (shown.latest !== latest) {
-    current = { latest, displayed: mergeBurst(shown.displayed, latest), resetKey };
-    setShown(current);
-  }
+  const [shown, setShown] = useState(() => initialSettledBurst(latest, resetKey));
+  const current = receiveBurst(shown, latest, resetKey);
+  if (current !== shown) setShown(current);
 
+  const settleMs = current.settleMs;
   useEffect(() => {
     const timer = setTimeout(() => {
-      setShown((previous) =>
-        previous.latest === latest && previous.displayed !== latest
-          ? { ...previous, latest, displayed: latest }
-          : previous
-      );
+      setShown((previous) => (previous.latest === latest ? settleBurst(previous) : previous));
     }, settleMs);
     return () => clearTimeout(timer);
   }, [latest, settleMs]);

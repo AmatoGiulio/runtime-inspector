@@ -203,6 +203,94 @@ export function mergeBurst(
   return merged;
 }
 
+/** The shortest wait before rows of the previous run that did not come back are dropped. */
+export const SETTLE_MIN_MS = 150;
+/** Margin past the previous run's last call offset before its missing rows are dropped. */
+export const SETTLE_MARGIN_MS = 250;
+
+/**
+ * How long a new run's burst must stay unchanged before rows of `displayed` (the previous run)
+ * that have not come back are dropped: long enough for the replay to have re-called its last
+ * animation, i.e. max(SETTLE_MIN_MS, last call offset of `displayed`) + SETTLE_MARGIN_MS.
+ */
+export function settleDelayMs(displayed: RuntimeAnimationTrace[]): number {
+  const lastCallOffsetMs =
+    displayed.length === 0
+      ? 0
+      : Math.max(...displayed.map(animationCallTimeMs)) - timelineOriginMs(displayed);
+  return Math.max(SETTLE_MIN_MS, lastCallOffsetMs) + SETTLE_MARGIN_MS;
+}
+
+/** What the timeline shows while a run's events arrive one at a time (see `receiveBurst`). */
+export interface SettledBurst {
+  /** The latest burst as received. */
+  latest: RuntimeAnimationTrace[];
+  /** What the timeline renders. */
+  displayed: RuntimeAnimationTrace[];
+  /** When it changes, `displayed` becomes exactly `latest`: nothing is merged across it. */
+  resetKey: string;
+  /** Call-time origin of the run `latest` belongs to; undefined before any run. */
+  runOriginMs: number | undefined;
+  /** How long `latest` must stay unchanged before `settleBurst` drops rows that did not come back. */
+  settleMs: number;
+}
+
+export function initialSettledBurst(
+  latest: RuntimeAnimationTrace[],
+  resetKey: string
+): SettledBurst {
+  return {
+    latest,
+    displayed: latest,
+    resetKey,
+    runOriginMs: latest.length > 0 ? timelineOriginMs(latest) : undefined,
+    settleMs: settleDelayMs([])
+  };
+}
+
+/**
+ * The next displayed burst when `latest` arrives. A different `resetKey` starts clean. Otherwise
+ * the rows not (yet) back are kept via `mergeBurst`, so none unmounts mid-replay; a new run (a
+ * new call-time origin) fixes the settle delay from what was on screen when it started. Returns
+ * `state` itself when nothing changed.
+ */
+export function receiveBurst(
+  state: SettledBurst,
+  latest: RuntimeAnimationTrace[],
+  resetKey: string
+): SettledBurst {
+  if (state.resetKey !== resetKey) return initialSettledBurst(latest, resetKey);
+  if (state.latest === latest) return state;
+
+  let { runOriginMs, settleMs } = state;
+  if (latest.length > 0) {
+    const originMs = timelineOriginMs(latest);
+    if (originMs !== runOriginMs) {
+      runOriginMs = originMs;
+      settleMs = settleDelayMs(state.displayed);
+    }
+  }
+
+  return {
+    latest,
+    displayed: mergeBurst(state.displayed, latest),
+    resetKey,
+    runOriginMs,
+    settleMs
+  };
+}
+
+/**
+ * Called once `latest` has stayed unchanged for `settleMs`: drops the rows that did not come back,
+ * keeping the order on screen. Returns `state` itself when every row came back.
+ */
+export function settleBurst(state: SettledBurst): SettledBurst {
+  const latestIds = new Set(state.latest.map((animation) => animation.instanceId));
+  const displayed = state.displayed.filter((animation) => latestIds.has(animation.instanceId));
+  if (displayed.length === state.displayed.length) return state;
+  return { ...state, displayed };
+}
+
 /** Identity of the set of animations on screen: the sorted, joined call site ids. */
 export function timelineSignature(animations: RuntimeAnimationTrace[]): string {
   return animations
