@@ -18,6 +18,9 @@ export {
   type SceneEntry
 } from "./broker-client.js";
 
+/** How long a fresh connection waits for the broker's schema replay before answering. */
+const SCHEMA_REPLAY_WAIT_MS = 500;
+
 let client: BrokerClient | undefined;
 let connecting: Promise<BrokerClient> | undefined;
 
@@ -36,6 +39,7 @@ async function getConnectedClient(): Promise<BrokerClient> {
     const created = createBrokerClient({ url: target.url, token: target.token });
     connecting = created
       .connect()
+      .then(() => created.waitForSchemas(SCHEMA_REPLAY_WAIT_MS))
       .then(() => {
         client = created;
         return created;

@@ -39,6 +39,12 @@ export interface BrokerClient {
   /** True while the broker socket is open. */
   isConnected(): boolean;
   getSchemas(): PanelSchema[];
+  /**
+   * Resolves once at least one schema is cached, or after `timeoutMs`. The broker replays
+   * cached schemas right after `handshake.accept`, but they can arrive after `connect()`
+   * resolves; a first read without this wait can wrongly report "no schema".
+   */
+  waitForSchemas(timeoutMs: number): Promise<void>;
   getValues(schemaId: string): Record<string, unknown>;
   isStale(schemaId: string): boolean;
   setValue(schemaId: string, controlId: string, value: unknown): void;
@@ -66,6 +72,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
   const sceneStatuses = new Map<string, SceneStatus>();
   const sceneListeners = new Set<(status: SceneStatus) => void>();
   const animations: RuntimeAnimationStarted[] = [];
+  const schemaWaiters = new Set<() => void>();
   let socket: WebSocket | undefined;
 
   function connect(): Promise<void> {
@@ -152,6 +159,7 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
       schemas.set(message.schema.id, message.schema);
       values.set(message.schema.id, collectInitialValues(message.schema));
       staleSchemaIds.delete(message.schema.id);
+      for (const wake of Array.from(schemaWaiters)) wake();
       return;
     }
 
@@ -356,10 +364,24 @@ export function createBrokerClient(options: BrokerClientOptions): BrokerClient {
     socket = undefined;
   }
 
+  function waitForSchemas(timeoutMs: number): Promise<void> {
+    if (schemas.size > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        schemaWaiters.delete(done);
+        resolve();
+      };
+      const timer = setTimeout(done, timeoutMs);
+      schemaWaiters.add(done);
+    });
+  }
+
   return {
     connect,
     isConnected,
     getSchemas,
+    waitForSchemas,
     getValues,
     isStale,
     setValue,

@@ -58,6 +58,29 @@ describe("createBrokerClient", () => {
     expect(client.getValues("test-schema").speed).toBe(1);
   });
 
+  it("waitForSchemas resolves with the replayed schema, without a fixed sleep", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+    runtime = await openRuntime(`ws://127.0.0.1:${broker.port}`, testSchema);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    await client.connect();
+    await client.waitForSchemas(2000);
+    expect(client.getSchemas().map((schema) => schema.id)).toEqual(["test-schema"]);
+  });
+
+  it("waitForSchemas gives up after the timeout when no runtime is connected", async () => {
+    broker = startBroker({ port: 0 });
+    await waitForBrokerPort(broker);
+
+    client = createBrokerClient({ url: `ws://127.0.0.1:${broker.port}` });
+    await client.connect();
+    const started = Date.now();
+    await client.waitForSchemas(80);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(70);
+    expect(client.getSchemas()).toEqual([]);
+  });
+
   it("reports isConnected while the broker socket is open", async () => {
     broker = startBroker({ port: 0 });
     await waitForBrokerPort(broker);
