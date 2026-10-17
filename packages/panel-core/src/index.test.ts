@@ -431,6 +431,24 @@ describe("createPanelSession applySource", () => {
     ]);
   });
 
+  it("never writes an out-of-range value back to source", () => {
+    const { session } = createSession();
+    session.connect();
+    const socket = latestSocket();
+    publishSchema(socket, anchoredSchema);
+
+    session.setValue("anchored-demo", "speed", 7);
+    session.setValue("anchored-demo", "speed", 65);
+    socket.receive({ type: "control.commit", schemaId: "anchored-demo", controlId: "speed", value: 99 });
+    session.applySource("anchored-demo", ["speed"]);
+
+    const applies = socket.sent
+      .filter((raw) => JSON.parse(raw).type === "source.apply")
+      .map((raw) => JSON.parse(raw));
+    expect(applies).toHaveLength(1);
+    expect(applies[0].requests).toEqual([{ controlId: "speed", kind: "slider", anchor, value: 7 }]);
+  });
+
   it("filters to the given controlIds", () => {
     const { session } = createSession();
     session.connect();
