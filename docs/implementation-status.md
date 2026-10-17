@@ -498,3 +498,13 @@ Fixed and re-checked live on 2026-10-05: Play and the replay after a timeline ed
 `examples/react-native-reanimated/src/vinyl/` is the demo screen: a dark music app with a 2-column grid of 8 records (original procedural artwork, react-native-svg + expo-linear-gradient), opened and closed with a hero transition. Its three motion functions are automatic scenes (Library 10 animations, Open record 10, Close record 9) with no Runtime Inspector code in the screen.
 
 Validated live in the desktop Workbench on the iOS Simulator: the Open record timeline shows only its own 10 rows (`animationsOfScene`); moving `disc › Slide` replayed the app with the new delay; **Apply 1 change** rewrote only `withDelay(160, …)` → `withDelay(595, …)`; the next Play changed no bar and left no pending change; a freshly opened Workbench showed no phantom change. Not exercised live: the orphan cleanup after a line shift (`__riModuleCallsites`), covered by unit tests.
+
+## npm alpha `0.1.0-alpha.1` release check (2026-10-17)
+
+Branch `release/v0.1.0-alpha.1`. Publishable: `@runtime-inspector/protocol`, `transport-ws`, `react-native`, `babel-plugin`, `cli`, `client-mcp`, `panel-core`. Private (repository only): `panel-web` (bundled into the CLI), `panel-dialkit`, `panel-rozenite`, `workbench`.
+
+Validated with `pnpm pack` tarballs installed into a fresh `create-expo-app` project outside the monorepo (Expo SDK 58, React Native 0.88, React 19.3, Reanimated 4.7 / worklets 0.13, Expo Go 58 on an iOS 26.3 Simulator): `init`, dev and production bundles, `runtime-inspector dev` serving the bundled panel, live tuning from the panel and from `runtime-inspector-mcp`, out-of-range rejection, Apply to code (`useSharedValue(0)` → `65`), stale panel during an app restart, and runtime reconnection after the CLI restarted.
+
+Release blockers fixed on that branch: the CLI started the panel with `pnpm dev` from the monorepo (now it serves `dist/panel`, broker and token from the URL query, nothing secret in the served files); `init` created a `babel.config.js` whose `babel-preset-expo` does not resolve in a new Expo app (it now prints `npx expo install babel-preset-expo`) and pointed to the unpublished Workbench; the MCP client's first `get_schema` could answer "no schema" before the broker's replay arrived; `@runtime-inspector/protocol` had no `default` export condition, so Metro warned on every bundle.
+
+Not covered: Android, physical devices, bare React Native (non-Expo) apps, a release build running on a device, pnpm/yarn consumers, and the Reanimated 3 + new Expo combination.

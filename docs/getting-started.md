@@ -2,13 +2,20 @@
 
 ## Add Runtime Inspector to your app
 
-From your React Native / Expo app root:
+From your React Native / Expo app root, install the alpha packages, then run `init` and `dev` through the locally installed CLI (an unrelated npm package is also named `runtime-inspector`, so do not run it with `npx` before installing `@runtime-inspector/cli`):
 
 ```bash
+npm install @runtime-inspector/react-native@alpha
+npm install --save-dev @runtime-inspector/babel-plugin@alpha @runtime-inspector/cli@alpha
 npx runtime-inspector init            # add --dry-run to preview the edits
+npx runtime-inspector dev             # broker, web panel and Apply to code
 ```
 
-`init` adds `@runtime-inspector/babel-plugin` to `babel.config.js` (before the Reanimated/worklets plugin, which must stay last) and wraps `metro.config.js` with `withRuntimeInspector(...)` from `@runtime-inspector/react-native/metro` (one copy of React, React Native and Reanimated; Rozenite when `WITH_ROZENITE=true`). It never runs your package manager: it prints the install command for the two packages if they are missing. Every step is idempotent; config shapes it cannot edit safely get a "manual step needed" line with the exact change.
+Then start the app (`npx expo start`) and open the panel URL that `dev` prints (it carries the session token and broker address). The published CLI serves a prebuilt web panel; the React Native DevTools panel (`@runtime-inspector/panel-rozenite`) and the desktop Workbench are not published yet and run from this repository.
+
+Validated on 2026-10-17 with packed packages in a fresh `create-expo-app` project (Expo SDK 58, React Native 0.88, Reanimated 4.7, Expo Go on the iOS Simulator).
+
+`init` adds `@runtime-inspector/babel-plugin` to `babel.config.js` (before the Reanimated/worklets plugin, which must stay last) and wraps `metro.config.js` with `withRuntimeInspector(...)` from `@runtime-inspector/react-native/metro` (one copy of React, React Native and Reanimated; Rozenite when `WITH_ROZENITE=true`). It never runs your package manager: it prints the install command for any missing Runtime Inspector package, and for `babel-preset-expo` when it creates `babel.config.js` in an Expo app (new Expo apps resolve that preset only through `expo`). Every step is idempotent; config shapes it cannot edit safely get a "manual step needed" line with the exact change.
 
 There is nothing else to write in the app for its animations to appear on the Workbench timeline. The hooks below are for values you want to expose explicitly.
 
@@ -46,7 +53,7 @@ If discovery fails on an unusual network, copy the printed `EXPO_PUBLIC_RI_BROKE
 EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577 pnpm --filter @runtime-inspector/example-react-native-reanimated start
 ```
 
-Open `http://127.0.0.1:4600`.
+Open the panel URL printed by `pnpm dev` (`http://127.0.0.1:4600/?token=…&broker=…`).
 
 For Android over USB without LAN, you can keep the default emulator URL by running:
 
