@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/react-native",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "React Native runtime SDK for Runtime Inspector.",
   "license": "MIT",
   "repository": {

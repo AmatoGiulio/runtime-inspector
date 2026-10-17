@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/protocol",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Runtime Inspector Protocol types, schemas, and examples.",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/panel-core",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Framework-agnostic panel session logic for Runtime Inspector (connection, schema store, patch throttling, A/B compare, TypeScript export).",
   "license": "MIT",
   "repository": {

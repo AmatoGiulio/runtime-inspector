@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/client-mcp",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "MCP server that lets an AI agent tune a running app through the Runtime Inspector broker.",
   "license": "MIT",
   "repository": {

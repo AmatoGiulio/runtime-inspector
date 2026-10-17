@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/transport-ws",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Local WebSocket broker for Runtime Inspector.",
   "license": "MIT",
   "repository": {

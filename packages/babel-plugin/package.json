@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/babel-plugin",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "Babel plugin: dev-only auto-binding of useSharedValue via an @inspect directive comment.",
   "license": "MIT",
   "repository": {

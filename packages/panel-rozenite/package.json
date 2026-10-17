@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/panel-rozenite",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Runtime Inspector client for React Native DevTools via Rozenite.",
   "type": "module",

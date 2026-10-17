@@ -1,6 +1,6 @@
 {
   "name": "@runtime-inspector/workbench",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Runtime Inspector motion workbench shell.",
   "type": "module",
