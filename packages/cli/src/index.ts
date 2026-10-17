@@ -4,12 +4,12 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 import { createServer } from "node:net";
-import { randomBytes } from "node:crypto";
 import { execa } from "execa";
 import qrcode from "qrcode-terminal";
 import { startBroker } from "@runtime-inspector/transport-ws";
 import { startWorkspaceClient } from "./workspace.js";
 import { removeSessionFile, writeSessionFile } from "./session-file.js";
+import { createSessionToken } from "./session-token.js";
 import { runInitCommand } from "./init.js";
 import { hasBundledPanel, startPanelServer } from "./panel-server.js";
 
@@ -35,7 +35,7 @@ const requestedPanelPort = Number(process.env.RUNTIME_INSPECTOR_PANEL_PORT ?? 46
 const brokerPort = await findAvailablePort(requestedBrokerPort);
 const panelPort = await findAvailablePort(requestedPanelPort, [brokerPort]);
 const lanAddress = getLanAddress();
-const token = randomBytes(4).toString("hex");
+const token = createSessionToken();
 const broker = startBroker({ host: "0.0.0.0", port: brokerPort, token });
 const cliDir = dirname(fileURLToPath(import.meta.url));
 // Installed package: dist/panel holds the prebuilt web panel. In this monorepo
