@@ -6,9 +6,9 @@ Runtime Inspector is an experimental developer tool for inspecting and tuning a 
 
 ## Demo
 
-[![Runtime Inspector Workbench demo](assets/workbench-demo.gif)](demo/reframed-2026-10-06-170241.mp4)
+[![Live tuning with Runtime Inspector: the web panel changes a running Expo app, then Apply to code writes the value into App.tsx](assets/live-tuning.gif)](demo/live-tuning.mp4)
 
-[Open the original video](demo/reframed-2026-10-06-170241.mp4). The demo shows the desktop Workbench, which runs from this repository and is not part of the npm alpha.
+The npm alpha in a fresh Expo app: drag a value in the web panel and the app on the iOS Simulator follows live, replay a motion with a new duration, then **Apply to code** writes the tuned corner radius back into `App.tsx`. [Watch the video](demo/live-tuning.mp4).
 
 ## What works today
 
