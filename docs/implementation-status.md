@@ -507,4 +507,6 @@ Validated with `pnpm pack` tarballs installed into a fresh `create-expo-app` pro
 
 Release blockers fixed on that branch: the CLI started the panel with `pnpm dev` from the monorepo (now it serves `dist/panel`, broker and token from the URL query, nothing secret in the served files); `init` created a `babel.config.js` whose `babel-preset-expo` does not resolve in a new Expo app (it now prints `npx expo install babel-preset-expo`) and pointed to the unpublished Workbench; the MCP client's first `get_schema` could answer "no schema" before the broker's replay arrived; `@runtime-inspector/protocol` had no `default` export condition, so Metro warned on every bundle.
 
+Security before release: `runtime-inspector dev` now generates a 256-bit session token (it was 32 bits) because the broker listens on `0.0.0.0` and an authenticated panel can request source write-back; the broker compares tokens in constant time. Boundary tests cover wrong, truncated and old-length tokens, `source.apply` from a runtime or an unauthenticated socket, and a runtime re-sending `handshake.hello` as a panel. The runtime role stays unauthenticated by design (zero-config devices).
+
 Not covered: Android, physical devices, bare React Native (non-Expo) apps, a release build running on a device, pnpm/yarn consumers, and the Reanimated 3 + new Expo combination.
