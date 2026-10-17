@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { networkInterfaces } from "node:os";
 import { createServer } from "node:net";
@@ -10,6 +11,7 @@ import { startBroker } from "@runtime-inspector/transport-ws";
 import { startWorkspaceClient } from "./workspace.js";
 import { removeSessionFile, writeSessionFile } from "./session-file.js";
 import { runInitCommand } from "./init.js";
+import { hasBundledPanel, startPanelServer } from "./panel-server.js";
 
 const USAGE = [
   "Usage:",
@@ -36,11 +38,15 @@ const lanAddress = getLanAddress();
 const token = randomBytes(4).toString("hex");
 const broker = startBroker({ host: "0.0.0.0", port: brokerPort, token });
 const cliDir = dirname(fileURLToPath(import.meta.url));
-const panelDir = resolve(cliDir, "../../panel-web");
-const localPanelUrl = `http://127.0.0.1:${panelPort}?token=${token}`;
-const lanPanelUrl = lanAddress ? `http://${lanAddress}:${panelPort}?token=${token}` : undefined;
+// Installed package: dist/panel holds the prebuilt web panel. In this monorepo
+// (`pnpm dev` runs src/ through tsx) the panel runs from source with Vite.
+const bundledPanelDir = resolve(cliDir, "panel");
+const panelSourceDir = resolve(cliDir, "../../panel-web");
 const localBrokerUrl = `ws://127.0.0.1:${broker.port}`;
 const lanBrokerUrl = lanAddress ? `ws://${lanAddress}:${broker.port}` : localBrokerUrl;
+const panelQuery = (brokerUrl: string) => `?token=${token}&broker=${encodeURIComponent(brokerUrl)}`;
+const localPanelUrl = `http://127.0.0.1:${panelPort}/${panelQuery(localBrokerUrl)}`;
+const lanPanelUrl = lanAddress ? `http://${lanAddress}:${panelPort}/${panelQuery(lanBrokerUrl)}` : undefined;
 
 if (brokerPort !== requestedBrokerPort) {
   console.log(`Runtime Inspector broker port ${requestedBrokerPort} busy; using ${brokerPort}.`);
@@ -60,7 +66,6 @@ if (lanPanelUrl) {
   qrcode.generate(lanPanelUrl, { small: true });
 }
 console.log(`MCP agent client:              RI_BROKER_URL=${localBrokerUrl} RI_TOKEN=${token} runtime-inspector-mcp`);
-console.log(`React Native DevTools:         open the "Runtime Inspector" tab (Rozenite, no broker needed)`);
 
 // Source anchors are relative to the app's Babel root, so write-back must
 // resolve them against the app project root — the CLI's cwd by default, or
@@ -76,6 +81,10 @@ const workspace = startWorkspaceClient({
   log: (message) => console.log(`Runtime Inspector workspace: ${message}`)
 });
 console.log(`Runtime Inspector workspace: write-back enabled (${workspaceRoot})`);
+// The DevTools panel is not published to npm yet; mention it only where it is installed.
+if (resolvesFrom(workspaceRoot, "@runtime-inspector/panel-rozenite/package.json")) {
+  console.log(`React Native DevTools:         open the "Runtime Inspector" tab (Rozenite, no broker needed)`);
+}
 
 const sessionPath = writeSessionFile({
   version: 1,
@@ -89,20 +98,25 @@ const sessionPath = writeSessionFile({
 });
 console.log(`Session file: ${sessionPath} (Workbench and MCP read it; no token to copy)`);
 
-const panel = execa("pnpm", ["dev"], {
-  cwd: panelDir,
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    VITE_RI_BROKER_URL: lanBrokerUrl,
-    VITE_RI_PANEL_PORT: String(panelPort),
-    VITE_RI_TOKEN: token
-  }
-});
+const panelServer = hasBundledPanel(bundledPanelDir)
+  ? await startPanelServer({ rootDir: bundledPanelDir, host: "0.0.0.0", port: panelPort })
+  : undefined;
+const panel = panelServer
+  ? undefined
+  : execa("pnpm", ["dev"], {
+      cwd: panelSourceDir,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        VITE_RI_BROKER_URL: lanBrokerUrl,
+        VITE_RI_PANEL_PORT: String(panelPort)
+      }
+    });
 
 const shutdown = async () => {
   removeSessionFile(process.pid);
-  panel.kill("SIGTERM");
+  panel?.kill("SIGTERM");
+  panelServer?.close();
   workspace.close();
   await broker.close();
   process.exit(0);
@@ -111,7 +125,16 @@ const shutdown = async () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-await panel;
+if (panel) await panel;
+
+function resolvesFrom(root: string, request: string) {
+  try {
+    createRequire(join(root, "package.json")).resolve(request);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function getLanAddress() {
   for (const addresses of Object.values(networkInterfaces())) {

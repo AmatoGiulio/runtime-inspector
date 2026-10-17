@@ -17,7 +17,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup src/index.ts --format esm --dts && node scripts/copy-panel.mjs",
     "dev": "tsx src/index.ts dev",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
@@ -33,6 +33,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@runtime-inspector/panel-web": "workspace:*",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/ws": "^8.5.13",
     "tsup": "^8.3.5",

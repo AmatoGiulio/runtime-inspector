@@ -5,9 +5,11 @@ import { InspectorPanel } from "@runtime-inspector/panel-dialkit";
 import "@runtime-inspector/panel-dialkit/styles.css";
 import "./styles.css";
 
-const brokerUrl = import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
-const panelToken =
-  new URLSearchParams(window.location.search).get("token") ?? import.meta.env.VITE_RI_TOKEN;
+// `runtime-inspector dev` prints the panel URL with ?token=…&broker=…; the
+// Vite variables remain for running the panel on its own in this repo.
+const query = new URLSearchParams(window.location.search);
+const brokerUrl = query.get("broker") ?? import.meta.env.VITE_RI_BROKER_URL ?? "ws://127.0.0.1:4577";
+const panelToken = query.get("token") ?? import.meta.env.VITE_RI_TOKEN;
 
 const session = createPanelSession({
   url: brokerUrl,
