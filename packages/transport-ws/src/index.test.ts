@@ -177,6 +177,87 @@ describe("Runtime Inspector panel token enforcement", () => {
   });
 });
 
+describe("Runtime Inspector broker authentication boundaries", () => {
+  const TOKEN = "a".repeat(63) + "b"; // same shape as the CLI's 256-bit hex token
+
+  async function hello(role: string, token?: string) {
+    const socket = await openSocket(`ws://127.0.0.1:${broker!.port}`);
+    const messages: Array<{ type?: string; code?: string }> = [];
+    socket.on("message", (data) => messages.push(JSON.parse(data.toString())));
+    const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
+    socket.send(
+      JSON.stringify({ type: "handshake.hello", protocolVersion: "0.3", role, clientId: `${role}-${Math.random()}`, token })
+    );
+    await wait(40);
+    return { socket, messages, closed };
+  }
+
+  const sourceApply = JSON.stringify({
+    type: "source.apply",
+    schemaId: "test-schema",
+    requests: [
+      {
+        controlId: "moveX",
+        kind: "slider",
+        anchor: { file: "src/Card.tsx", line: 1, column: 1, enclosure: ["Card"], name: "moveX", init: "0" },
+        value: 1
+      }
+    ]
+  });
+
+  it("rejects near-miss, truncated and old-length tokens for panel and workspace", async () => {
+    broker = startBroker({ port: 0, token: TOKEN });
+    await waitForBrokerPort(broker);
+
+    for (const role of ["panel", "workspace"]) {
+      for (const wrong of ["a".repeat(64), TOKEN.slice(0, 63), TOKEN.slice(0, 8), `${TOKEN}0`, ""]) {
+        const client = await hello(role, wrong);
+        await client.closed;
+        expect(client.messages.map((message) => message.code)).toContain("UNAUTHORIZED");
+        expect(client.messages.some((message) => message.type === "handshake.accept")).toBe(false);
+      }
+      const ok = await hello(role, TOKEN);
+      expect(ok.messages.some((message) => message.type === "handshake.accept")).toBe(true);
+      ok.socket.close();
+    }
+  });
+
+  it("never forwards source.apply from a runtime or a client that skipped the handshake", async () => {
+    broker = startBroker({ port: 0, token: TOKEN });
+    await waitForBrokerPort(broker);
+    const workspace = await hello("workspace", TOKEN);
+    const runtime = await hello("runtime");
+    const anonymous = await openSocket(`ws://127.0.0.1:${broker.port}`);
+
+    runtime.socket.send(sourceApply);
+    anonymous.send(sourceApply);
+    await wait(50);
+    expect(workspace.messages.some((message) => message.type === "source.apply")).toBe(false);
+
+    const panel = await hello("panel", TOKEN);
+    panel.socket.send(sourceApply);
+    await wait(50);
+    expect(workspace.messages.filter((message) => message.type === "source.apply")).toHaveLength(1);
+
+    for (const socket of [workspace.socket, runtime.socket, anonymous, panel.socket]) socket.close();
+  });
+
+  it("does not let a runtime upgrade itself to panel without the token", async () => {
+    broker = startBroker({ port: 0, token: TOKEN });
+    await waitForBrokerPort(broker);
+    const workspace = await hello("workspace", TOKEN);
+    const runtime = await hello("runtime");
+
+    runtime.socket.send(
+      JSON.stringify({ type: "handshake.hello", protocolVersion: "0.3", role: "panel", clientId: "sneaky" })
+    );
+    await runtime.closed;
+    expect(runtime.messages.map((message) => message.code)).toContain("UNAUTHORIZED");
+    expect(workspace.messages.some((message) => message.type === "source.apply")).toBe(false);
+    workspace.socket.close();
+  });
+});
+
 describe("Runtime Inspector protocol 0.3 broker rules", () => {
   it("forwards control.trigger to the runtime but never caches or replays it", async () => {
     broker = startBroker({ port: 0 });

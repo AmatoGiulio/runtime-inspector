@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
   HandshakeAccept,
@@ -78,7 +78,7 @@ export function startBroker(options: BrokerOptions = {}): RuntimeInspectorBroker
         if (
           token &&
           (message.role === "panel" || message.role === "workspace") &&
-          message.token !== token
+          !tokensMatch(message.token, token)
         ) {
           send(socket, {
             type: "error",
@@ -299,6 +299,13 @@ function forwardToRole(
     if (target.role !== targetRole) continue;
     send(target.socket, message);
   }
+}
+
+/** Constant-time token comparison; hashing first keeps differing lengths from short-circuiting. */
+function tokensMatch(received: string | undefined, expected: string): boolean {
+  if (typeof received !== "string") return false;
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(received), digest(expected));
 }
 
 function send(socket: WebSocket, message: RIPMessage) {
