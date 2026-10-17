@@ -12,6 +12,7 @@ import { dirname, join, resolve } from "node:path";
 
 export const BABEL_PLUGIN = "@runtime-inspector/babel-plugin";
 export const RUNTIME_PACKAGE = "@runtime-inspector/react-native";
+export const CLI_PACKAGE = "@runtime-inspector/cli";
 export const METRO_MODULE = "@runtime-inspector/react-native/metro";
 const METRO_WRAPPER = "withRuntimeInspector";
 /** Plugins that must stay last in the Babel plugin list. */
@@ -247,6 +248,8 @@ export interface PackageInfo {
   hasReanimated: boolean;
   hasRuntime: boolean;
   hasBabelPlugin: boolean;
+  hasCli: boolean;
+  hasBabelPresetExpo: boolean;
 }
 
 export function inspectPackage(pkg: PackageJson): PackageInfo {
@@ -257,7 +260,9 @@ export function inspectPackage(pkg: PackageJson): PackageInfo {
     isExpo: has("expo"),
     hasReanimated: has("react-native-reanimated"),
     hasRuntime: has(RUNTIME_PACKAGE),
-    hasBabelPlugin: has(BABEL_PLUGIN)
+    hasBabelPlugin: has(BABEL_PLUGIN),
+    hasCli: has(CLI_PACKAGE),
+    hasBabelPresetExpo: has("babel-preset-expo")
   };
 }
 
@@ -286,7 +291,7 @@ export function detectPackageManager(cwd: string, exists: (path: string) => bool
 
 export function installCommands(
   manager: PackageManager,
-  missing: { runtime: boolean; babelPlugin: boolean }
+  missing: { runtime: boolean; babelPlugin: boolean; cli?: boolean; babelPresetExpo?: boolean }
 ): string[] {
   const add = { pnpm: "pnpm add", yarn: "yarn add", bun: "bun add", npm: "npm install" }[manager];
   const addDev = { pnpm: "pnpm add -D", yarn: "yarn add -D", bun: "bun add --dev", npm: "npm install --save-dev" }[
@@ -294,7 +299,11 @@ export function installCommands(
   ];
   const commands: string[] = [];
   if (missing.runtime) commands.push(`${add} ${RUNTIME_PACKAGE}`);
-  if (missing.babelPlugin) commands.push(`${addDev} ${BABEL_PLUGIN}`);
+  const devPackages = [missing.babelPlugin && BABEL_PLUGIN, missing.cli && CLI_PACKAGE].filter(Boolean);
+  if (devPackages.length > 0) commands.push(`${addDev} ${devPackages.join(" ")}`);
+  // A new Expo app resolves babel-preset-expo through `expo` only; a babel.config.js needs it
+  // at the top level. `expo install` picks the version that matches the SDK.
+  if (missing.babelPresetExpo) commands.push("npx expo install babel-preset-expo");
   return commands;
 }
 
@@ -466,7 +475,13 @@ export function runInit(options: InitOptions): InitResult {
   );
 
   // 3. Dependencies (never installed for the user).
-  const commands = installCommands(manager, { runtime: !info.hasRuntime, babelPlugin: !info.hasBabelPlugin });
+  const createdExpoBabelConfig = info.isExpo && steps[0]?.detail === "created";
+  const commands = installCommands(manager, {
+    runtime: !info.hasRuntime,
+    babelPlugin: !info.hasBabelPlugin,
+    cli: !info.hasCli,
+    babelPresetExpo: createdExpoBabelConfig && !info.hasBabelPresetExpo
+  });
   steps.push(
     commands.length === 0
       ? { step: "dependencies", status: "already set up" }
@@ -485,9 +500,9 @@ export function runInit(options: InitOptions): InitResult {
 
   log("");
   log("Next steps:");
-  log("  1. runtime-inspector dev");
+  log("  1. npx runtime-inspector dev   (from this app's root, with the CLI installed locally)");
   log(`  2. Start the app: ${info.isExpo ? "npx expo start" : "npx react-native start"}`);
-  log("  3. Open the Workbench (it reads the session file; no token to copy)");
+  log("  3. Open the panel URL printed by step 1");
 
   return { exitCode: 0, steps };
 }

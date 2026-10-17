@@ -245,6 +245,10 @@ describe("package helpers", () => {
       "yarn add @runtime-inspector/react-native"
     ]);
     expect(installCommands("bun", { runtime: false, babelPlugin: false })).toEqual([]);
+    expect(installCommands("npm", { runtime: false, babelPlugin: true, cli: true, babelPresetExpo: true })).toEqual([
+      "npm install --save-dev @runtime-inspector/babel-plugin @runtime-inspector/cli",
+      "npx expo install babel-preset-expo"
+    ]);
   });
 
   it("formats a new-file diff and a changed-file diff", () => {
@@ -307,13 +311,27 @@ describe("runInit", () => {
       {
         step: "dependencies",
         status: "manual step needed",
-        detail: "run pnpm add @runtime-inspector/react-native && pnpm add -D @runtime-inspector/babel-plugin"
+        detail:
+          "run pnpm add @runtime-inspector/react-native && pnpm add -D @runtime-inspector/babel-plugin @runtime-inspector/cli && npx expo install babel-preset-expo"
       }
     ]);
     const output = lines.join("\n");
-    expect(output).toContain("runtime-inspector dev");
+    expect(output).toContain("npx runtime-inspector dev");
     expect(output).toContain("npx expo start");
-    expect(output).toContain("Workbench");
+    expect(output).toContain("panel URL");
+  });
+
+  it("does not ask for babel-preset-expo when the app already lists it or keeps its own babel config", () => {
+    writePackage({
+      dependencies: { expo: "58", "@runtime-inspector/react-native": "0.1" },
+      devDependencies: { [BABEL_PLUGIN]: "0.1", "@runtime-inspector/cli": "0.1", "babel-preset-expo": "58" }
+    });
+    expect(runInit({ cwd: dir, log }).steps.at(-1)).toEqual({ step: "dependencies", status: "already set up" });
+
+    rmSync(join(dir, "babel.config.js"));
+    writePackage({ dependencies: { expo: "58" } });
+    writeFileSync(join(dir, "babel.config.js"), 'module.exports = { presets: ["babel-preset-expo"] };\n');
+    expect(runInit({ cwd: dir, log }).steps.at(-1)?.detail).not.toContain("babel-preset-expo");
   });
 
   it("creates the Expo babel config without Reanimated when it is not a dependency", () => {
@@ -326,7 +344,7 @@ describe("runInit", () => {
   it("edits existing configs, then reports already set up on a second run", () => {
     writePackage({
       dependencies: { "react-native": "0.76", "@runtime-inspector/react-native": "0.1" },
-      devDependencies: { [BABEL_PLUGIN]: "0.1" }
+      devDependencies: { [BABEL_PLUGIN]: "0.1", "@runtime-inspector/cli": "0.1" }
     });
     writeFileSync(join(dir, "babel.config.js"), `module.exports = { presets: ["module:@react-native/babel-preset"] };\n`);
     writeFileSync(
