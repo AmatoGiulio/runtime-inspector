@@ -8,7 +8,7 @@ Runtime Inspector is an experimental developer tool for inspecting and tuning a 
 
 [![Tuning a gesture spring live with Runtime Inspector: the web panel changes the spring of a running Expo app, then Apply to code writes it into App.tsx](assets/spring-tuning.gif)](demo/spring-tuning.mp4)
 
-The npm alpha in a fresh Expo app on the iOS Simulator. Flicked open, the mini player's sheet overshoots with its default spring. Damping is raised in the web panel while the app runs, and the spring curve updates with it. The same flick then settles without a bounce, and **Apply to code** writes the new spring into `App.tsx`. [Watch the video](demo/spring-tuning.mp4).
+The npm alpha in a fresh Expo app on the iOS Simulator. Flicked open, the mini player's sheet overshoots with the spring it starts with (`damping: 14`). Damping is raised in the web panel while the app runs, and the spring curve updates with it. The same flick then settles without a bounce, and **Apply to code** writes the new spring into `App.tsx`. [Watch the video](demo/spring-tuning.mp4).
 
 ## What works today
 
