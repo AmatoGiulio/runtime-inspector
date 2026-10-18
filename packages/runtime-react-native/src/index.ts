@@ -487,7 +487,7 @@ function connectRuntime(session: Session) {
   if (tunnelUrl && !scriptUrl && !session.warnedTunnel && !hasDirectClient) {
     session.warnedTunnel = true;
     warnDev(
-      `Dev server is behind a tunnel (${tunnelUrl}). A tunnel cannot reach a local broker - use LAN mode or set EXPO_PUBLIC_RI_BROKER_URL.`
+      `Dev server is behind a tunnel (${tunnelUrl}). A tunnel cannot reach a local broker - use LAN mode.`
     );
   }
 
@@ -502,7 +502,7 @@ function connectRuntime(session: Session) {
     if (!hasDirectClient && !warnedUnreachable) {
       warnedUnreachable = true;
       warnDev(
-        `Could not reach a Runtime Inspector broker at: ${candidates.join(", ")}. Is \`runtime-inspector dev\` running? Set EXPO_PUBLIC_RI_BROKER_URL or pass brokerUrl to override. (Discovery: scriptUrl=${scriptUrl ?? "undefined"} tunnelUrl=${tunnelUrl ?? "undefined"} platform=${getPlatformOs() ?? "undefined"}.) Retrying quietly in the background.`
+        `Could not reach a Runtime Inspector broker at: ${candidates.join(", ")}. Is \`runtime-inspector dev\` running? An explicit schema can pass brokerUrl to definePanel to override discovery. (Discovery: scriptUrl=${scriptUrl ?? "undefined"} tunnelUrl=${tunnelUrl ?? "undefined"} platform=${getPlatformOs() ?? "undefined"}.) Retrying quietly in the background.`
       );
     }
   }
