@@ -79,6 +79,8 @@ The renderer supports:
 
 ## Using it in an app
 
+`@runtime-inspector/panel-rozenite` is not published to npm in `0.1.0-alpha.1`, so this path works from this repository (or a workspace that links it) for now.
+
 1. Add the packages: `@runtime-inspector/react-native`, `@runtime-inspector/panel-rozenite`, and `@rozenite/metro` (dev).
 2. Use `withRuntimeInspector` in `metro.config.js` (`npx runtime-inspector init` writes it):
 
@@ -89,8 +91,7 @@ The renderer supports:
    ```
 
    With `WITH_ROZENITE=true` (or `withRuntimeInspector(config, { rozenite: true })`) it applies `withRozenite` with this plugin and loads the device side of the bridge before the app: imports of `@runtime-inspector/react-native` resolve to a small entry (`rozenite-entry.js`) that re-exports the SDK and loads the panel, and that entry runs before the main module. No import in the app is needed. Without Rozenite the panel is not bundled at all. It warns when Rozenite is requested but `@rozenite/metro` or the panel package does not resolve.
-3. (Removed: the app no longer imports `@runtime-inspector/panel-rozenite`.)
-4. Start Metro with `WITH_ROZENITE=true`, open React Native DevTools (`j` in the Metro terminal) and select **Rozenite → Runtime Inspector**.
+3. Start Metro with `WITH_ROZENITE=true`, open React Native DevTools (`j` in the Metro terminal) and select **Rozenite → Runtime Inspector**.
 
 No broker, CLI or token is involved. Declarations are unchanged — `useRuntimeValue`, `useAction`, `useInspector` and `// @inspect` appear in DevTools exactly as in the web panel. The app does not mirror values into a Rozenite API.
 
@@ -104,7 +105,7 @@ pnpm --filter @runtime-inspector/example-react-native-reanimated start:rozenite
 
 ## Rendering
 
-The panel is the shared DialKit `InspectorPanel` (see [DialKit rendering](dialkit.md)), identical to the web panel except that **Apply to code** is hidden: the direct bridge has no `workspace` client to write files. Use the web panel, or an MCP agent, for write-back.
+The panel is the shared DialKit `InspectorPanel` (see [DialKit rendering](dialkit.md)), identical to the web panel except that **Apply to code** is hidden: the direct bridge has no `workspace` client to write files. Use the web panel for write-back; the MCP client has no write-back tool.
 
 ## Validation
 

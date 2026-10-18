@@ -24,6 +24,7 @@ import "@runtime-inspector/panel-dialkit/styles.css";
 
 - **Exact entry.** DialKit's own value editor clamps and rounds typed input, so it is disabled. Press Enter on a focused slider (or double-click it) to open an exact field; its value goes to RIP validation unchanged and an out-of-range number is rejected with a visible reason, never clamped.
 - **Display ranges.** Spring fields use `control.ranges` when declared, otherwise stiffness 1–1000, damping 1–100, mass 0.1–10. Bézier sliders span x 0–1 and y −1–2. Every display range widens to include the current value, so a slider never misrepresents a value it did not produce. DialKit's spring "Time" mode is not offered: its duration/bounce parameters are not RIP's spring model.
+- **Spring curve.** An omitted `mass` is drawn as 1, Reanimated 3's default. Reanimated 4's `withSpring` defaults it to 4, so on Reanimated 4 the curve matches the motion only when the spring declares `mass`.
 - **Stale schemas.** Controls are replaced by read-only rows. The interactive component unmounts, closing an open color picker and stopping transient gestures. A new schema/control identity also remounts the editor. This supplements the authoritative stale checks in `panel-core`.
 
 ## Panel chrome

@@ -15,9 +15,9 @@ Then start the app (`npx expo start`) and open the panel URL that `dev` prints (
 
 Validated on 2026-10-17 with packed packages in a fresh `create-expo-app` project (Expo SDK 58, React Native 0.88, Reanimated 4.7, Expo Go on the iOS Simulator).
 
-`init` adds `@runtime-inspector/babel-plugin` to `babel.config.js` (before the Reanimated/worklets plugin, which must stay last) and wraps `metro.config.js` with `withRuntimeInspector(...)` from `@runtime-inspector/react-native/metro` (one copy of React, React Native and Reanimated; Rozenite when `WITH_ROZENITE=true`). It never runs your package manager: it prints the install command for any missing Runtime Inspector package, and for `babel-preset-expo` when it creates `babel.config.js` in an Expo app (new Expo apps resolve that preset only through `expo`). Every step is idempotent; config shapes it cannot edit safely get a "manual step needed" line with the exact change.
+`init` adds `@runtime-inspector/babel-plugin` to `babel.config.js` (before the Reanimated/worklets plugin, which must stay last) and wraps `metro.config.js` with `withRuntimeInspector(...)` from `@runtime-inspector/react-native/metro` (one copy of React, React Native and Reanimated; with `WITH_ROZENITE=true` it also enables the React Native DevTools panel, which is only available from this repository for now). It never runs your package manager: it prints the install command for any missing Runtime Inspector package, and for `babel-preset-expo` when it creates `babel.config.js` in an Expo app (new Expo apps resolve that preset only through `expo`). Every step is idempotent; config shapes it cannot edit safely get a "manual step needed" line with the exact change.
 
-There is nothing else to write in the app for its animations to appear on the Workbench timeline. The hooks below are for values you want to expose explicitly.
+Animations the Babel plugin discovers need no extra code: their numbers appear as sliders in the web panel, and on the Workbench timeline when you run the Workbench from this repository (see [Automatic scenes and curves](#automatic-scenes-and-curves-no-code)). The hooks below are for values you want to expose explicitly.
 
 ## No token to copy
 
@@ -47,12 +47,6 @@ Start the example app:
 pnpm --filter @runtime-inspector/example-react-native-reanimated start
 ```
 
-If discovery fails on an unusual network, copy the printed `EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577` value to override it explicitly:
-
-```bash
-EXPO_PUBLIC_RI_BROKER_URL=ws://<lan-ip>:4577 pnpm --filter @runtime-inspector/example-react-native-reanimated start
-```
-
 Open the panel URL printed by `pnpm dev` (`http://127.0.0.1:4600/?token=…&broker=…`).
 
 For Android over USB without LAN, you can keep the default emulator URL by running:
@@ -65,11 +59,15 @@ adb reverse tcp:4577 tcp:4577
 
 ### `// @inspect` directive (fastest path for an existing codebase)
 
-If you already have `useSharedValue`s scattered through a codebase, the fastest way in is a comment - no import, no hook. Add `@runtime-inspector/babel-plugin` to `babel.config.js`:
+If you already have `useSharedValue`s scattered through a codebase, the fastest way in is a comment - no import, no hook. `runtime-inspector init` adds `@runtime-inspector/babel-plugin` to `babel.config.js`; by hand, keep your presets and put it before the Reanimated/worklets plugin when that plugin is listed:
 
 ```js
-module.exports = {
-  plugins: ["@runtime-inspector/babel-plugin", "react-native-reanimated/plugin"]
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ["babel-preset-expo"],
+    plugins: ["@runtime-inspector/babel-plugin"]
+  };
 };
 ```
 
@@ -96,7 +94,7 @@ const blur = useRuntimeValue("blur", 18, { min: 0, max: 40 });
 // SharedValue: use blur.value in a worklet/style, as usual.
 ```
 
-- **Kind inference** is the same table as `useInspector`/`// @inspect`: number → slider (requires `min`/`max` in `options`, thrown as an actionable error otherwise), boolean → toggle, string → color, `{ damping, stiffness }` → spring, a 4-number array → bezier. Actions are declared, not inferred: passing a function throws pointing to `useAction("<name>", fn)` instead.
+- **Kind inference** is the same table as `useInspector`/`// @inspect`: number → slider (requires `min`/`max` in `options`, thrown as an actionable error otherwise), boolean → toggle, string → color, `{ damping, stiffness, mass? }` → spring, a 4-number array → bezier. Write `mass` explicitly for springs you pass to `withSpring`: the panel draws an omitted mass as 1, which matches Reanimated 3, but Reanimated 4's `withSpring` defaults it to 4. Actions are declared, not inferred: passing a function throws pointing to `useAction("<name>", fn)` instead.
 - **Options**: `min`, `max`, `step`, `unit`, `label`, `onChange` — `onChange` fires after the handle is written, same as `useInspector`.
 - **Panel placement**: every `useRuntimeValue` call lands in the same shared "auto" schema that `// @inspect` publishes to, so scattered one-liners across components collect into a single panel with no grouping to set up. Reach for `useInspector` instead when you want a named, grouped panel.
 - **Lifecycle**: registers on mount, unregisters on unmount, and republishes the shared schema (debounced) either way — unmounting removes the control from the panel. Because unmount releases the name, remounting the same component does not accumulate `name2`, `name3` suffixes; a genuine collision (two live `useRuntimeValue` calls with the same name) does get a suffix, with a dev warning, same as `// @inspect`.
@@ -129,7 +127,7 @@ function play() { … }
 function resetPose() { … }
 ```
 
-The numbers of discovered animations (a timing `duration`, a spring's `damping` / `stiffness` / `mass`, a start delay) are editable in the Workbench timeline and Inspector. With `runtime-inspector dev` running, **Apply to code** writes the tuned numbers back into the source file — `withDelay(140, withTiming(0, { duration: 380 }))` becomes `withDelay(180, withTiming(0, { duration: 420 }))` — and Fast Refresh picks them up ([RFC 0007](../rfcs/0007-animation-literal-write-back.md)).
+The numbers of discovered animations (a timing `duration`, a spring's `damping` / `stiffness` / `mass`, a start delay) appear as sliders in the web panel and are editable in the Workbench timeline and Inspector. Discovery covers `<sharedValue>.value = withTiming/withSpring/withDelay(...)` assignments in component code; animations started inside worklets (gesture callbacks, `useAnimatedStyle`, `'worklet'` functions) are not discovered. Writing those numbers back is a Workbench action: the web panel's **Apply to code** covers values with a source anchor (`// @inspect`). With `runtime-inspector dev` running, the Workbench's **Apply to code** writes the tuned numbers back into the source file — `withDelay(140, withTiming(0, { duration: 380 }))` becomes `withDelay(180, withTiming(0, { duration: 420 }))` — and Fast Refresh picks them up ([RFC 0007](../rfcs/0007-animation-literal-write-back.md)).
 
 An automatic scene can be replayed while its screen is showing. To open it from elsewhere, add navigation with `defineScene("<file>:<Component>.<function>", { open, link })` or use the explicit API below.
 
@@ -246,7 +244,7 @@ panel.connect();
 
 ## Monorepo note
 
-If the SDK lives in the same pnpm workspace as your app (like this repo's example), make `react`, `react-native`, and `react-native-reanimated` resolve as singletons — pnpm can install a second physical copy of peer dependencies, and two Reanimated instances break shared values created by the SDK (`sv.addListener is not a function`). See `examples/react-native-reanimated/metro.config.js` for the Metro `resolveRequest` override. Apps installing the SDK from npm don't need this.
+If the SDK lives in the same pnpm workspace as your app (like this repo's example), `react`, `react-native`, and `react-native-reanimated` must resolve as singletons — pnpm can install a second physical copy of peer dependencies, and two Reanimated instances break shared values created by the SDK (`sv.addListener is not a function`). `withRuntimeInspector` in `metro.config.js` (what `init` adds) resolves them from the app root; `examples/react-native-reanimated/metro.config.js` is exactly that one line.
 
 ## Verification
 

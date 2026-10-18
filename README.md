@@ -62,7 +62,8 @@ The example and Workbench commands are for this repository; they are not a promi
 
 - Interfaces and APIs may change. This is a development tool, not a production monitoring or remote-access service.
 - Use the broker only on a trusted development network; this alpha does not provide a production security model. The session token in the panel URL is the only access control: whoever has it can change live values and, through Apply to code, edit source files in the app folder.
-- Motion discovery supports a subset of Reanimated patterns. Unsupported compositions may not appear in the Workbench.
+- Motion discovery supports a subset of Reanimated patterns (assignments in component code, not inside worklets or gesture callbacks). Unsupported compositions may not appear.
+- On Reanimated 4, declare `mass` in springs you tune: the panel draws an omitted mass as 1, Reanimated 4's `withSpring` uses 4. `// @inspect` and `useRuntimeValue` also trigger Reanimated 4's "Reading from `value` during component render" development warning.
 - The desktop Simulator viewport and input path use private Xcode/Simulator APIs and may break across Xcode versions.
 - The desktop client is an unpackaged development build. Production signing, distribution, and first-run macOS Screen Recording permission UX are not implemented.
 
