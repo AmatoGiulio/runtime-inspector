@@ -2,7 +2,7 @@
 
 **Alpha · developer preview**
 
-Runtime Inspector is an experimental developer tool for inspecting and tuning a running React Native app that uses Reanimated. It includes a web panel, a React Native DevTools panel, an MCP client, and a macOS desktop Workbench.
+Runtime Inspector helps you inspect and fine-tune a running React Native app that uses Reanimated, without repeatedly editing code and comparing motion from memory. Expose runtime values and actions, explore supported animations, and adjust behavior live through a web panel, a Rozenite panel in React Native DevTools, or an MCP client. Supported source-anchored changes can be applied back to code. An experimental macOS Workbench runs from this repository.
 
 ## Demo
 
@@ -59,6 +59,17 @@ pnpm workbench:desktop
 ```
 
 The example and Workbench commands are for this repository; they are not a promise of a packaged desktop app or a zero-configuration install for arbitrary projects.
+
+## Help test the alpha
+
+I'm looking for feedback from React Native developers trying Runtime Inspector on **real interactions**, beyond the included example. In particular:
+
+- Does installation and connecting the panel work in your Expo project?
+- Which Reanimated animations aren't discovered, or which values can't be adjusted as expected?
+- Does live tuning help your normal workflow? Where does the panel get in the way?
+- Does anything break on Android, physical devices, bare React Native, or other supported Reanimated versions? These paths aren't all validated yet.
+
+If something doesn't work, [open an issue](https://github.com/AmatoGiulio/runtime-inspector/issues/new) with your Expo / React Native / Reanimated versions, platform, and reproduction steps. Please don't include session tokens, private source code, or other secrets.
 
 ## Alpha limits
 
