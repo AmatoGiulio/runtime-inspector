@@ -158,6 +158,8 @@ The `pnpm pack` tarball of `@runtime-inspector/panel-rozenite` was installed int
 - with `npx runtime-inspector dev` also running and DevTools open: **Apply to code** in the web panel rewrote `useSharedValue({ damping: 14, … })` to `damping: 24.5` in `App.tsx`; after the Fast Refresh, DevTools showed 24.5 and its next change (43.5) still reached the app; a damping change made only in DevTools was not shown by the web panel;
 - `npm publish --dry-run` of the tarball.
 
+After publishing, `@runtime-inspector/panel-rozenite@alpha` was installed from the registry (with npm 11) into another fresh Expo SDK 58 app: Rozenite loaded the plugin, the panel listed the app's controls, and a damping change (14 → 33) reached the app.
+
 That run found one bug, fixed in this package: the panel sends `handshake.hello` as soon as it mounts, and if the device side was not listening yet the hello was lost and the panel stayed on "Waiting for the app" (seen once out of four openings). The panel now repeats the hello when the runtime announces its first generation, not only when the generation changes; a repeated hello is accepted again and replays the schemas.
 
 Not verified: Android, a physical device, the `@rozenite/metro` 2.4.0 host with Expo 58, pnpm and yarn consumers, bare React Native apps, and the standalone DevTools window that `j` opens (the same frontend was loaded in a browser instead).
