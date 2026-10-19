@@ -97,6 +97,47 @@ describe("RozenitePanelSocket + panel-core", () => {
     panelClient.close();
   });
 
+  it("replays the handshake when the runtime becomes ready after the panel connected", async () => {
+    const { device, panel } = connectFakePair();
+    const panelClient = await getRozeniteDevToolsClient<RuntimeInspectorRozeniteEvents>(
+      RUNTIME_INSPECTOR_ROZENITE_PLUGIN_ID,
+      { channel: panel }
+    );
+
+    const session = createPanelSession({
+      url: "rozenite://runtime-inspector",
+      createSocket: () => createRozenitePanelSocket(panelClient)
+    });
+    session.connect();
+    // The panel's first handshake.hello is sent before the device listens, so it is lost.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const deviceClient = await getRozeniteDevToolsClient<RuntimeInspectorRozeniteEvents>(
+      RUNTIME_INSPECTOR_ROZENITE_PLUGIN_ID,
+      { channel: device }
+    );
+    deviceClient.onMessage(RIP_EVENT, ({ message }) => {
+      if (message.type !== "handshake.hello") return;
+      deviceClient.send(RIP_EVENT, {
+        message: {
+          type: "handshake.accept",
+          protocolVersion: "0.3",
+          brokerId: "direct-runtime",
+          clientId: message.clientId
+        }
+      });
+      deviceClient.send(RIP_EVENT, { message: { type: "schema.publish", schema: schemaA } });
+    });
+    deviceClient.send(RUNTIME_READY_EVENT, { protocolVersion: "0.3", generationId: "generation-1" });
+
+    await vi.waitFor(() => expect(session.getState().schemas.map((schema) => schema.id)).toEqual(["schema-a"]));
+    expect(session.getState().staleSchemaIds["schema-a"]).toBe(false);
+
+    session.dispose();
+    deviceClient.close();
+    panelClient.close();
+  });
+
   it("marks old schemas stale on runtime replacement and revives only republished schemas", async () => {
     const { device, panel } = connectFakePair();
     const deviceClient = await getRozeniteDevToolsClient<RuntimeInspectorRozeniteEvents>(

@@ -21,7 +21,7 @@ These paths share the Runtime Inspector Protocol (RIP) and `panel-core` session 
 
 ## Install in your app (npm alpha)
 
-The npm alpha ships the SDK, the Babel plugin, the CLI (broker, web panel, Apply to code) and the MCP client. The React Native DevTools panel and the desktop Workbench run from this repository only.
+The npm alpha ships the SDK, the Babel plugin, the CLI (broker, web panel, Apply to code), the MCP client and the React Native DevTools panel. The desktop Workbench runs from this repository only.
 
 From your Expo / React Native app root (Reanimated 3 or 4):
 
@@ -33,6 +33,8 @@ npx runtime-inspector dev      # broker + web panel + Apply to code
 ```
 
 Then start the app (`npx expo start`) and open the panel URL printed by `runtime-inspector dev`. If `init` created `babel.config.js` in an Expo app, it also asks for `npx expo install babel-preset-expo`. Run `runtime-inspector` through the locally installed CLI as above: an unrelated package named `runtime-inspector` exists on npm. Details in [Getting started](docs/getting-started.md).
+
+To tune from React Native DevTools instead of the web panel, add `@runtime-inspector/panel-rozenite@alpha` and `@rozenite/metro` (dev), start Metro with `WITH_ROZENITE=true npx expo start` and open **Rozenite → Runtime Inspector** in DevTools; no CLI or broker is needed. Apply to code stays in the web panel, which can run at the same time. Validated on the iOS Simulator with Expo SDK 58; setup notes and limits in [React Native DevTools](docs/rozenite.md).
 
 ## Try the example
 

@@ -78,15 +78,19 @@ export class RozenitePanelSocket implements WebSocketLike {
       return;
     }
 
-    if (this.generationId && this.generationId !== payload.generationId) {
-      for (const schemaId of this.schemaIds) {
-        this.emit({
-          type: "runtime.status",
-          online: false,
-          clientId: "rozenite-runtime",
-          schemaId
-        });
+    if (this.generationId !== payload.generationId) {
+      if (this.generationId) {
+        for (const schemaId of this.schemaIds) {
+          this.emit({
+            type: "runtime.status",
+            online: false,
+            clientId: "rozenite-runtime",
+            schemaId
+          });
+        }
       }
+      // Also on the first ready: a hello sent before the device side was listening is lost.
+      // A repeated hello is harmless; the runtime accepts it again and replays its schemas.
       if (this.handshake) {
         this.client.send(RIP_EVENT, { message: this.handshake });
       }

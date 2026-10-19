@@ -1,8 +1,13 @@
 {
   "name": "@runtime-inspector/panel-rozenite",
   "version": "0.1.0-alpha.1",
-  "private": true,
   "description": "Runtime Inspector client for React Native DevTools via Rozenite.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmatoGiulio/runtime-inspector.git",
+    "directory": "packages/panel-rozenite"
+  },
   "type": "module",
   "main": "./dist/react-native/cjs/react-native.js",
   "module": "./dist/react-native/react-native.js",
@@ -15,6 +20,12 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "rozenite build",
     "dev": "rozenite dev",
@@ -23,19 +34,22 @@
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
+  "peerDependencies": {
+    "@runtime-inspector/react-native": "workspace:^"
+  },
   "dependencies": {
-    "@runtime-inspector/panel-core": "workspace:*",
-    "@runtime-inspector/protocol": "workspace:*",
-    "@runtime-inspector/react-native": "workspace:*",
     "@rozenite/plugin-bridge": "2.4.0",
-    "react": "^19.0.0",
-    "@runtime-inspector/panel-dialkit": "workspace:*"
+    "@runtime-inspector/protocol": "workspace:*"
   },
   "devDependencies": {
     "@rozenite/testing": "2.4.0",
     "@rozenite/vite-plugin": "2.4.0",
+    "@runtime-inspector/panel-core": "workspace:*",
+    "@runtime-inspector/panel-dialkit": "workspace:*",
+    "@runtime-inspector/react-native": "workspace:*",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-native-web": "^0.21.2",
     "rozenite": "2.4.0",

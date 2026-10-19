@@ -214,21 +214,9 @@ importers:
       '@rozenite/plugin-bridge':
         specifier: 2.4.0
         version: 2.4.0(react@19.1.0)
-      '@runtime-inspector/panel-core':
-        specifier: workspace:*
-        version: link:../panel-core
-      '@runtime-inspector/panel-dialkit':
-        specifier: workspace:*
-        version: link:../panel-dialkit
       '@runtime-inspector/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@runtime-inspector/react-native':
-        specifier: workspace:*
-        version: link:../runtime-react-native
-      react:
-        specifier: ^19.0.0
-        version: 19.1.0
     devDependencies:
       '@rozenite/testing':
         specifier: 2.4.0
@@ -236,12 +224,24 @@ importers:
       '@rozenite/vite-plugin':
         specifier: 2.4.0
         version: 2.4.0(@types/react@19.1.17)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vite@6.4.3(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@runtime-inspector/panel-core':
+        specifier: workspace:*
+        version: link:../panel-core
+      '@runtime-inspector/panel-dialkit':
+        specifier: workspace:*
+        version: link:../panel-dialkit
+      '@runtime-inspector/react-native':
+        specifier: workspace:*
+        version: link:../runtime-react-native
       '@types/react':
         specifier: ^19.0.2
         version: 19.1.17
       '@types/react-dom':
         specifier: ^19.0.2
         version: 19.2.3(@types/react@19.1.17)
+      react:
+        specifier: ^19.0.0
+        version: 19.1.0
       react-dom:
         specifier: ^19.0.0
         version: 19.1.0(react@19.1.0)

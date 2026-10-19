@@ -501,7 +501,7 @@ Validated live in the desktop Workbench on the iOS Simulator: the Open record ti
 
 ## npm alpha `0.1.0-alpha.1` release check (2026-10-17)
 
-Branch `release/v0.1.0-alpha.1`. Publishable: `@runtime-inspector/protocol`, `transport-ws`, `react-native`, `babel-plugin`, `cli`, `client-mcp`, `panel-core`. Private (repository only): `panel-web` (bundled into the CLI), `panel-dialkit`, `panel-rozenite`, `workbench`.
+Branch `release/v0.1.0-alpha.1`. Publishable: `@runtime-inspector/protocol`, `transport-ws`, `react-native`, `babel-plugin`, `cli`, `client-mcp`, `panel-core`. Private (repository only): `panel-web` (bundled into the CLI), `panel-dialkit`, `panel-rozenite`, `workbench`. `panel-rozenite` was made publishable afterwards (see below).
 
 Validated with `pnpm pack` tarballs installed into a fresh `create-expo-app` project outside the monorepo (Expo SDK 58, React Native 0.88, React 19.3, Reanimated 4.7 / worklets 0.13, Expo Go 58 on an iOS 26.3 Simulator): `init`, dev and production bundles, `runtime-inspector dev` serving the bundled panel, live tuning from the panel and from `runtime-inspector-mcp`, out-of-range rejection, Apply to code (`useSharedValue(0)` → `65`), stale panel during an app restart, and runtime reconnection after the CLI restarted.
 
@@ -510,3 +510,9 @@ Release blockers fixed on that branch: the CLI started the panel with `pnpm dev`
 Security before release: `runtime-inspector dev` now generates a 256-bit session token (it was 32 bits) because the broker listens on `0.0.0.0` and an authenticated panel can request source write-back; the broker compares tokens in constant time. Boundary tests cover wrong, truncated and old-length tokens, `source.apply` from a runtime or an unauthenticated socket, and a runtime re-sending `handshake.hello` as a panel. The runtime role stays unauthenticated by design (zero-config devices).
 
 Not covered: Android, physical devices, bare React Native (non-Expo) apps, a release build running on a device, pnpm/yarn consumers, and the Reanimated 3 + new Expo combination.
+
+## `@runtime-inspector/panel-rozenite` on npm (2026-10-19)
+
+The DevTools panel was made publishable as an addition to `0.1.0-alpha.1` (the published SDK already loads it through `withRuntimeInspector` and `rozenite-entry.js`). The package ships `dist` only. `rozenite build` bundles `panel-core`, `panel-dialkit`, DialKit and React into the DevTools assets, so those are dev dependencies; runtime dependencies are `@runtime-inspector/protocol` and `@rozenite/plugin-bridge` 2.4.0, and `@runtime-inspector/react-native` is a peer dependency so the bridge and the app share one SDK instance.
+
+Validated with the packed tarball in a fresh Expo SDK 58 app (React Native 0.88, Reanimated 4.7, Expo Go 58, iOS 26.3 Simulator, `@rozenite/metro` 2.5.0): panel listed in DevTools, spring and slider tuning reaching the app, trigger, DevTools opened after app start and reopened after a reload. The run found and fixed a lost first handshake (the panel now repeats `handshake.hello` on the runtime's first generation). Found and documented, not fixed: npm 10 cannot install `@rozenite/metro` in an Expo 58 app (npm 11 can), and in Expo Go a reload leaves an open DevTools on the old target until it is reopened. Details and open gaps in [React Native DevTools](rozenite.md#validation).
