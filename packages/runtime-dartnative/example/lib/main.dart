@@ -12,7 +12,6 @@ const _brokerUrl = String.fromEnvironment(
 );
 
 void main() {
-  DartNativePluginRegistrant.registerAll();
   runApp(const InspectorDemo());
 }
 
