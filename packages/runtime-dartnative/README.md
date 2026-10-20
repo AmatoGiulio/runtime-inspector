@@ -77,10 +77,16 @@ device validation or protocol fixture conformance.
 
 ## Next validation gate
 
-1. On Mac, install current DN/Zero SDK and run the example on iOS Simulator.
-2. Start existing Runtime Inspector broker + web panel, set `INSPECTOR_URL` to
-   your Mac's LAN address, and confirm the spring appears.
-3. Tune it, replay, feel the new gesture, and repeat on an Android device.
-4. Verify hot reload/restart and production network absence before publishing.
+1. On Windows, install current DN/Zero SDK + Android SDK 36 and connect an
+   Android phone over USB. See [the Windows / Android walkthrough](example/README.md).
+   The official DartNative playground is free to run; custom examples may
+   require a DN plan or an authorized trial.
+2. Start the existing Runtime Inspector broker + web panel; use `adb reverse`
+   to expose port 4577 to the Android app at `ws://127.0.0.1:4577`.
+3. Compile this provisional example against the current private DN SDK,
+   checking whether `SpringDescription` and `fling(spring:)` are exposed.
+4. Tune a spring, replay the gesture, and observe the next fling on device.
+5. Repeat on iOS/macOS later. Verify hot reload/restart and production network
+   absence before publishing.
 
 Technical design and maintainer questions: [`rfcs/0009-dartnative-runtime-adapter.md`](../../rfcs/0009-dartnative-runtime-adapter.md).

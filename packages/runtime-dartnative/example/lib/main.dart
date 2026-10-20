@@ -11,7 +11,10 @@ const _brokerUrl = String.fromEnvironment(
   defaultValue: 'ws://127.0.0.1:4577',
 );
 
-void main() => runApp(const InspectorDemo());
+void main() {
+  DartNativePluginRegistrant.registerAll();
+  runApp(const InspectorDemo());
+}
 
 class InspectorDemo extends StatefulWidget {
   const InspectorDemo({super.key});
@@ -42,7 +45,11 @@ class _InspectorDemoState extends State<InspectorDemo>
       id: 'card.spring',
       label: 'Card spring',
       initial: const SpringParameters(damping: 18, stiffness: 240),
-      onChange: (_) {},
+      onChange: (value) => print(
+        '[Runtime Inspector / DN] next fling: '
+        'damping=${value.damping}, stiffness=${value.stiffness}, '
+        'mass=${value.mass}',
+      ),
     );
     _inspector.registerAction(
       id: 'card.replay',
@@ -54,6 +61,7 @@ class _InspectorDemoState extends State<InspectorDemo>
 
   void _replay() {
     final parameters = _spring.value;
+    print('[Runtime Inspector / DN] replay requested');
     _controller.value = 0;
     _controller.fling(
       velocity: 1,
