@@ -1,0 +1,12 @@
+name: runtime_inspector_dartnative_example
+description: Experimental DartNative spring-tuning demonstration.
+publish_to: none
+version: 0.0.1
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+dependencies:
+  dartnative: ^1.0.0
+  dartnative_ios: ^1.0.0
+  dartnative_android: ^1.0.0
+  runtime_inspector_dartnative:
+    path: ..

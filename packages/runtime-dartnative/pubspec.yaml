@@ -1,0 +1,6 @@
+name: runtime_inspector_dartnative
+description: Experimental, explicit Dart runtime adapter for Runtime Inspector Protocol 0.3.
+version: 0.0.1-dev.1
+publish_to: none
+environment:
+  sdk: '>=3.4.0 <4.0.0'
