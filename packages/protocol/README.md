@@ -22,9 +22,8 @@ import {
 
 console.log(RIP_VERSION);
 
-const result = safeParseRIPMessage(JSON.parse(incomingJson));
-if (result.success) {
-  const message: RIPMessage = result.data;
+const message: RIPMessage | undefined = safeParseRIPMessage(incomingJson);
+if (message) {
   // Handle the validated message.
 }
 ~~~
