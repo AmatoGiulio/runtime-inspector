@@ -14,6 +14,7 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "verify": "pnpm -r test && pnpm -r typecheck",
+    "check:package-docs": "node scripts/check-package-readmes.mjs",
     "clean": "pnpm -r clean",
     "workbench:desktop": "pnpm --filter @runtime-inspector/workbench desktop",
     "benchmark:framebuffer": "pnpm --filter @runtime-inspector/workbench benchmark:framebuffer",
