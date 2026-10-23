@@ -24,7 +24,7 @@ import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
 import { loadDeviceChrome } from "./device-chrome.mjs";
 import { readRuntimeSession } from "./session-file.mjs";
-import { writeShellProject, syncShellProject } from "./shell-export.mjs";
+import { writeShellProject, syncShellProject, repairShellProject } from "./shell-export.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -45,6 +45,14 @@ app.setName("Runtime Inspector");
 app.whenReady().then(async () => {
   registerDesktopIpc();
   registerDisplayCaptureHandler();
+  // Older managed previews may have been generated before the SDK 55 import fix.
+  // Repair that exact import at startup; do not touch arbitrary user projects.
+  const managedPreview = path.join(app.getPath("userData"), "shell-studio-live");
+  void repairShellProject(managedPreview).catch((error) => {
+    if (!String(error?.message ?? error).includes("shell-studio.json is missing")) {
+      console.warn("[Shell Studio] Managed preview migration skipped:", error);
+    }
+  });
 
   const rendererUrl = await startRenderer();
   await createWindow(rendererUrl);
@@ -131,6 +139,15 @@ async function createWindow(rendererUrl) {
 }
 
 function registerDesktopIpc() {
+  ipcMain.handle("runtime-desktop:repair-shell-project", async () => {
+    const pick = await dialog.showOpenDialog({
+      title: "Repair a previously exported Shell Studio app",
+      properties: ["openDirectory"]
+    });
+    if (pick.canceled || !pick.filePaths[0]) return null;
+    return repairShellProject(pick.filePaths[0]);
+  });
+
   ipcMain.handle("runtime-desktop:sync-shell-project", async (_event, project) => {
     const directory = path.join(app.getPath("userData"), "shell-studio-live");
     shellSyncQueue = shellSyncQueue.catch(() => {}).then(() => syncShellProject(project, directory));
