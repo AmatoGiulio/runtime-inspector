@@ -18,6 +18,8 @@ const makeProject = () => ({
 test("exports real native tabs, stack pages and modal routes", () => {
   const files = generateShellFiles(makeProject());
   assert.match(files["src/app/(tabs)/_layout.tsx"], /NativeTabs\.Trigger/);
+  assert.match(files["src/app/(tabs)/_layout.tsx"], /from 'expo-router\/unstable-native-tabs'/);
+  assert.doesNotMatch(files["src/app/(tabs)/_layout.tsx"], /from 'expo-router\/native-tabs'/);
   assert.match(files["src/app/(tabs)/_layout.tsx"], /sf="house"/);
   assert.match(files["src/app/_layout.tsx"], /"presentation":"formSheet"/);
   assert.match(files["src/app/(tabs)/home/index.tsx"], /router\.push/);
