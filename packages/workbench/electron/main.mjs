@@ -24,7 +24,7 @@ import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
 import { loadDeviceChrome } from "./device-chrome.mjs";
 import { readRuntimeSession } from "./session-file.mjs";
-import { writeShellProject } from "./shell-export.mjs";
+import { writeShellProject, syncShellProject } from "./shell-export.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -36,6 +36,7 @@ let viteServer;
 let selectedCaptureSourceId;
 let selectedCaptureWindowId;
 let selectedSimulator;
+let shellSyncQueue = Promise.resolve();
 const simulatorInput = new SimulatorInputHelper();
 const simulatorFramebuffer = new SimulatorFramebufferHelper();
 
@@ -130,6 +131,12 @@ async function createWindow(rendererUrl) {
 }
 
 function registerDesktopIpc() {
+  ipcMain.handle("runtime-desktop:sync-shell-project", async (_event, project) => {
+    const directory = path.join(app.getPath("userData"), "shell-studio-live");
+    shellSyncQueue = shellSyncQueue.catch(() => {}).then(() => syncShellProject(project, directory));
+    return shellSyncQueue;
+  });
+
   ipcMain.handle("runtime-desktop:export-shell-project", async (_event, project) => {
     const pick = await dialog.showOpenDialog({
       title: "Choose an empty folder for the Expo project",
