@@ -229,6 +229,58 @@ function escapeJsx(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+
+/**
+ * Synchronizes only files that Shell Studio itself generated. Other user files are untouched.
+ * This directory is managed by the application, not an arbitrary chosen workspace.
+ */
+export async function syncShellProject(project, directory) {
+  if (typeof directory !== "string" || !path.isAbsolute(directory)) {
+    throw new Error("Preview directory must be absolute.");
+  }
+  const files = generateShellFiles(project);
+  await fs.mkdir(directory, { recursive: true });
+  const manifestName = ".shell-studio-generated.json";
+  const currentEntries = await fs.readdir(directory);
+  if (!currentEntries.includes(manifestName) && currentEntries.length > 0) {
+    throw new Error("Preview directory is not managed by Shell Studio.");
+  }
+  let oldPaths = [];
+  if (currentEntries.includes(manifestName)) {
+    const parsed = JSON.parse(await fs.readFile(path.join(directory, manifestName), "utf8"));
+    if (!Array.isArray(parsed) || !parsed.every(safeRelativePath)) {
+      throw new Error("Invalid Shell Studio preview manifest.");
+    }
+    oldPaths = parsed;
+  }
+  for (const relative of oldPaths) {
+    if (Object.prototype.hasOwnProperty.call(files, relative)) continue;
+    await fs.unlink(path.join(directory, relative)).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+  let changedFiles = 0;
+  for (const [relative, contents] of Object.entries(files)) {
+    const destination = path.join(directory, relative);
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    const previous = await fs.readFile(destination, "utf8").catch((error) => {
+      if (error.code === "ENOENT") return undefined;
+      throw error;
+    });
+    if (previous !== contents) {
+      await fs.writeFile(destination, contents, "utf8");
+      changedFiles++;
+    }
+  }
+  await fs.writeFile(path.join(directory, manifestName), JSON.stringify(Object.keys(files), null, 2) + "\n");
+  return { directory, fileCount: Object.keys(files).length, changedFiles };
+}
+
+function safeRelativePath(value) {
+  return typeof value === "string" && !path.isAbsolute(value) &&
+    value !== "" && value !== "." && value.split(/[\/\\]/).every((part) => part !== ".." && part !== "");
+}
+
 /** Never overwrite user code. Pick an empty directory for an export. */
 export async function writeShellProject(project, directory) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
