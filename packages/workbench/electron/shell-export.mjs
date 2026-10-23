@@ -193,7 +193,7 @@ export function generateShellFiles(input) {
   ].join("\n");
 
   files["src/app/(tabs)/_layout.tsx"] = [
-    "import { NativeTabs } from 'expo-router/native-tabs';",
+    "import { NativeTabs } from 'expo-router/unstable-native-tabs';",
     "export default function TabsLayout() {",
     "  return <NativeTabs>",
     ...tabs.map((s) => [
