@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  dialog,
   ipcMain,
   nativeImage,
   session,
@@ -23,6 +24,7 @@ import { SimulatorFramebufferHelper } from "./framebuffer-helper.mjs";
 import { RUNTIME_FRAMEBUFFER_PROFILE } from "./framebuffer-profile.mjs";
 import { loadDeviceChrome } from "./device-chrome.mjs";
 import { readRuntimeSession } from "./session-file.mjs";
+import { writeShellProject } from "./shell-export.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..");
@@ -128,6 +130,15 @@ async function createWindow(rendererUrl) {
 }
 
 function registerDesktopIpc() {
+  ipcMain.handle("runtime-desktop:export-shell-project", async (_event, project) => {
+    const pick = await dialog.showOpenDialog({
+      title: "Choose an empty folder for the Expo project",
+      properties: ["openDirectory", "createDirectory"]
+    });
+    if (pick.canceled || !pick.filePaths[0]) return null;
+    return writeShellProject(project, pick.filePaths[0]);
+  });
+
   ipcMain.handle("runtime-desktop:get-info", async () => ({
     platform: process.platform,
     desktop: true,
