@@ -36,6 +36,23 @@ The central viewport is a real CoreSimulator framebuffer, not a DOM recreation.
 
 **Export Expo project…** generates a separate, editable app in an empty directory. It will never overwrite an existing app or its files.
 
+## SDK 55 compatibility and regression checks
+
+Shell Studio deliberately targets **Expo SDK 55**. The generated native tabs import is
+`expo-router/unstable-native-tabs` (the stable `expo-router/native-tabs` entry point
+is for SDK 58+). This must be kept in sync with the exported package versions.
+
+The CI runs both the Workbench suite and a **standalone iOS Metro bundle smoke test**:
+it creates an Expo project using the real generator, installs dependencies outside
+the monorepo, and runs `expo export --platform ios`. Changes to generated
+navigation APIs must pass that test before merging.
+
+To update an existing live preview, pull the feature branch, restart
+`pnpm workbench:desktop`, and open **Shell Studio**. The managed preview files
+are rewritten when their generated contents change, so the corrected import
+is applied automatically. Restart Metro with `pnpm exec expo start --ios --clear`
+if a previous bundle failed. You do not need to edit generated source by hand.
+
 ## Engineering notes / boundaries
 
 - This is deliberately a feature-branch experiment; Runtime Inspector motion semantics and its existing workbench remain separate.
