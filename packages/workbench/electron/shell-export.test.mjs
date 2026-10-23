@@ -3,7 +3,7 @@ import test from "node:test";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { generateShellFiles, validateShellProject, writeShellProject, syncShellProject } from "./shell-export.mjs";
+import { generateShellFiles, validateShellProject, writeShellProject, syncShellProject, repairShellProject } from "./shell-export.mjs";
 
 const makeProject = () => ({
   name: "My iOS App",
@@ -65,6 +65,33 @@ test("live workspace sync preserves user files, updates screens and prunes remov
     assert.ok(result.changedFiles > 0);
     await assert.rejects(fs.stat(path.join(root, "src/app/(tabs)/discover/index.tsx")), { code: "ENOENT" });
     assert.equal(await fs.readFile(path.join(root, "custom.tsx"), "utf8"), "user file");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("repairs an old generated native-tabs import without touching other app files", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "shell-studio-repair-"));
+  try {
+    await writeShellProject(makeProject(), root);
+    const layout = path.join(root, "src/app/(tabs)/_layout.tsx");
+    const correct = await fs.readFile(layout, "utf8");
+    await fs.writeFile(layout, correct.replace("expo-router/unstable-native-tabs", "expo-router/native-tabs"));
+    await fs.writeFile(path.join(root, "custom.tsx"), "untouched");
+    const repaired = await repairShellProject(root);
+    assert.equal(repaired.repaired, true);
+    assert.match(await fs.readFile(layout, "utf8"), /expo-router\/unstable-native-tabs/);
+    assert.equal(await fs.readFile(path.join(root, "custom.tsx"), "utf8"), "untouched");
+    assert.equal((await repairShellProject(root)).repaired, false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses to repair arbitrary user projects without Shell Studio marker", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "shell-studio-foreign-"));
+  try {
+    await assert.rejects(repairShellProject(root), /Not a Shell Studio project/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
