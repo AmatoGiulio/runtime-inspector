@@ -281,6 +281,63 @@ function safeRelativePath(value) {
     value !== "" && value !== "." && value.split(/[\/\\]/).every((part) => part !== ".." && part !== "");
 }
 
+/**
+ * Repairs a legacy generated app without rewriting its components or user-owned code.
+ * This is intentionally narrower than a new export: change only the SDK 55 native-tabs
+ * entrypoint, and only after detecting the Shell Studio project marker.
+ */
+export async function repairShellProject(directory) {
+  if (typeof directory !== "string" || !path.isAbsolute(directory)) {
+    throw new Error("Repair requires an absolute Shell Studio project directory.");
+  }
+  const marker = path.join(directory, "shell-studio.json");
+  let definition;
+  try {
+    definition = JSON.parse(await fs.readFile(marker, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error("Not a Shell Studio project: shell-studio.json is missing from " + directory);
+    }
+    throw error;
+  }
+  validateShellProject(definition);
+  const layoutPath = path.join(directory, "src", "app", "(tabs)", "_layout.tsx");
+  const content = await fs.readFile(layoutPath, "utf8");
+  const oldImport = "from 'expo-router/native-tabs'";
+  const correctImport = "from 'expo-router/unstable-native-tabs'";
+  let repaired = false;
+  if (content.includes(oldImport)) {
+    await fs.writeFile(layoutPath, content.replaceAll(oldImport, correctImport), "utf8");
+    repaired = true;
+  } else if (!content.includes(correctImport)) {
+    throw new Error("Unexpected tab layout: no supported Expo Router import found.");
+  }
+
+  // Check the actual package installed in this project, not in the Workbench.
+  const modulePath = path.join(directory, "node_modules", "expo-router");
+  let installedRouter;
+  try {
+    const manifest = JSON.parse(await fs.readFile(path.join(modulePath, "package.json"), "utf8"));
+    installedRouter = manifest.version;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  // A path-resolution check is more actionable than silently clearing Metro's cache.
+  // pnpm may make expo-router a symlink; fs.access resolves it transparently.
+  let nativeTabsAvailable = false;
+  for (const candidate of ["unstable-native-tabs.js", "unstable-native-tabs.ts", "unstable-native-tabs.tsx", "unstable-native-tabs"]) {
+    try {
+      await fs.access(path.join(modulePath, candidate));
+      nativeTabsAvailable = true;
+      break;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  return { directory, repaired, installedRouter, nativeTabsAvailable };
+}
+
 /** Never overwrite user code. Pick an empty directory for an export. */
 export async function writeShellProject(project, directory) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
