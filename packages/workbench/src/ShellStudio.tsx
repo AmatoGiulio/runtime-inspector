@@ -81,11 +81,13 @@ function uniqueId(project: ShellProject, kind: ShellKind): string {
   return base + "-" + number;
 }
 
-export function useShellStudioState() {
+export function useShellStudioState(enabled: boolean) {
   const [project, setProject] = useState<ShellProject>(restoreProject);
   const [selectedId, setSelectedId] = useState("home");
   const [notice, setNotice] = useState("Export a project, then run pnpm ios to see it in the live simulator.");
   const [exporting, setExporting] = useState(false);
+  const [previewDirectory, setPreviewDirectory] = useState<string>();
+  const [syncError, setSyncError] = useState<string>();
   const selected = project.screens.find((screen) => screen.id === selectedId) ?? project.screens[0];
 
   useEffect(() => {
@@ -95,6 +97,22 @@ export function useShellStudioState() {
       // The editor remains usable without persistence.
     }
   }, [project]);
+
+  useEffect(() => {
+    if (!enabled || !window.runtimeDesktop?.syncShellProject) return;
+    const desktop = window.runtimeDesktop;
+    let disposed = false;
+    const timer = setTimeout(() => {
+      void desktop.syncShellProject(project).then((result) => {
+        if (disposed) return;
+        setPreviewDirectory(result.directory);
+        setSyncError(undefined);
+      }).catch((error: unknown) => {
+        if (!disposed) setSyncError(error instanceof Error ? error.message : "Preview sync failed.");
+      });
+    }, 650);
+    return () => { disposed = true; clearTimeout(timer); };
+  }, [enabled, project]);
 
   function updateScreen(id: string, patch: Partial<ShellScreen>) {
     setProject((current) => ({
@@ -172,7 +190,13 @@ export function useShellStudioState() {
     }
   }
 
-  return { project, setProject, selected, selectedId, setSelectedId, notice, exporting,
+  function copyPreviewCommand() {
+    if (!previewDirectory) return;
+    const command = "cd " + JSON.stringify(previewDirectory) + " && pnpm install && pnpm exec expo install --fix && pnpm ios";
+    void navigator.clipboard.writeText(command).then(() => setNotice("Terminal launch command copied. Run it once; subsequent edits sync into the project.")).catch(() => setNotice(command));
+  }
+
+  return { project, setProject, selected, selectedId, setSelectedId, notice, exporting, previewDirectory, syncError, copyPreviewCommand,
     addScreen, updateScreen, removeScreen, moveTab, exportProject };
 }
 
@@ -222,6 +246,10 @@ export function ShellStudioSidebar({ studio }: { studio: ShellStudioState }) {
         <button className="wb-button primary studio-export" disabled={studio.exporting} onClick={studio.exportProject}>
           {studio.exporting ? "Exporting…" : "Export Expo project…"}
         </button>
+        {studio.previewDirectory ? (
+          <button className="wb-button secondary studio-preview-command" title={studio.previewDirectory} onClick={studio.copyPreviewCommand}>Copy preview launch command</button>
+        ) : null}
+        {studio.syncError ? <p className="studio-notice studio-error" role="alert">{studio.syncError}</p> : null}
         <p className="studio-notice" role="status">{studio.notice}</p>
       </div>
     </div>
