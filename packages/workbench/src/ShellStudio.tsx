@@ -81,7 +81,7 @@ function uniqueId(project: ShellProject, kind: ShellKind): string {
   return base + "-" + number;
 }
 
-export function useShellStudioState(enabled: boolean) {
+export function useShellStudioState() {
   const [project, setProject] = useState<ShellProject>(restoreProject);
   const [selectedId, setSelectedId] = useState("home");
   const [notice, setNotice] = useState("Export a project, then run pnpm ios to see it in the live simulator.");
@@ -99,7 +99,7 @@ export function useShellStudioState(enabled: boolean) {
   }, [project]);
 
   useEffect(() => {
-    if (!enabled || !window.runtimeDesktop?.syncShellProject) return;
+    if (!window.runtimeDesktop?.syncShellProject) return;
     const desktop = window.runtimeDesktop;
     let disposed = false;
     const timer = setTimeout(() => {
@@ -112,7 +112,7 @@ export function useShellStudioState(enabled: boolean) {
       });
     }, 650);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [enabled, project]);
+  }, [project]);
 
   function updateScreen(id: string, patch: Partial<ShellScreen>) {
     setProject((current) => ({
@@ -190,13 +190,32 @@ export function useShellStudioState(enabled: boolean) {
     }
   }
 
+  async function repairExportedProject() {
+    const desktop = window.runtimeDesktop;
+    if (!desktop?.repairShellProject) return;
+    try {
+      const repaired = await desktop.repairShellProject();
+      if (!repaired) return;
+      const repairStatus = repaired.repaired ? "Updated native tabs import." : "Native tabs import already correct.";
+      const depsStatus = repaired.installedRouter
+        ? "Installed expo-router: " + repaired.installedRouter + "."
+        : "No local Expo Router install found: run pnpm install in that app.";
+      const importStatus = repaired.installedRouter && !repaired.nativeTabsAvailable
+        ? " The installed package does not expose the expected native-tabs file. Reinstall compatible dependencies in that app."
+        : "";
+      setNotice(repairStatus + " " + depsStatus + importStatus + " Folder: " + repaired.directory);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not repair the exported app.");
+    }
+  }
+
   function copyPreviewCommand() {
     if (!previewDirectory) return;
     const command = "cd " + JSON.stringify(previewDirectory) + " && pnpm install && pnpm exec expo install --fix && pnpm ios";
     void navigator.clipboard.writeText(command).then(() => setNotice("Terminal launch command copied. Run it once; subsequent edits sync into the project.")).catch(() => setNotice(command));
   }
 
-  return { project, setProject, selected, selectedId, setSelectedId, notice, exporting, previewDirectory, syncError, copyPreviewCommand,
+  return { project, setProject, selected, selectedId, setSelectedId, notice, exporting, previewDirectory, syncError, copyPreviewCommand, repairExportedProject,
     addScreen, updateScreen, removeScreen, moveTab, exportProject };
 }
 
@@ -247,8 +266,12 @@ export function ShellStudioSidebar({ studio }: { studio: ShellStudioState }) {
           {studio.exporting ? "Exporting…" : "Export Expo project…"}
         </button>
         {studio.previewDirectory ? (
-          <button className="wb-button secondary studio-preview-command" title={studio.previewDirectory} onClick={studio.copyPreviewCommand}>Copy preview launch command</button>
+          <>
+            <div className="studio-preview-path" title={studio.previewDirectory}>Live preview · {studio.previewDirectory}</div>
+            <button className="wb-button secondary studio-preview-command" title={studio.previewDirectory} onClick={studio.copyPreviewCommand}>Copy preview launch command</button>
+          </>
         ) : null}
+        <button className="wb-button secondary studio-preview-command" onClick={studio.repairExportedProject}>Repair exported Shell Studio app…</button>
         {studio.syncError ? <p className="studio-notice studio-error" role="alert">{studio.syncError}</p> : null}
         <p className="studio-notice" role="status">{studio.notice}</p>
       </div>
