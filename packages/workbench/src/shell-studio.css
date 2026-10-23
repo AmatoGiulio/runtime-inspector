@@ -66,6 +66,8 @@
 .studio-kind { font: var(--wb-type-small); color: var(--wb-text-muted); padding: 0 8px; }
 .studio-sidebar-bottom { border-top: 1px solid var(--wb-border); padding: 12px; }
 .studio-export { width: 100%; }
+.studio-preview-command { width: 100%; margin-top: 8px; }
+.studio-error { color: var(--wb-danger) !important; }
 .studio-notice { margin: 9px 1px 0; color: var(--wb-text-secondary); font: var(--wb-type-small); overflow-wrap: anywhere; line-height: 1.5; }
 .studio-inspector { min-height: 100%; display: flex; flex-direction: column; }
 .studio-fields { padding: 14px; display: flex; flex-direction: column; gap: 13px; }
