@@ -1,6 +1,7 @@
 .workbench.shell-studio-mode {
   grid-template-rows: 44px minmax(0, 1fr);
 }
+.workbench.shell-studio-mode .runtime-stage { position: relative; }
 .workbench.shell-studio-mode > .split-handle,
 .workbench.shell-studio-mode > .timeline {
   display: none;
