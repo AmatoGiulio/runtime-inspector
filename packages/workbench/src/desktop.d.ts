@@ -87,6 +87,7 @@ declare global {
   interface RuntimeDesktopApi {
     platform: string;
     exportShellProject(project: import("./ShellStudio").ShellProject): Promise<{ directory: string; fileCount: number } | null>;
+    syncShellProject(project: import("./ShellStudio").ShellProject): Promise<{ directory: string; fileCount: number; changedFiles: number }>;
     getInfo(): Promise<{
       platform: string;
       desktop: boolean;
