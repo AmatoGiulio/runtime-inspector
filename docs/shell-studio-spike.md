@@ -47,11 +47,25 @@ it creates an Expo project using the real generator, installs dependencies outsi
 the monorepo, and runs `expo export --platform ios`. Changes to generated
 navigation APIs must pass that test before merging.
 
-To update an existing live preview, pull the feature branch, restart
-`pnpm workbench:desktop`, and open **Shell Studio**. The managed preview files
-are rewritten when their generated contents change, so the corrected import
-is applied automatically. Restart Metro with `pnpm exec expo start --ios --clear`
-if a previous bundle failed. You do not need to edit generated source by hand.
+To update an existing live preview, pull the feature branch and restart
+`pnpm workbench:desktop`. **The managed preview now synchronizes automatically
+when the desktop editor starts**, even before switching to Shell Studio. The
+older SDK 55 native-tabs import is migrated on startup.
+
+The Shell Studio sidebar displays the actual **Live preview** folder. Use
+**Copy preview launch command** to run that exact project, avoiding a different
+exported copy or the old Reanimated example. If you previously launched an app
+from **Export Expo project…**, use **Repair exported Shell Studio app…** in the
+sidebar and select its directory: it safely replaces the obsolete native-tabs
+import *only if* that directory contains `shell-studio.json`. Other source files
+are left alone. Restart Metro with `pnpm exec expo start --ios --clear` from
+the app directory after a failed bundle.
+
+If the error remains, first inspect the exact unresolved import and source path
+in Metro's error text: `expo-router/native-tabs` means the source remains old,
+while `expo-router/unstable-native-tabs` indicates that the app's installed
+`expo-router` or its project directory may be wrong. The repair action also
+reports the version found inside the selected project's `node_modules`.
 
 ## Engineering notes / boundaries
 
