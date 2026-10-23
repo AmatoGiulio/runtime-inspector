@@ -12,7 +12,7 @@ const project = {
     { id: "sheet", title: "Sheet", kind: "modal", icon: "plus", header: "inline", action: "none" }
   ]
 };
-const root = path.resolve(".shell-studio-smoke");
+const root = path.join(process.env.RUNNER_TEMP || "/tmp", "ri-shell-studio-smoke");
 for (const [relative, content] of Object.entries(generateShellFiles(project))) {
   const destination = path.join(root, relative);
   await fs.mkdir(path.dirname(destination), { recursive: true });
