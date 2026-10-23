@@ -107,7 +107,7 @@ interface ViewportBenchmarkResult {
 
 function App() {
   const [workbenchMode, setWorkbenchMode] = useState<"motion" | "shell">("motion");
-  const shellStudio = useShellStudioState(workbenchMode === "shell");
+  const shellStudio = useShellStudioState();
   const { choice: themeChoice, resolved: resolvedTheme, cycle: cycleTheme } = useWorkbenchTheme();
   const themeLabel = themeChoiceLabel(themeChoice);
   const state = useSyncExternalStore(session.subscribe, session.getState);
