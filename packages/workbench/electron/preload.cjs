@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("runtimeDesktop", {
   platform: process.platform,
   exportShellProject: (project) => ipcRenderer.invoke("runtime-desktop:export-shell-project", project),
+  repairShellProject: () => ipcRenderer.invoke("runtime-desktop:repair-shell-project"),
   syncShellProject: (project) => ipcRenderer.invoke("runtime-desktop:sync-shell-project", project),
   getInfo: () => ipcRenderer.invoke("runtime-desktop:get-info"),
   listSimulators: () => ipcRenderer.invoke("runtime-desktop:list-simulators"),
