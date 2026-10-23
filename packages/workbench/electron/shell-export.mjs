@@ -91,7 +91,7 @@ function generateScreen(screen, screens) {
     '        <Text style={styles.caption}>Your custom components go here.</Text>',
     '        {destination ? (',
     '          <Pressable onPress={open} style={styles.link} accessibilityRole="button">',
-    '            <Text style={styles.linkText}>Open ' + (target ? target.title.replace(/[<>&]/g, "") : "screen") + '  →</Text>',
+    '            <Text style={styles.linkText}>{' + JSON.stringify(target ? 'Open ' + target.title + '  →' : 'screen  →') + '}</Text>',
     '          </Pressable>',
     '        ) : null}',
     '      </View>',
@@ -132,8 +132,8 @@ export function generateShellFiles(input) {
       "react-native": "0.83.0",
       "react-native-screens": "~4.23.0",
       "react-native-safe-area-context": "~5.6.0",
-      "expo-linking": "~8.0.11",
-      "expo-constants": "~18.0.13"
+      "expo-linking": "~55.0.17",
+      "expo-constants": "~55.0.17"
     },
     devDependencies: { typescript: "~5.9.2", "@types/react": "~19.2.0" }
   }, null, 2) + "\n";
@@ -176,10 +176,18 @@ export function generateShellFiles(input) {
     "  return <Stack>",
     '    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />',
     ...others.map((s) => {
-      const opt = { title: s.title, presentation: s.kind === "modal" ? "modal" : "card", headerLargeTitle: s.header === "large", headerShown: s.header !== "hidden" };
+      const opt = { title: s.title, presentation: s.kind === "modal" ? "formSheet" : "card", ...(s.kind === "modal" ? { sheetAllowedDetents: [0.5, 1], sheetGrabberVisible: true } : {}), headerLargeTitle: s.header === "large", headerShown: s.header !== "hidden" };
       return '    <Stack.Screen name=' + JSON.stringify(s.id) + ' options={' + JSON.stringify(opt) + '} />';
     }),
     "  </Stack>;",
+    "}",
+    ""
+  ].join("\n");
+
+  files["src/app/index.tsx"] = [
+    "import { Redirect } from 'expo-router';",
+    "export default function Index() {",
+    "  return <Redirect href=" + JSON.stringify("/(tabs)/" + tabs[0].id) + " />;",
     "}",
     ""
   ].join("\n");
