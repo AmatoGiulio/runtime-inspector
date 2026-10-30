@@ -1,11 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RIPMessage } from "@runtime-inspector/protocol";
 
-/** Minimal hook runtime: `useEffect` runs immediately and its cleanup is kept for unmount. */
+/**
+ * Minimal hook runtime: `useEffect` runs immediately (or, with `deferEffects`, at `commit()`,
+ * after the whole render like React) and its cleanup is kept for unmount.
+ */
 const hooks = vi.hoisted(() => {
   const cleanups: Array<() => void> = [];
+  const pending: Array<() => void | (() => void)> = [];
+  const state = { deferEffects: false };
+  const run = (effect: () => void | (() => void)) => {
+    const cleanup = effect();
+    if (typeof cleanup === "function") cleanups.push(cleanup);
+  };
   return {
     cleanups,
+    state,
+    run,
+    pending,
+    commit() {
+      for (const effect of pending.splice(0)) run(effect);
+    },
     unmount() {
       for (const cleanup of cleanups.splice(0)) cleanup();
     }
@@ -17,8 +32,8 @@ vi.mock("react", () => ({
     return { current: initial };
   },
   useEffect(effect: () => void | (() => void)) {
-    const cleanup = effect();
-    if (typeof cleanup === "function") hooks.cleanups.push(cleanup);
+    if (hooks.state.deferEffects) hooks.pending.push(effect);
+    else hooks.run(effect);
   }
 }));
 
@@ -43,6 +58,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  hooks.state.deferEffects = false;
+  hooks.pending.length = 0;
   hooks.unmount();
   const { __resetAutoProbesForTests } = await import("./probe-auto");
   __resetAutoProbesForTests();
@@ -171,6 +188,69 @@ describe("__riProbe", () => {
     const { probes, recording } = await load();
     const sharedValue = { value: 24 };
     expect(probes.__riProbe(sharedValue, "titleY", META)).toBe(sharedValue);
+    expect(recording.getTraceSchema("auto")).toBeUndefined();
+  });
+});
+
+describe("useRiProbe + __riProbeValue (what the Babel plugin emits)", () => {
+  /** Samples the `auto` trace once and returns the recorded values. */
+  function sample(recording: Awaited<ReturnType<typeof load>>["recording"], messages: RIPMessage[]) {
+    const frames: Array<(time: number) => void> = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => frames.push(callback));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.spyOn(performance, "now").mockReturnValue(100);
+    recording.handleRecordingStart({
+      type: "recording.start",
+      recordingId: "rec",
+      schemaId: "auto",
+      probeIds: ["ProductRevealDemo.titleY"],
+      sampleRateHz: 60
+    });
+    frames.shift()!(100);
+    recording.handleRecordingStop({ type: "recording.stop", recordingId: "rec", schemaId: "auto" });
+    const chunk = messages.find((message) => message.type === "recording.chunk") as
+      | { samples: Array<{ values: Record<string, unknown> }> }
+      | undefined;
+    return chunk?.samples[0].values;
+  }
+
+  /** One render of a component with a probed shared value, then the commit. */
+  function render(probes: Awaited<ReturnType<typeof load>>["probes"], sharedValue: { value: number }) {
+    hooks.state.deferEffects = true;
+    const token = probes.useRiProbe("titleY", META);
+    const returned = probes.__riProbeValue(token, sharedValue);
+    hooks.commit();
+    return returned;
+  }
+
+  it("returns the shared value unchanged; registers while mounted and unregisters on unmount", async () => {
+    const { probes, recording } = await load();
+    const sharedValue = { value: 24 };
+
+    expect(render(probes, sharedValue)).toBe(sharedValue);
+    expect(recording.getTraceSchema("auto")?.probes).toEqual([
+      { id: "ProductRevealDemo.titleY", valueType: "number", label: "Product reveal demo · titleY" }
+    ]);
+
+    hooks.unmount();
+    expect(recording.getTraceSchema("auto")).toBeUndefined();
+  });
+
+  it("samples the shared value its instance recorded", async () => {
+    const { probes, recording, messages } = await load();
+    const sharedValue = { value: 24 };
+    render(probes, sharedValue);
+
+    sharedValue.value = 3;
+    expect(sample(recording, messages)).toEqual({ "ProductRevealDemo.titleY": 3 });
+  });
+
+  it("registers nothing in production", async () => {
+    vi.stubGlobal("__DEV__", false);
+    const { probes, recording } = await load();
+    const sharedValue = { value: 24 };
+    const token = probes.useRiProbe("titleY", META);
+    expect(probes.__riProbeValue(token, sharedValue)).toBe(sharedValue);
     expect(recording.getTraceSchema("auto")).toBeUndefined();
   });
 });

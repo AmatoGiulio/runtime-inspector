@@ -188,6 +188,100 @@ describe("__riMotion", () => {
   });
 });
 
+describe("useRiScene + __riMotionFn (what the Babel plugin emits)", () => {
+  /** A component instance with its own refs, rendered through the shared hook runtime. */
+  function instance() {
+    const refs: Array<{ current: unknown }> = [];
+    return <T>(component: () => T): T => {
+      const saved = hooks.state.refs;
+      hooks.state.refs = refs;
+      try {
+        return hooks.render(component);
+      } finally {
+        hooks.state.refs = saved;
+      }
+    };
+  }
+
+  function card(motion: Awaited<ReturnType<typeof load>>["motion"], play: () => void) {
+    const token = motion.useRiScene(SCENE_ID, META);
+    return motion.__riMotionFn(token, play);
+  }
+
+  it("returns the same function; binds the scene on mount and unbinds on unmount", async () => {
+    const { motion } = await load();
+    const play = vi.fn();
+
+    expect(hooks.render(() => card(motion, play))).toBe(play);
+
+    const socket = await connectScenes();
+    expect(sceneControl(lastScenesSchema(socket), SCENE_ID)).toMatchObject({
+      id: SCENE_ID,
+      label: "Play",
+      scene: { active: true, reachable: true }
+    });
+
+    hooks.unmount();
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(sceneControl(lastScenesSchema(socket), SCENE_ID)?.scene).toEqual({
+      active: false,
+      reachable: false
+    });
+  });
+
+  it("opening the scene plays the function the instance recorded last", async () => {
+    const { motion } = await load();
+    const first = vi.fn();
+    const latest = vi.fn();
+    hooks.render(() => card(motion, first));
+    hooks.state.mounted = true;
+    hooks.render(() => card(motion, latest));
+
+    const socket = await connectScenes();
+    socket.onmessage?.({
+      data: JSON.stringify({ type: "control.trigger", schemaId: "scenes", controlId: SCENE_ID, source: "panel" })
+    });
+
+    expect(first).not.toHaveBeenCalled();
+    expect(latest).toHaveBeenCalledTimes(1);
+  });
+
+  it("each instance plays its own function, whichever rendered last", async () => {
+    const { motion } = await load();
+    const rowOne = instance();
+    const rowTwo = instance();
+    const playOne = vi.fn();
+    const playTwo = vi.fn();
+    rowOne(() => card(motion, playOne));
+    rowTwo(() => card(motion, playTwo));
+    // Row one re-renders after row two: a single "latest function per scene id" would now
+    // hold row one's function for both bindings.
+    hooks.state.mounted = true;
+    const playOneAgain = vi.fn();
+    rowOne(() => card(motion, playOneAgain));
+
+    const socket = await connectScenes();
+    socket.onmessage?.({
+      data: JSON.stringify({ type: "control.trigger", schemaId: "scenes", controlId: SCENE_ID, source: "panel" })
+    });
+
+    // The scene plays the most recently bound instance (row two), with row two's function.
+    expect(playTwo).toHaveBeenCalledTimes(1);
+    expect(playOne).not.toHaveBeenCalled();
+    expect(playOneAgain).not.toHaveBeenCalled();
+  });
+
+  it("returns the function and registers nothing in production", async () => {
+    vi.stubGlobal("__DEV__", false);
+    const { motion } = await load();
+    const play = vi.fn();
+
+    expect(hooks.render(() => card(motion, play))).toBe(play);
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+});
+
 describe("automatic scene already ran (callsites)", () => {
   it("does not play again when one of its callsites started after the binding became active", async () => {
     const { scenes, motion, observer } = await load();

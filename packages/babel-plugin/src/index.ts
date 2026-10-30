@@ -1,4 +1,4 @@
-import type { ConfigAPI, NodePath, PluginObj, PluginPass } from "@babel/core";
+import type { ConfigAPI, NodePath, PluginObj, PluginPass, Visitor } from "@babel/core";
 import type * as BabelTypesNamespace from "@babel/types";
 import type {
   AssignmentExpression,
@@ -11,9 +11,9 @@ import type {
 import { relative, sep } from "node:path";
 import { parseDirectiveComment, type ParsedDirective } from "./directive";
 import {
+  insertAfterDeclaration,
   instrumentMotions,
   MOTION_HELPER_NAME,
-  PROBE_HELPER_NAME,
   type DiscoveredAnimation
 } from "./motion";
 
@@ -107,7 +107,7 @@ type BabelAPI = ConfigAPI & { types: typeof BabelTypesNamespace };
 export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
   const isProduction = api.env("production");
 
-  return {
+  const plugin: PluginObj = {
     name: "runtime-inspector-auto-binding",
     visitor: {
       Program: {
@@ -136,6 +136,8 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
               ensureImport: (path, helperName) => ensureRuntimeHelperImport(path, helperName, api)
             });
           }
+
+          programPath.traverse(eagerVisitor, state);
         },
         // Fast Refresh: tell the runtime which call sites this module still has, so
         // the `auto` controls of call sites that moved or disappeared are disposed.
@@ -151,181 +153,196 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           if (!file) return;
           injectModuleCallsites(programPath, file, [...(stateBag._riCallsiteIds ?? [])], api);
         }
-      },
-      VariableDeclarator(path: NodePath<VariableDeclarator>, state: PluginPass) {
-        if (isProduction) return;
+      }
 
-        // RFC 0008 §5: an automatic probe wraps the declaration first; `// @inspect`
-        // composes inside it: __riProbe(__riInspect(useSharedValue(...), ...), ...).
-        const probed = isProbeHelperCall(path.node.init);
-        const init = probed
-          ? ((path.node.init as CallExpression).arguments[0] as Node)
-          : path.node.init;
-        const id = path.node.id;
+    }
+  };
 
-        if (
-          init?.type === "CallExpression" &&
-          id.type === "Identifier" &&
-          isUseInspectorCallee(init.callee)
-        ) {
-          const schemaArg = init.arguments[0];
-          if (schemaArg?.type === "StringLiteral") {
-            programState(path)._riInspectorSchemas?.set(id.name, schemaArg.value);
-          }
+  // `// @inspect` and animation assignments are handled in one traversal from
+  // `Program.enter`, on the untouched program. A later plugin can rewrite component bodies
+  // from its own Program visitor - the React Compiler in babel-preset-expo does - and the
+  // rewritten code has lost the directive comments and the source locations callsite ids
+  // are built from. Running only here also means no node is ever visited twice.
+  const eagerVisitor: Visitor<PluginPass> = {
+    VariableDeclarator(path: NodePath<VariableDeclarator>, state: PluginPass) {
+      if (isProduction) return;
+
+      const init = path.node.init;
+      const id = path.node.id;
+
+      if (
+        init?.type === "CallExpression" &&
+        id.type === "Identifier" &&
+        isUseInspectorCallee(init.callee)
+      ) {
+        const schemaArg = init.arguments[0];
+        if (schemaArg?.type === "StringLiteral") {
+          programState(path)._riInspectorSchemas?.set(id.name, schemaArg.value);
         }
+      }
 
-        if (!init || init.type !== "CallExpression") return;
-        if (!isUseSharedValueCallee(init.callee)) return;
-        if (id.type !== "Identifier") return;
+      if (!init || init.type !== "CallExpression") return;
+      if (!isUseSharedValueCallee(init.callee)) return;
+      if (id.type !== "Identifier") return;
 
-        const directive = findDirective(path);
-        if (!directive) return;
+      const directive = findDirective(path);
+      if (!directive) return;
 
-        const name = id.name;
-        validateDirective(directive, init, name);
+      const name = id.name;
+      validateDirective(directive, init, name);
 
-        const t = api.types;
-        const label = directive.label ?? name;
-        const metaProps: Array<[string, unknown]> = [];
-        if (directive.min !== undefined) metaProps.push(["min", directive.min]);
-        if (directive.max !== undefined) metaProps.push(["max", directive.max]);
-        if (directive.step !== undefined) metaProps.push(["step", directive.step]);
-        if (directive.unit !== undefined) metaProps.push(["unit", directive.unit]);
-        metaProps.push(["label", label]);
+      const t = api.types;
+      const label = directive.label ?? name;
+      const metaProps: Array<[string, unknown]> = [];
+      if (directive.min !== undefined) metaProps.push(["min", directive.min]);
+      if (directive.max !== undefined) metaProps.push(["max", directive.max]);
+      if (directive.step !== undefined) metaProps.push(["step", directive.step]);
+      if (directive.unit !== undefined) metaProps.push(["unit", directive.unit]);
+      metaProps.push(["label", label]);
 
-        const metaProperties = metaProps.map(([key, value]) =>
-          t.objectProperty(t.identifier(key), literalFor(t, value))
+      const metaProperties = metaProps.map(([key, value]) =>
+        t.objectProperty(t.identifier(key), literalFor(t, value))
+      );
+
+      const anchor = buildSourceAnchor(path, state, name, init);
+      if (anchor) {
+        metaProperties.push(
+          t.objectProperty(t.identifier("source"), sourceAnchorToObjectExpression(t, anchor))
         );
+      }
 
-        const anchor = buildSourceAnchor(path, state, name, init);
-        if (anchor) {
-          metaProperties.push(
-            t.objectProperty(t.identifier("source"), sourceAnchorToObjectExpression(t, anchor))
-          );
-        }
+      const metaObject = t.objectExpression(metaProperties);
 
-        const metaObject = t.objectExpression(metaProperties);
-
-        const call = t.callExpression(t.identifier(HELPER_NAME), [
-          init,
-          t.stringLiteral(name),
-          metaObject
+      // A statement of its own after the declaration, not a wrapper around `useSharedValue`:
+      // the React Compiler recognizes `useSharedValue`'s result and lets callbacks assign
+      // `.value`; behind a wrapper call that result is an ordinary value it refuses to mutate.
+      const declaration = path.parentPath;
+      if (declaration?.isVariableDeclaration() && declaration.parentPath?.isBlockStatement()) {
+        insertAfterDeclaration(declaration, [
+          t.expressionStatement(
+            t.callExpression(t.identifier(HELPER_NAME), [
+              t.identifier(name),
+              t.stringLiteral(name),
+              metaObject
+            ])
+          )
         ]);
-
-        const initPath = probed
-          ? (path.get("init.arguments.0") as NodePath<Node>)
-          : path.get("init");
-        initPath.replaceWith(call);
-        programState(path)._riAutoValueNames?.add(name);
-        ensureHelperImport(path, state, api);
-      },
-      AssignmentExpression(path: NodePath<AssignmentExpression>, state: PluginPass) {
-        if (isProduction) return;
-        if (programState(path)._riSkipAnimationInstrumentation) return;
-
-        const found = discoverAnimation(path, state);
-        if (!found) return;
-        const { target, shape } = found;
-        const right = path.node.right as CallExpression;
-
-        const t = api.types;
-        const { animationKind, delayed } = shape;
-        const built = buildAnimationMeta(
-          path,
-          state,
-          target,
-          animationKind,
-          innerAnimationCall(right, delayed),
-          api
+      } else {
+        path.get("init").replaceWith(
+          t.callExpression(t.identifier(HELPER_NAME), [init, t.stringLiteral(name), metaObject])
         );
-        if (!built) return;
-        const { meta, callsiteId, literalBase } = built;
-        programState(path)._riCallsiteIds?.add(callsiteId);
+      }
+      programState(path)._riAutoValueNames?.add(name);
+      ensureHelperImport(path, state, api);
+    },
+    AssignmentExpression(path: NodePath<AssignmentExpression>, state: PluginPass) {
+      if (isProduction) return;
+      if (programState(path)._riSkipAnimationInstrumentation) return;
 
-        // Preserve the application's original Reanimated call exactly. Runtime
-        // Inspector observes the animation object *after* Reanimated constructs it
-        // and returns that same object unchanged.
-        const transformed = t.cloneNode(right, true);
-        const animationCall = innerAnimationCall(transformed, delayed);
+      const found = discoverAnimation(path, state);
+      if (!found) return;
+      const { target, shape } = found;
+      const right = path.node.right as CallExpression;
 
-        // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
-        // slider control. Only the config argument is wrapped; the application still
-        // makes its own `withTiming` / `withSpring` call.
-        // Bindings come from the original call so each literal's source text is known.
-        const bindings = literalParameterBindings(
-          animationKind,
-          innerAnimationCall(right, delayed).arguments[1],
-          state.file.code
-        );
-        if (bindings.length > 0) {
-          animationCall.arguments[1] = t.callExpression(
-            t.identifier(ANIMATION_CONFIG_HELPER_NAME),
-            [
-              animationCall.arguments[1],
-              t.arrayExpression(
-                bindings.map((binding) =>
-                  parameterBindingExpression(t, callsiteId, target.target, binding, literalBase)
-                )
+      const t = api.types;
+      const { animationKind, delayed } = shape;
+      const built = buildAnimationMeta(
+        path,
+        state,
+        target,
+        animationKind,
+        innerAnimationCall(right, delayed),
+        api
+      );
+      if (!built) return;
+      const { meta, callsiteId, literalBase } = built;
+      programState(path)._riCallsiteIds?.add(callsiteId);
+
+      // Preserve the application's original Reanimated call exactly. Runtime
+      // Inspector observes the animation object *after* Reanimated constructs it
+      // and returns that same object unchanged.
+      const transformed = t.cloneNode(right, true);
+      const animationCall = innerAnimationCall(transformed, delayed);
+
+      // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
+      // slider control. Only the config argument is wrapped; the application still
+      // makes its own `withTiming` / `withSpring` call.
+      // Bindings come from the original call so each literal's source text is known.
+      const bindings = literalParameterBindings(
+        animationKind,
+        innerAnimationCall(right, delayed).arguments[1],
+        state.file.code
+      );
+      if (bindings.length > 0) {
+        animationCall.arguments[1] = t.callExpression(
+          t.identifier(ANIMATION_CONFIG_HELPER_NAME),
+          [
+            animationCall.arguments[1],
+            t.arrayExpression(
+              bindings.map((binding) =>
+                parameterBindingExpression(t, callsiteId, target.target, binding, literalBase)
               )
-            ]
-          );
-          meta.properties.push(parameterControlsProperty(t, callsiteId, bindings));
-        }
-
-        // RFC 0005 §3c: the start is movable through a delay control. A delayed
-        // call gets its delay argument wrapped; a bare call is wrapped whole, and
-        // only when the module already imports Reanimated.
-        let observed: BabelTypesNamespace.Expression = transformed;
-        let startHelperName: string | undefined;
-        if (delayed) {
-          const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
-          const delayInit = sourceText(right.arguments[0], state.file.code);
-          transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
-            transformed.arguments[0],
-            startBindingExpression(
-              t,
-              callsiteId,
-              target.target,
-              declaredDelay,
-              literalBase && delayInit !== undefined
-                ? { ...literalBase, parameter: "delay", init: delayInit }
-                : undefined
             )
-          ]);
-          if (declaredDelay !== undefined) {
-            meta.properties.push(startControlProperty(t, callsiteId));
-          }
-          startHelperName = ANIMATION_DELAY_HELPER_NAME;
-        } else if (hasReanimatedImport(path)) {
-          observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
-            transformed,
-            startBindingExpression(
-              t,
-              callsiteId,
-              target.target,
-              0,
-              literalBase && { ...literalBase, parameter: "delay", init: null }
-            ),
-            t.identifier(WITH_DELAY_LOCAL_NAME)
-          ]);
-          meta.properties.push(startControlProperty(t, callsiteId));
-          startHelperName = ANIMATION_START_HELPER_NAME;
-          ensureWithDelayImport(path, api);
-        }
-
-        path.get("right").replaceWith(
-          t.callExpression(t.identifier(ANIMATION_OBSERVER_HELPER_NAME), [observed, meta])
+          ]
         );
-        ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
-        if (bindings.length > 0) {
-          ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
+        meta.properties.push(parameterControlsProperty(t, callsiteId, bindings));
+      }
+
+      // RFC 0005 §3c: the start is movable through a delay control. A delayed
+      // call gets its delay argument wrapped; a bare call is wrapped whole, and
+      // only when the module already imports Reanimated.
+      let observed: BabelTypesNamespace.Expression = transformed;
+      let startHelperName: string | undefined;
+      if (delayed) {
+        const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
+        const delayInit = sourceText(right.arguments[0], state.file.code);
+        transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
+          transformed.arguments[0],
+          startBindingExpression(
+            t,
+            callsiteId,
+            target.target,
+            declaredDelay,
+            literalBase && delayInit !== undefined
+              ? { ...literalBase, parameter: "delay", init: delayInit }
+              : undefined
+          )
+        ]);
+        if (declaredDelay !== undefined) {
+          meta.properties.push(startControlProperty(t, callsiteId));
         }
-        if (startHelperName) {
-          ensureRuntimeHelperImport(path, startHelperName, api);
-        }
+        startHelperName = ANIMATION_DELAY_HELPER_NAME;
+      } else if (hasReanimatedImport(path)) {
+        observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
+          transformed,
+          startBindingExpression(
+            t,
+            callsiteId,
+            target.target,
+            0,
+            literalBase && { ...literalBase, parameter: "delay", init: null }
+          ),
+          t.identifier(WITH_DELAY_LOCAL_NAME)
+        ]);
+        meta.properties.push(startControlProperty(t, callsiteId));
+        startHelperName = ANIMATION_START_HELPER_NAME;
+        ensureWithDelayImport(path, api);
+      }
+
+      path.get("right").replaceWith(
+        t.callExpression(t.identifier(ANIMATION_OBSERVER_HELPER_NAME), [observed, meta])
+      );
+      ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
+      if (bindings.length > 0) {
+        ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
+      }
+      if (startHelperName) {
+        ensureRuntimeHelperImport(path, startHelperName, api);
       }
     }
   };
+
+  return plugin;
 }
 
 function isUseSharedValueCallee(callee: Node): boolean {
@@ -336,16 +353,6 @@ function isUseSharedValueCallee(callee: Node): boolean {
     return callee.property.type === "Identifier" && callee.property.name === "useSharedValue";
   }
   return false;
-}
-
-/** A `__riProbe(<init>, ...)` call injected by the RFC 0008 motion pass. */
-function isProbeHelperCall(node: Node | null | undefined): node is CallExpression {
-  return (
-    node?.type === "CallExpression" &&
-    node.callee.type === "Identifier" &&
-    node.callee.name === PROBE_HELPER_NAME &&
-    node.arguments[0]?.type === "CallExpression"
-  );
 }
 
 function isUseInspectorCallee(callee: Node): boolean {
@@ -1097,7 +1104,7 @@ function collectEnclosure(path: NodePath): string[] {
       names.push(current.node.id.name);
     } else if (current.isFunctionExpression() || current.isArrowFunctionExpression()) {
       let parent = current.parentPath;
-      // RFC 0008: `const play = __riMotion(id, () => {...}, meta)` still encloses as "play".
+      // RFC 0008: `const play = __riMotionFn(id, () => {...})` still encloses as "play".
       if (
         parent?.isCallExpression() &&
         parent.node.callee.type === "Identifier" &&

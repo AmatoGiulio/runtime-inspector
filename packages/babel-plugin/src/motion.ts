@@ -16,8 +16,45 @@ import type {
 } from "@babel/types";
 import { parseSceneComment, type SceneDirective } from "./scene-directive";
 
-export const MOTION_HELPER_NAME = "__riMotion";
-export const PROBE_HELPER_NAME = "__riProbe";
+// Each automatic motion and probe is two calls. The React Compiler memoizes an ordinary call
+// into an `if ($[n] !== ...)` branch, so whatever calls React hooks must be a `use*` hook; and
+// it freezes every argument of a hook, so a hook must not receive the motion function or the
+// shared value (the component would then fail to compile wherever a callback assigns
+// `.value`). The hooks therefore take only static data and return an instance token, and
+// plain functions hand the function or shared value over to that instance.
+/** Hook: binds the scene while this instance is mounted; returns its instance token. */
+export const SCENE_HOOK_NAME = "useRiScene";
+/** Plain: records the motion function of an instance; returns it unchanged. */
+export const MOTION_HELPER_NAME = "__riMotionFn";
+/** Hook: registers the probe while this instance is mounted; returns its instance token. */
+export const PROBE_HOOK_NAME = "useRiProbe";
+/** Plain: records the shared value of an instance; returns it unchanged. */
+export const PROBE_HELPER_NAME = "__riProbeValue";
+
+/** The last statement inserted after a declaration, per declaration node. */
+const lastInsertedAfter = new WeakMap<Node, NodePath>();
+
+/**
+ * Inserts statements after a declaration, after any already inserted there: helpers for the
+ * declarators of `const a = ..., b = ...` stay in source order.
+ */
+export function insertAfterDeclaration(declaration: NodePath, statements: Statement[]): void {
+  const anchor = lastInsertedAfter.get(declaration.node) ?? declaration;
+  const inserted = registerDeclarations(anchor.insertAfter(statements));
+  lastInsertedAfter.set(declaration.node, inserted[inserted.length - 1]);
+}
+
+/**
+ * Registers the bindings of inserted `const` declarations. Insertion does not, and a later
+ * plugin resolving identifiers through the scope (the React Compiler does) would otherwise
+ * fail with "Could not find binding for declaration".
+ */
+function registerDeclarations(paths: NodePath[]): NodePath[] {
+  for (const path of paths) {
+    if (path.isVariableDeclaration()) path.scope.registerDeclaration(path);
+  }
+  return paths;
+}
 
 /** A discovered animation assignment (the same callsite id `buildAnimationMeta` emits). */
 export interface DiscoveredAnimation {
@@ -67,9 +104,10 @@ const EXPLICIT_SCENE_HOOKS = new Set(["useScene", "useAction"]);
 
 /**
  * RFC 0008 §1, §2, §4, §5: turns the motion functions of every module-level component
- * into `__riMotion(...)` scenes and wraps animated top-level `useSharedValue(<literal>)`
- * declarations with `__riProbe(...)`. Runs on the untouched program, before the animation
- * call sites are instrumented, so it must use the same callsite ids as the later pass.
+ * into scenes (`__riMotionFn(...)` + `useRiScene(...)`) and follows animated top-level
+ * `useSharedValue(<literal>)` declarations with probes (`__riProbeValue(...)` +
+ * `useRiProbe(...)`). Runs on the untouched program, before the animation call sites are
+ * instrumented, so it must use the same callsite ids as the later pass.
  */
 export function instrumentMotions(program: NodePath<Program>, options: MotionPassOptions): void {
   for (const component of findComponents(program)) {
@@ -374,24 +412,33 @@ function injectMotion(component: Component, candidate: Candidate, options: Motio
   );
   const meta = t.objectExpression(properties);
 
+  const token = component.fn.scope.generateUidIdentifier("riScene");
+  const sceneHook = t.variableDeclaration("const", [
+    t.variableDeclarator(
+      token,
+      t.callExpression(t.identifier(SCENE_HOOK_NAME), [t.stringLiteral(sceneId), meta])
+    )
+  ]);
   if (candidate.kind === "declaration") {
-    candidate.statement.insertAfter(
+    registerDeclarations(candidate.statement.insertAfter([
+      sceneHook,
       t.expressionStatement(
         t.callExpression(t.identifier(MOTION_HELPER_NAME), [
-          t.stringLiteral(sceneId),
-          t.identifier(candidate.idName),
-          meta
+          t.cloneNode(token),
+          t.identifier(candidate.idName)
         ])
       )
-    );
+    ]));
   } else {
     const target = candidate.wrapTarget!;
     target.replaceWith(
-      t.callExpression(t.identifier(MOTION_HELPER_NAME), [t.stringLiteral(sceneId), target.node, meta])
+      t.callExpression(t.identifier(MOTION_HELPER_NAME), [t.cloneNode(token), target.node])
     );
+    registerDeclarations(candidate.statement.insertBefore(sceneHook));
   }
 
   options.ensureImport(candidate.statement, MOTION_HELPER_NAME);
+  options.ensureImport(candidate.statement, SCENE_HOOK_NAME);
 }
 
 function injectProbe(
@@ -404,17 +451,26 @@ function injectProbe(
   if (id.type !== "Identifier" || !init || !isLiteralSharedValueCall(init)) return;
 
   const t = options.types;
-  declarator.get("init").replaceWith(
-    t.callExpression(t.identifier(PROBE_HELPER_NAME), [
-      init,
-      t.stringLiteral(id.name),
-      t.objectExpression([
-        t.objectProperty(t.identifier("component"), t.stringLiteral(component.name)),
-        t.objectProperty(t.identifier("file"), t.stringLiteral(options.file))
-      ])
-    ])
-  );
+  const meta = t.objectExpression([
+    t.objectProperty(t.identifier("component"), t.stringLiteral(component.name)),
+    t.objectProperty(t.identifier("file"), t.stringLiteral(options.file))
+  ]);
+  // Statements after the declaration, which stays a plain `useSharedValue(...)` call: the
+  // React Compiler only lets callbacks assign `.value` on a value it can see came from it.
+  const token = declarator.scope.generateUidIdentifier("riProbe");
+  insertAfterDeclaration(declarator.parentPath, [
+    t.variableDeclaration("const", [
+      t.variableDeclarator(
+        token,
+        t.callExpression(t.identifier(PROBE_HOOK_NAME), [t.stringLiteral(id.name), meta])
+      )
+    ]),
+    t.expressionStatement(
+      t.callExpression(t.identifier(PROBE_HELPER_NAME), [t.cloneNode(token), t.identifier(id.name)])
+    )
+  ]);
   options.ensureImport(declarator, PROBE_HELPER_NAME);
+  options.ensureImport(declarator, PROBE_HOOK_NAME);
 }
 
 /** `useSharedValue(<number or boolean literal>)`; a negated number literal counts as a number. */

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { RuntimeProbeDescriptor } from "@runtime-inspector/protocol";
 import { humanizeIdentifier } from "./motion";
 import { registerRuntimeProbe, type RuntimeProbeSource } from "./recording";
@@ -42,6 +42,61 @@ export function __riProbe<T>(sharedValue: T, name: string, meta: AutoProbeMeta):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sharedValue, name, meta.component]);
 
+  return sharedValue;
+}
+
+/** One mounted component instance's probe: the shared value its render recorded. */
+interface ProbeInstance {
+  sharedValue?: unknown;
+}
+
+/** Instance token -> instance, for `__riProbeValue`. Entries live while the instance is mounted. */
+const probeInstances = new Map<string, ProbeInstance>();
+let nextProbeInstance = 0;
+
+/**
+ * Injected by `@runtime-inspector/babel-plugin` after an animated top-level
+ * `useSharedValue(<literal>)` declaration (RFC 0008 §5, amended 2026-10-30), paired with
+ * `__riProbeValue`. Registers the probe while this component instance is mounted, reading
+ * the shared value the instance recorded. Takes only static data and returns an instance
+ * token, so the React Compiler does not freeze the shared value.
+ */
+export function useRiProbe(name: string, meta: AutoProbeMeta): string {
+  const ref = useRef<{ token: string; instance: ProbeInstance } | undefined>(undefined);
+  if (ref.current === undefined) {
+    ref.current = { token: `${meta.component}.${name}#${++nextProbeInstance}`, instance: {} };
+  }
+  const { token, instance } = ref.current;
+  if (isDev()) {
+    probeInstances.set(token, instance);
+  }
+
+  useEffect(() => {
+    if (!isDev()) {
+      return undefined;
+    }
+    probeInstances.set(token, instance);
+    const release = acquireAutoProbe(instance.sharedValue, name, meta);
+    return () => {
+      release?.();
+      probeInstances.delete(token);
+    };
+    // `meta` is static per call site; the probe is keyed by component and name.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, meta.component, token, instance]);
+
+  return token;
+}
+
+/**
+ * Injected with `useRiProbe`: records the shared value of the instance `token` and returns it
+ * unchanged. Not a hook.
+ */
+export function __riProbeValue<T>(token: string, sharedValue: T): T {
+  const instance = probeInstances.get(token);
+  if (instance) {
+    instance.sharedValue = sharedValue;
+  }
   return sharedValue;
 }
 
@@ -118,6 +173,7 @@ export function acquireAutoProbe(
 
 /** Test-only: drops every automatic probe registration. */
 export function __resetAutoProbesForTests(): void {
+  probeInstances.clear();
   for (const entry of autoProbes.values()) {
     entry.dispose();
   }

@@ -69,6 +69,37 @@ describe("runtime-inspector babel plugin", () => {
     );
   });
 
+  it("follows an annotated declaration inside a component with a statement, keeping the declaration as written", () => {
+    const code = transform(`
+      import { useSharedValue } from "react-native-reanimated";
+      export const Card = () => {
+        // @inspect min=0 max=1
+        const opacity = useSharedValue(0);
+        return opacity;
+      };
+    `);
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain(
+      'const opacity = useSharedValue(0); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",'
+    );
+  });
+
+  it("keeps source order for annotated declarators of one declaration", () => {
+    const code = transform(`
+      import { useSharedValue } from "react-native-reanimated";
+      function Card() {
+        const a = useSharedValue(0), // @inspect min=0 max=1
+          b = useSharedValue(1); // @inspect min=0 max=2
+        return [a, b];
+      }
+    `);
+    const normalized = code.replace(/\s+/g, " ");
+    const first = normalized.indexOf('__riInspect(a, "a"');
+    const second = normalized.indexOf('__riInspect(b, "b"');
+    expect(first).toBeGreaterThan(-1);
+    expect(second).toBeGreaterThan(first);
+  });
+
   it("leaves an unannotated useSharedValue declaration untouched", () => {
     const code = transform(`
       import { useSharedValue } from "react-native-reanimated";
@@ -843,13 +874,14 @@ describe("automatic motions and probes (RFC 0008)", () => {
     );
   }
 
+  /** Scene ids, from the `useRiScene` hook each motion gets. */
   function motionCalls(normalized: string): string[] {
-    return Array.from(normalized.matchAll(/__riMotion\("([^"]+)"/g), (match) => match[1]);
+    return Array.from(normalized.matchAll(/useRiScene\("([^"]+)"/g), (match) => match[1]);
   }
 
-  /** The `callsites` array literal of the `__riMotion` meta for `sceneId`. */
+  /** The `callsites` array literal of the `useRiScene` meta for `sceneId`. */
   function motionCallsites(normalized: string, sceneId: string): string[] {
-    const start = normalized.indexOf(`__riMotion("${sceneId}"`);
+    const start = normalized.indexOf(`useRiScene("${sceneId}"`);
     expect(start).toBeGreaterThanOrEqual(0);
     const match = /callsites: \[([^\]]*)\]/.exec(normalized.slice(start));
     return Array.from((match?.[1] ?? "").matchAll(/"([^"]+)"/g), (item) => item[1]);
@@ -874,7 +906,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     );
     expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:ProductRevealDemo.play"]);
     expect(normalized).toMatch(
-      /\} __riMotion\("src\/Demo\.tsx:ProductRevealDemo\.play", play, \{ component: "ProductRevealDemo", name: "play", file: "src\/Demo\.tsx", line: 9, callsites: \[/
+      /\} const _riScene = useRiScene\("src\/Demo\.tsx:ProductRevealDemo\.play", \{ component: "ProductRevealDemo", name: "play", file: "src\/Demo\.tsx", line: 9, callsites: \[[^\]]*\] \}\); __riMotionFn\(_riScene, play\);/
     );
     const callsites = motionCallsites(normalized, "src/Demo.tsx:ProductRevealDemo.play");
     expect(callsites).toEqual([
@@ -884,14 +916,15 @@ describe("automatic motions and probes (RFC 0008)", () => {
     expect(callsites).toEqual(observedCallsites(normalized));
     const runtimeImports = normalized.match(/import \{[^}]*\} from "@runtime-inspector\/react-native"/g);
     expect(runtimeImports).toHaveLength(1);
-    expect(runtimeImports![0].match(/__riMotion/g)).toHaveLength(1);
-    expect(runtimeImports![0].match(/__riProbe/g)).toHaveLength(1);
+    for (const helper of ["__riMotionFn", "useRiScene", "__riProbeValue", "useRiProbe"]) {
+      expect(runtimeImports![0].match(new RegExp(`\\b${helper}\\b`, "g"))).toHaveLength(1);
+    }
   });
 
   it.each([
-    ["an arrow", "const play = () => { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotion("],
-    ["a function expression", "const play = function () { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotion("],
-    ["useCallback", "const play = useCallback(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);", "const play = __riMotion(\"src/Demo.tsx:Card.play\", useCallback(() =>"]
+    ["an arrow", "const play = () => { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotionFn("],
+    ["a function expression", "const play = function () { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotionFn("],
+    ["useCallback", "const play = useCallback(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);", "); const play = __riMotionFn(_riScene, useCallback(() =>"]
   ])("wraps the initializer of %s", (_label, declaration, expected) => {
     const normalized = motion(`
       function Card() {
@@ -953,9 +986,8 @@ describe("automatic motions and probes (RFC 0008)", () => {
       }
     `);
 
-    expect(normalized).toContain('useEffect(__riMotion("src/Demo.tsx:Card.effect@9", () => {');
     expect(normalized).toContain(
-      '{ component: "Card", name: "effect", file: "src/Demo.tsx", line: 9, callsites: ["src/Demo.tsx:11:10:spring:opacity"] }), []);'
+      'const _riScene2 = useRiScene("src/Demo.tsx:Card.effect@9", { component: "Card", name: "effect", file: "src/Demo.tsx", line: 9, callsites: ["src/Demo.tsx:11:10:spring:opacity"] }); useEffect(__riMotionFn(_riScene2, () => {'
     );
     expect(motionCalls(normalized)).toEqual([
       "src/Demo.tsx:Card.play",
@@ -972,7 +1004,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
       }
     `);
 
-    expect(normalized).toContain('useLayoutEffect(__riMotion("src/Demo.tsx:Card.effect@8", () =>');
+    expect(normalized).toContain('useLayoutEffect(__riMotionFn(_riScene, () =>');
   });
 
   it.each([
@@ -1176,7 +1208,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:Card.play"]);
   });
 
-  it("wraps only animated top-level literal shared values in __riProbe", () => {
+  it("probes only animated top-level literal shared values, after their declaration", () => {
     const normalized = motion(`
       function ProductRevealDemo() {
         const titleY = useSharedValue(24);
@@ -1203,17 +1235,20 @@ describe("automatic motions and probes (RFC 0008)", () => {
       }
     `);
 
+    // The declaration stays a plain useSharedValue call: the React Compiler only lets
+    // callbacks assign `.value` on a value it can see came from useSharedValue.
     expect(normalized).toContain(
-      'const titleY = __riProbe(useSharedValue(24), "titleY", { component: "ProductRevealDemo", file: "src/Demo.tsx" });'
+      'const titleY = useSharedValue(24); const _riProbe = useRiProbe("titleY", { component: "ProductRevealDemo", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, titleY);'
     );
-    expect(normalized).toContain('const rowX = __riProbe(useSharedValue(-40), "rowX", {');
-    expect(normalized).toContain('const visible = __riProbe(useSharedValue(false), "visible", {');
+    expect(normalized).toContain('const rowX = useSharedValue(-40); const _riProbe2 = useRiProbe("rowX", {');
+    expect(normalized).toContain('const visible = useSharedValue(false); const _riProbe3 = useRiProbe("visible", {');
     expect(normalized).toContain("const idle = useSharedValue(0);");
     expect(normalized).toContain("const config = useSharedValue({ x: 1 });");
     expect(normalized).toContain("const nested = useSharedValue(0);");
     expect(normalized).toContain("inner: useSharedValue(0)");
     expect(normalized).toContain("const deep = useSharedValue(0);");
-    expect(normalized.match(/__riProbe\(/g)).toHaveLength(3);
+    expect(normalized.match(/__riProbeValue\(/g)).toHaveLength(3);
+    expect(normalized.match(/useRiProbe\(/g)).toHaveLength(3);
   });
 
   it("does not probe a shared value only animated inside a worklet context", () => {
@@ -1243,7 +1278,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     `);
 
     expect(normalized).toContain(
-      'const opacity = __riProbe(__riInspect(useSharedValue(0), "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } }), "opacity", { component: "Card", file: "src/Demo.tsx" });'
+      'const opacity = useSharedValue(0); const _riProbe = useRiProbe("opacity", { component: "Card", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, opacity); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } });'
     );
     expect(normalized).toContain('schemaId: "auto"');
   });
@@ -1322,10 +1357,12 @@ describe("automatic motions and probes (RFC 0008)", () => {
     });
     const code = result?.code ?? "";
 
-    expect(code).toContain('__riMotion("src/Demo.tsx:Demo.play", play,');
-    expect(code).toContain('__riMotion("src/Demo.tsx:Demo.replay", useCallback(');
-    expect(code).toContain('useEffect(__riMotion("src/Demo.tsx:Demo.effect@14",');
-    expect(code).toContain("__riProbe(useSharedValue(0)");
+    expect(code).toContain('useRiScene("src/Demo.tsx:Demo.play",');
+    expect(code).toContain("__riMotionFn(_riScene, play)");
+    expect(code).toContain('useRiScene("src/Demo.tsx:Demo.replay",');
+    expect(code).toMatch(/__riMotionFn\(_riScene\d+, useCallback\(/);
+    expect(code).toMatch(/useEffect\(__riMotionFn\(_riScene\d+, /);
+    expect(code).toContain("__riProbeValue(_riProbe, ");
     // Reanimated still workletizes the style callback, and the output parses.
     expect(code).toContain("__workletHash");
     expect(() => parseSync(code, { babelrc: false, configFile: false, filename: "out.js" })).not.toThrow();
@@ -1377,7 +1414,7 @@ describe("animation literal anchors (RFC 0007)", () => {
       }
     `);
 
-    expect(normalized).toContain("const play = __riMotion(");
+    expect(normalized).toContain("const play = __riMotionFn(");
     const base = {
       file: "src/Demo.tsx",
       line: 7,
