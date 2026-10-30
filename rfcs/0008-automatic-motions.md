@@ -105,3 +105,34 @@ An automatic scene can always be replayed while it is on screen. Reaching it fro
 - Plugin: each motion-function shape, pure/impure effects, nearest-ancestor walk through a `setTimeout` callback, explicit `useScene` skipped, `// @scene` title/group/off and invalid syntax, probe wrapping only for animated top-level shared values, production untouched, output still valid for the Reanimated plugin.
 - Runtime: `__riMotion` binds/unbinds, returns the same function, callsite-based "already ran", explicit declaration merge; `__riProbe` registers and composes with `__riInspect`.
 - Example: with `useScene` / `defineScenes` / `useRuntimeProbe` removed, the Workbench lists the motions and replays them on screen.
+
+## Amendment (2026-10-30): emitted shape under the React Compiler
+
+The React Compiler (`babel-plugin-react-compiler`, run by `babel-preset-expo` when an app enables it) constrains what the plugin may emit:
+
+- It memoizes an ordinary call into an `if ($[n] !== …)` branch, so a helper that calls React hooks must be a `use*` hook — `__riMotion` / `__riProbe` were not.
+- It freezes every argument of a hook, so a hook must not receive the motion function or the shared value: a callback that assigns `.value` then fails to compile ("This value cannot be modified"). It also stops treating a `useSharedValue` result as a shared value once that result is wrapped in another call.
+- It resolves identifiers through Babel's scope, so inserted declarations must be registered there.
+
+Each motion and probe is therefore a hook that takes only static data and returns an **instance token** (a string), plus a plain function that hands the function or shared value to that instance. The `useSharedValue(...)` declaration itself is left as written:
+
+```ts
+function play() { … }
+const _riScene = useRiScene("src/ProductRevealDemo.tsx:ProductRevealDemo.play", meta);
+__riMotionFn(_riScene, play);
+
+const _riScene2 = useRiScene(id, meta);
+const play = __riMotionFn(_riScene2, () => { … });       // wraps an initializer
+const _riScene3 = useRiScene(id, meta);
+useEffect(__riMotionFn(_riScene3, () => { … }), []);     // wraps a pure-motion effect
+
+const titleY = useSharedValue(24);
+const _riProbe = useRiProbe("titleY", { component: "ProductRevealDemo", file });
+__riProbeValue(_riProbe, titleY);
+```
+
+`useRiScene` binds the scene while its component instance is mounted and plays the function that instance last recorded through `__riMotionFn`; several mounted instances of a component (list rows) each keep their own. `useRiProbe` / `__riProbeValue` do the same for probes. If the compiler memoizes a plain call, it only skips recording an unchanged value. `__riMotion` and `__riProbe` stay exported, unchanged, for code transformed by earlier plugin versions; the plugin and `@runtime-inspector/react-native` must be upgraded together.
+
+The plugin also runs the `// @inspect` rewrite and the animation-assignment discovery from its `Program.enter`, on the untouched program: the compiler rewrites component bodies from its own `Program.enter`, after which the directive comments and the source locations callsite ids are built from are gone. This relies on the plugin being listed in the app's `plugins` (Babel runs plugins before presets), which is what `runtime-inspector init` writes.
+
+`packages/babel-plugin/src/react-compiler.test.ts` runs the real compiler (1.0.0) and checks, for five motion shapes, that it logs the same events (compiled, or skipped for the same reason) with Runtime Inspector as without, and that no injected hook lands in a memoization branch.
