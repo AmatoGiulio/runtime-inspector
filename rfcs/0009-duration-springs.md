@@ -50,10 +50,10 @@ Slider ranges (a declared literal outside the range gets no slider, as today):
 
 | Parameter | min | max | step | unit |
 | --- | --- | --- | --- | --- |
-| `duration` (spring) | 0 | 10000 | 1 | ms |
+| `duration` (spring) | 1 | 10000 | 1 | ms |
 | `dampingRatio` | 0.05 | 2 | 0.01 | — |
 
-`dampingRatio` 1 is critically damped, above 1 overdamped, below 1 bouncy. 0 is excluded: the spring would never settle.
+`dampingRatio` 1 is critically damped, above 1 overdamped, below 1 bouncy. 0 is excluded for both parameters: Reanimated tests `duration || dampingRatio`, so a 0 would silently switch the spring back to physical mode (and a `dampingRatio` of 0 would never settle). A spring whose `duration` is written as `0` gets no duration slider.
 
 ## 2. Protocol
 
