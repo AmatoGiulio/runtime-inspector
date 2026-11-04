@@ -24,7 +24,7 @@ import {
   trigger as triggerControl,
   type RuntimeInspectorOptions,
   type SharedValueLike
-} from "./index";
+} from "./core";
 
 /** Minimal shape of the `makeMutable` export from `react-native-reanimated`. */
 type MakeMutable = <T>(value: T) => SharedValueLike<T>;

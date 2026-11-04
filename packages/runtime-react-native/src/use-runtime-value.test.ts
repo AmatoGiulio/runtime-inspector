@@ -53,7 +53,7 @@ describe("buildRuntimeValue", () => {
   });
 
   it("mount/register makes the control appear in the auto schema after debounce", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { buildRuntimeValue } = await import("./use-runtime-value");
     const { registerRuntimeValue } = await import("./auto");
 
@@ -68,7 +68,7 @@ describe("buildRuntimeValue", () => {
   });
 
   it("unmount disposes and republishes the schema without the control", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { buildRuntimeValue } = await import("./use-runtime-value");
     const { registerRuntimeValue } = await import("./auto");
 
@@ -83,7 +83,7 @@ describe("buildRuntimeValue", () => {
   });
 
   it("remount with the same name does not accumulate a suffix", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { buildRuntimeValue } = await import("./use-runtime-value");
     const { registerRuntimeValue } = await import("./auto");
 
@@ -104,7 +104,7 @@ describe("buildRuntimeValue", () => {
 
   it("two live registrations of the same name suffix and warn", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { buildRuntimeValue } = await import("./use-runtime-value");
     const { registerRuntimeValue } = await import("./auto");
 
@@ -150,7 +150,7 @@ describe("buildRuntimeValue", () => {
 describe("useRuntimeValue - production", () => {
   it("does not register in production (isDev false skips registration, mirrors hook behavior)", async () => {
     vi.stubGlobal("__DEV__", false);
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { buildRuntimeValue } = await import("./use-runtime-value");
 
     // The hook still builds the handle in production but never calls
@@ -180,7 +180,7 @@ describe("useAction", () => {
   });
 
   it("registers a trigger control in the published schema after debounce", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { registerRuntimeValue } = await import("./auto");
 
     registerRuntimeValue({
@@ -245,7 +245,7 @@ describe("useAction", () => {
   });
 
   it("dispose on unmount removes the control", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { registerRuntimeValue } = await import("./auto");
 
     const dispose = registerRuntimeValue({
@@ -264,7 +264,7 @@ describe("useAction", () => {
 
   it("production no-op: returns the handler unchanged without registering", async () => {
     vi.stubGlobal("__DEV__", false);
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
 
     // Mirrors the hook: in production useAction never calls registerRuntimeValue.
     // Verified at the registry level since rendering the hook needs a React renderer.
