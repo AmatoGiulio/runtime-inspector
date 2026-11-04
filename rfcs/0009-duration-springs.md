@@ -3,7 +3,7 @@
 - Status: draft, 2026-11-05
 - Author: maintainers
 - Origin: issue #8 (item 3), found on a real Expo SDK 58 app
-- Affects: `protocol` (additive), `babel-plugin`, `cli` (workspace), `panel-core`, docs
+- Affects: `protocol` (additive), `babel-plugin`, `cli` (workspace), docs
 - Breaking: no — one new value in `AnimationLiteralParameter` (a relaxed validation rule)
 
 ## Motivation
@@ -17,7 +17,7 @@ withSpring(1, { duration: 400, dampingRatio: 0.7 }); // duration-based
 
 Duration-based springs are common in real apps because they are easier to reason about. Today the Babel plugin only turns `damping`, `stiffness` and `mass` into sliders (RFC 0005 §3b). A duration-based spring therefore gets no duration or bounciness slider, and a test asserts that such configs are left alone. Worse, if a config mixes both kinds, the plugin can offer a `damping` slider that Reanimated ignores.
 
-This RFC adds sliders for duration-based springs, keeps *Apply to code* (RFC 0007) working for them, and gives the timeline their real length.
+This RFC adds sliders for duration-based springs and keeps *Apply to code* (RFC 0007) working for them.
 
 ## What Reanimated does (verified on 3.16)
 
@@ -77,16 +77,16 @@ No new helper. `__riAnimationConfig` already overrides any bound key, so `durati
 
 RFC 0007 §3 applies unchanged: the literal is located by key in the animation call's second argument. Only the accepted parameter set grows. `EXPRESSION_MISMATCH` also covers a config whose mode changed since the app was built (for example a `duration` member was added next to a tuned `damping`); the workspace re-classifies the object with the same rule as the plugin and refuses to write a parameter the current mode ignores.
 
-## 5. Panel and Workbench
+## 5. Panels
 
-- **Expected length.** `panel-core`'s `expectedAnimationDuration` estimates a spring's length from `damping` / `stiffness` / `mass` (`sampleSpringCurve`, `durationBasis: "spring-estimate"`). A duration-based spring returns no estimate today. With this RFC it returns its declared length, `{ ms: duration, basis: "declared" }`, so the Workbench timeline draws it at the right size before it completes (on Reanimated 3; on 4 it follows whatever §"To verify" finds). `dampingRatio` alone (default `duration`) uses Reanimated's default duration.
-- **Sliders.** Labels follow the existing `"<target> <parameter>"` form (`"titleY duration"`, `"titleY dampingRatio"`); DialKit renders them as ordinary sliders.
+Labels follow the existing `"<target> <parameter>"` form (`"titleY duration"`, `"titleY dampingRatio"`). The web panel, the DevTools panel and the MCP client show and set them as ordinary sliders; no client change is needed.
 
 ## Out of scope
 
 - The `spring` control kind used by `useInspector` / `// @inspect` on a spring config object (`SpringValue`). Extending `SpringValue` with `duration` / `dampingRatio` is a separate, additive change.
 - `clamp`, `overshootClamping`, `velocity`, thresholds.
 - Converting a spring between modes from the panel.
+- The Workbench timeline (paused). Its spring length estimate in `panel-core` (`expectedAnimationDuration`) does not cover duration-based springs; that belongs to the Workbench if it resumes.
 
 ## Test plan
 
@@ -94,5 +94,4 @@ RFC 0007 §3 applies unchanged: the literal is located by key in the animation c
 - Plugin: duration mode emits `duration` + `dampingRatio` (+ `stiffness`) bindings and never `damping` / `mass`; physical mode unchanged; mixed config treated as duration mode; the existing "duration springs are not wrapped" test is replaced.
 - Runtime: overriding `duration` and `dampingRatio` reaches the `withSpring` call.
 - CLI: write `duration` and `dampingRatio` on a spring; refuse a `damping` write when the object is now in duration mode.
-- panel-core: a duration-based spring gets `durationBasis: "declared"` with its declared (or default) duration; physical springs keep the estimate.
-- End to end on the Simulator, once with Reanimated 3 and once with Reanimated 4: change the duration and `dampingRatio` sliders from the panel, replay, check the timeline length, *Apply to code*, Fast Refresh.
+- End to end on the Simulator, once with Reanimated 3 and once with Reanimated 4: change the duration and `dampingRatio` sliders from the web panel, replay, *Apply to code*, Fast Refresh.

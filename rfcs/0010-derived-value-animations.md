@@ -78,16 +78,16 @@ An optional field is additive under [protocol-stability.md](../docs/protocol-sta
 
 For `form: "derived"` the RFC 0007 §3 procedure changes only in step 2. Candidates are `VariableDeclarator`s whose identifier text equals `target`, whose initializer is a `useDerivedValue(...)` call with an inline function, and which are inside the `enclosure` chain. Inside that function, each top-level return (or arrow expression body) whose expression has the recorded callee shape is a match; ties are broken by line/column. Steps 3–5 (locate the literal, compare with `init`, write) are unchanged. The RFC 0007 codes keep their meaning.
 
-## 5. Observation, timeline and scenes
+## 5. Animation observation
 
-Not in this RFC. `__riObserveAnimation` runs on the JS thread and feeds the Workbench timeline and scenes. Reporting a derived animation's start from the UI thread (through `runOnJS` / `scheduleOnRN`) is a separate step. Until then these animations get sliders and *Apply to code*, but do not appear as blocks in the timeline.
+Not in this RFC. Assignment-based animations also report each start through `__riObserveAnimation` on the JS thread (used by scenes' "already ran" detection and by the paused Workbench timeline). Derived animations do not report starts: they get sliders and *Apply to code*, which is what tuning needs. Reporting from the UI thread (through `runOnJS` / `scheduleOnRN`) can be added later if a client needs it.
 
 ## Out of scope
 
 - `useAnimatedStyle` and `useAnimatedReaction` callbacks, gesture callbacks, `runOnUI` / `scheduleOnUI`.
 - Callbacks passed by reference, conditional or nested returns inside inner functions.
 - Adding a delay to a bare call.
-- Timeline observation (§5).
+- Start observation (§5), the Workbench timeline (paused) and scenes: a derived value is not a motion function, so RFC 0008 scenes do not apply.
 
 ## Open questions
 
