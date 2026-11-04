@@ -49,6 +49,7 @@ import {
   timelineScaleKey
 } from "./timeline-model";
 import { ControlInspector } from "./ControlInspector";
+import { ShellStudioSidebar, ShellStudioInspector, useShellStudioState } from "./ShellStudio";
 import { TIMELINE_HEIGHT_STORAGE_KEY, clampTimelineHeight } from "./layout";
 import { themeChoiceLabel, useWorkbenchTheme } from "./theme";
 import "@runtime-inspector/panel-dialkit/styles.css";
@@ -105,6 +106,8 @@ interface ViewportBenchmarkResult {
 }
 
 function App() {
+  const [workbenchMode, setWorkbenchMode] = useState<"motion" | "shell">("motion");
+  const shellStudio = useShellStudioState();
   const { choice: themeChoice, resolved: resolvedTheme, cycle: cycleTheme } = useWorkbenchTheme();
   const themeLabel = themeChoiceLabel(themeChoice);
   const state = useSyncExternalStore(session.subscribe, session.getState);
@@ -1321,7 +1324,7 @@ function App() {
 
   return (
     <main
-      className={window.runtimeDesktop ? "workbench desktop" : "workbench"}
+      className={(window.runtimeDesktop ? "workbench desktop" : "workbench") + (workbenchMode === "shell" ? " shell-studio-mode" : "")}
       style={
         timelineHeight !== undefined
           ? ({ "--wb-timeline-h": `${timelineHeight}px` } as CSSProperties)
@@ -1330,6 +1333,8 @@ function App() {
     >
       <header className="topbar">
         <div className="brand">Runtime Inspector</div>
+        <button type="button" className={"wb-button toggle" + (workbenchMode === "motion" ? " active" : "")} aria-pressed={workbenchMode === "motion"} onClick={() => setWorkbenchMode("motion")}>Motion</button>
+        <button type="button" className={"wb-button toggle" + (workbenchMode === "shell" ? " active" : "")} aria-pressed={workbenchMode === "shell"} onClick={() => { setWorkbenchMode("shell"); setSidebarVisible(true); }}>Shell Studio</button>
         <button
           type="button"
           className="wb-button toggle"
@@ -1431,6 +1436,7 @@ function App() {
       >
         {sidebarVisible ? (
           <aside className="sidebar panel">
+            {workbenchMode === "shell" ? <ShellStudioSidebar studio={shellStudio} /> : <>
             <div className="sidebar-tabs" role="tablist" aria-label="Sidebar">
               <button
                 type="button"
@@ -1570,10 +1576,12 @@ function App() {
                 })
               )}
             </div>
+            </>}
           </aside>
         ) : null}
 
         <section className="runtime-stage">
+          {workbenchMode === "shell" ? <div className="studio-stage-note">iOS Simulator · Real device preview</div> : null}
           <div className="runtime-surface">
             {runtimeCapture?.source === "window" ? (
               <div className="runtime-video-shell">
@@ -1659,6 +1667,7 @@ function App() {
         </section>
 
         <aside className="inspector panel">
+          {workbenchMode === "shell" ? <ShellStudioInspector studio={shellStudio} /> : <>
           <div className="panel-title">Inspector</div>
           {inspectorMode === "animation" ? (
             selectedAnimation ? (
@@ -1688,6 +1697,7 @@ function App() {
           ) : (
             <Empty text="Select a runtime control, probe, or timeline segment." />
           )}
+          </>}
         </aside>
       </section>
 
