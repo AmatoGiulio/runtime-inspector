@@ -33,6 +33,7 @@
     "@babel/preset-typescript": "^7.26.0",
     "@babel/types": "^7.26.0",
     "@types/babel__core": "^7.20.5",
+    "babel-plugin-react-compiler": "1.0.0",
     "tsup": "^8.3.5",
     "vitest": "^4.1.9"
   }
