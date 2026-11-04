@@ -59,7 +59,7 @@ describe("__riAnimationConfig", () => {
   });
 
   it("publishes one slider control in the auto schema after the debounce", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig } = await import("./animation-config");
 
     __riAnimationConfig({ duration: 260 }, [durationBinding()]);
@@ -84,7 +84,7 @@ describe("__riAnimationConfig", () => {
   });
 
   it("does not schedule another publish when called again with the same binding", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig } = await import("./animation-config");
 
     __riAnimationConfig({ duration: 260 }, [durationBinding()]);
@@ -122,7 +122,7 @@ describe("__riAnimationConfig", () => {
   });
 
   it("resets to the new declared value and republishes when the source literal changes", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { applyControlPatch } = await import("./index");
     const { __riAnimationConfig } = await import("./animation-config");
 
@@ -150,7 +150,7 @@ describe("__riAnimationConfig", () => {
 
   it("is a no-op in production - returns config and registers nothing", async () => {
     vi.stubGlobal("__DEV__", false);
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
     const { __riAnimationConfig } = await import("./animation-config");
     const config = { duration: 260 };
@@ -163,7 +163,7 @@ describe("__riAnimationConfig", () => {
   });
 
   it("ignores a binding whose declared value is not finite", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
     const { __riAnimationConfig } = await import("./animation-config");
     const config = { duration: Number.NaN };
@@ -314,7 +314,7 @@ describe("movable start helpers (RFC 0005 3c)", () => {
     });
 
     it("publishes one slider with the given fields and does not re-register on repeat calls", async () => {
-      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
       const { __riAnimationDelay } = await import("./animation-config");
 
       __riAnimationDelay(120, delayBinding());
@@ -343,7 +343,7 @@ describe("movable start helpers (RFC 0005 3c)", () => {
     });
 
     it("returns the original argument and registers nothing for a binding without a control", async () => {
-      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
       const registerSpy = vi.spyOn(await import("./auto"), "registerRuntimeValue");
       const { __riAnimationDelay } = await import("./animation-config");
       const { consumeAppliedStartDelay } = await import("./animation-start-state");
@@ -406,7 +406,7 @@ describe("movable start helpers (RFC 0005 3c)", () => {
     });
 
     it("publishes one slider declared at 0 with the given fields", async () => {
-      const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+      const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
       const { __riAnimationStart } = await import("./animation-config");
 
       __riAnimationStart({}, startBinding(), vi.fn());
@@ -645,7 +645,7 @@ describe("literal anchors (RFC 0007)", () => {
   });
 
   it("copies the literal of every helper's binding onto its control", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig, __riAnimationDelay, __riAnimationStart } = await import(
       "./animation-config"
     );
@@ -694,7 +694,7 @@ describe("literal anchors (RFC 0007)", () => {
   });
 
   it("re-registers a new anchor for the same literal, keeping the tuned value", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { applyControlPatch } = await import("./index");
     const { __riAnimationConfig } = await import("./animation-config");
     const before = { ...literalBase, parameter: "duration" as const, init: "380" };
@@ -725,7 +725,7 @@ describe("literal anchors (RFC 0007)", () => {
   });
 
   it("publishes the declared literal as the default when the schema republishes while tuned", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { applyControlPatch } = await import("./index");
     const { __riAnimationConfig } = await import("./animation-config");
 
@@ -743,7 +743,7 @@ describe("literal anchors (RFC 0007)", () => {
   });
 
   it("publishes no literal field for a binding without one", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig } = await import("./animation-config");
 
     __riAnimationConfig({ duration: 260 }, [durationBinding()]);
@@ -797,7 +797,7 @@ describe("__riModuleCallsites (Fast Refresh orphan cleanup)", () => {
   });
 
   it("disposes only the orphan controls of that file and republishes the auto schema", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { applyControlPatch } = await import("./index");
     const { __riAnimationConfig, __riAnimationStart, __riModuleCallsites } = await import(
       "./animation-config"
@@ -850,7 +850,7 @@ describe("__riModuleCallsites (Fast Refresh orphan cleanup)", () => {
   });
 
   it("does not touch a file whose name is a prefix of another file", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig, __riModuleCallsites } = await import("./animation-config");
     const longer = "src/Card.tsx.bak:9:6:timing:card.moveX";
 
@@ -880,7 +880,7 @@ describe("__riModuleCallsites (Fast Refresh orphan cleanup)", () => {
   });
 
   it("is a no-op in production", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riAnimationConfig, __riModuleCallsites } = await import("./animation-config");
 
     __riAnimationConfig({ duration: 260 }, [siteDuration(OLD_SITE)]);

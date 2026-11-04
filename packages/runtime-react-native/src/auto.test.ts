@@ -52,7 +52,7 @@ describe("__riInspect", () => {
   it("infers a slider control with the declared range", async () => {
     const { __riInspect } = await import("./auto");
     const { definePanel } = await import("./index");
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
 
     const sharedValue = { value: 8 };
     __riInspect(sharedValue, "cardRadius", { min: 8, max: 48, step: 2, unit: "px", label: "Card Radius" });
@@ -71,7 +71,7 @@ describe("__riInspect", () => {
   });
 
   it("derives a default label from the variable name when no label is given", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     __riInspect({ value: 1 }, "moveX", { min: -10, max: 10 });
@@ -82,7 +82,7 @@ describe("__riInspect", () => {
   });
 
   it("infers a toggle from a boolean value with no min/max needed", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     __riInspect({ value: true }, "enabled", {});
@@ -94,7 +94,7 @@ describe("__riInspect", () => {
   });
 
   it("forwards a source anchor from meta onto the published control", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     const source = {
@@ -114,7 +114,7 @@ describe("__riInspect", () => {
   });
 
   it("omits the source field entirely when no source anchor is given", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     __riInspect({ value: 0 }, "moveX", { min: -120, max: 120 });
@@ -127,7 +127,7 @@ describe("__riInspect", () => {
   });
 
   it("keeps the rest of the meta (label, range, step, unit) working alongside a source anchor", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     const source = {
@@ -158,7 +158,7 @@ describe("__riInspect", () => {
 
   it("re-registering the same name via __riInspect overwrites silently (no suffix, no warning)", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     __riInspect({ value: 1 }, "moveX", { min: 0, max: 10 });
@@ -174,7 +174,7 @@ describe("__riInspect", () => {
   });
 
   it("debounces multiple registrations within the window into a single publish", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     __riInspect({ value: 1 }, "a", { min: 0, max: 1 });
@@ -190,7 +190,7 @@ describe("__riInspect", () => {
   });
 
   it("dispose releases the base name so a later registration is not suffixed", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { registerRuntimeValue } = await import("./auto");
 
     const dispose = registerRuntimeValue({
@@ -219,7 +219,7 @@ describe("__riInspect", () => {
   });
 
   it("dispose removes the control and republishes without it", async () => {
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { registerRuntimeValue } = await import("./auto");
 
     const dispose = registerRuntimeValue({
@@ -239,7 +239,7 @@ describe("__riInspect", () => {
 
   it("two live registrations of the same name suffix and warn", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { registerRuntimeValue } = await import("./auto");
 
     registerRuntimeValue({ kind: "value", name: "dupe", sharedValue: { value: 1 }, meta: { min: 0, max: 1 }, target: 1 });
@@ -335,7 +335,7 @@ describe("__riInspect", () => {
 
   it("re-inspecting the same name (re-render/hot-reload) overwrites in place - one control, no warning", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     const sharedValue1 = { value: 8 };
@@ -363,7 +363,7 @@ describe("__riInspect", () => {
 
   it("__riInspect then a live useRuntimeValue claim on the same name suffixes and warns", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect, registerRuntimeValue } = await import("./auto");
 
     __riInspect({ value: 1 }, "x", { min: 0, max: 10 });
@@ -380,7 +380,7 @@ describe("__riInspect", () => {
 
   it("a live useRuntimeValue claim then __riInspect on the same name suffixes and warns", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect, registerRuntimeValue } = await import("./auto");
 
     registerRuntimeValue({ kind: "value", name: "x", sharedValue: { value: 1 }, meta: { min: 0, max: 10 }, target: 1 });
@@ -397,7 +397,7 @@ describe("__riInspect", () => {
 
   it("is a no-op in production - returns the value unchanged and never registers", async () => {
     vi.stubGlobal("__DEV__", false);
-    const definePanelSpy = vi.spyOn(await import("./index"), "definePanel");
+    const definePanelSpy = vi.spyOn(await import("./core"), "definePanel");
     const { __riInspect } = await import("./auto");
 
     const sharedValue = { value: 5 };

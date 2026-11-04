@@ -23,7 +23,7 @@ import {
   trigger as triggerControl,
   type RuntimeInspectorOptions,
   type SharedValueLike
-} from "./index";
+} from "./core";
 import { deriveLabel, inferKindFromValue } from "./use-inspector";
 
 declare const __DEV__: boolean | undefined;

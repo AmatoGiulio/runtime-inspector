@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CubicBezier, SpringValue } from "@runtime-inspector/protocol";
-import type { SharedValueLike } from "./index";
+import type { SharedValueLike } from "./core";
 import { registerRuntimeValue, type InspectMeta, type RuntimeValueRegistration } from "./auto";
 import { defaultMakeMutable, inferKindFromValue } from "./use-inspector";
 

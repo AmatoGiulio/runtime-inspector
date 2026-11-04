@@ -15,7 +15,7 @@ import {
   group,
   trigger as triggerControl,
   updatePanelSchema
-} from "./index";
+} from "./core";
 
 declare const __DEV__: boolean | undefined;
 
