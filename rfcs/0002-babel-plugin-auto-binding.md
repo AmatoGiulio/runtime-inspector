@@ -49,6 +49,22 @@ const moveX = __riInspect(useSharedValue(0), "moveX", { min: -120, max: 120, ste
 - Publishing is debounced (~100ms after the last registration) through the normal `definePanel` + `connect()` path, so hot reload re-registers cleanly through the existing session-replacement logic. Values registered later re-publish the schema (additive).
 - Returns the same shared value (transparent to Reanimated).
 
+### Amendment (issue #8): disposal on unmount
+
+Originally `__riInspect` never disposed its registration, so after navigating away the control stayed in the panel, driving a value nothing rendered. It now has the mount lifecycle the other entry points have. For a declaration in a component or hook body the plugin emits:
+
+```ts
+const moveX = useSharedValue(0);
+const _riInspect = useRiInspect("moveX");
+__riInspect(moveX, "moveX", { min: -120, max: 120, step: 1, unit: "px", label: "Move X" }, _riInspect);
+```
+
+- `useRiInspect(name)` takes only static data (the RFC 0008 amendment's React Compiler rule) and returns an instance token; `__riInspect` records its registration under that token.
+- On unmount the instance's control is removed, unless a newer instance rendered in the meantime (a navigation renders the new screen before the old one's cleanup) and owns it. Several mounted instances (list rows) still share one control: the latest render owns it, and when the owner unmounts the control moves to the newest instance still mounted.
+- A remount without a render (StrictMode, a kept-alive screen) registers again with the value the instance last recorded. A screen opened again gets the bare name back, never a suffix.
+- Without a token (a hand-written call, or a declaration outside a function body, which is still wrapped in place) nothing changes: the registration is never disposed.
+- The plugin and `@runtime-inspector/react-native` must be upgraded together, as for the RFC 0008 amendment.
+
 ## Scope limits (first pass)
 
 - No trigger support via directive (functions are not `useSharedValue`s; `useInspector` covers triggers).

@@ -18,6 +18,7 @@ import {
 } from "./motion";
 
 const HELPER_NAME = "__riInspect";
+const INSPECT_HOOK_NAME = "useRiInspect";
 const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
 const ANIMATION_CONFIG_HELPER_NAME = "__riAnimationConfig";
 const ANIMATION_DELAY_HELPER_NAME = "__riAnimationDelay";
@@ -217,7 +218,29 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
       // the React Compiler recognizes `useSharedValue`'s result and lets callbacks assign
       // `.value`; behind a wrapper call that result is an ordinary value it refuses to mutate.
       const declaration = path.parentPath;
-      if (declaration?.isVariableDeclaration() && declaration.parentPath?.isBlockStatement()) {
+      if (declaration?.isVariableDeclaration() && isFunctionBodyBlock(declaration.parentPath)) {
+        // Inside a component or hook body: `useRiInspect` ties the registration to the mounted
+        // instance, so the control goes away on unmount (issue #8). It takes only static data,
+        // so the React Compiler neither memoizes it nor freezes the shared value.
+        const token = path.scope.generateUidIdentifier("riInspect");
+        insertAfterDeclaration(declaration, [
+          t.variableDeclaration("const", [
+            t.variableDeclarator(
+              token,
+              t.callExpression(t.identifier(INSPECT_HOOK_NAME), [t.stringLiteral(name)])
+            )
+          ]),
+          t.expressionStatement(
+            t.callExpression(t.identifier(HELPER_NAME), [
+              t.identifier(name),
+              t.stringLiteral(name),
+              metaObject,
+              t.cloneNode(token)
+            ])
+          )
+        ]);
+        ensureRuntimeHelperImport(path, INSPECT_HOOK_NAME, api);
+      } else if (declaration?.isVariableDeclaration() && declaration.parentPath?.isBlockStatement()) {
         insertAfterDeclaration(declaration, [
           t.expressionStatement(
             t.callExpression(t.identifier(HELPER_NAME), [
@@ -343,6 +366,18 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
   };
 
   return plugin;
+}
+
+/** A function's own body block, where a hook call is allowed (not a nested `if` or loop block). */
+function isFunctionBodyBlock(path: NodePath | null | undefined): boolean {
+  if (!path?.isBlockStatement()) return false;
+  const parent = path.parentPath;
+  return Boolean(
+    parent &&
+      (parent.isFunctionDeclaration() ||
+        parent.isFunctionExpression() ||
+        parent.isArrowFunctionExpression())
+  );
 }
 
 function isUseSharedValueCallee(callee: Node): boolean {

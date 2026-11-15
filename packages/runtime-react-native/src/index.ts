@@ -46,7 +46,7 @@ export type {
   InferredKind
 } from "./use-inspector";
 
-export { __riInspect } from "./auto";
+export { __riInspect, useRiInspect } from "./auto";
 export type { InspectMeta } from "./auto";
 
 export { defineScene, defineScenes, configureScenes, useScene } from "./scenes";

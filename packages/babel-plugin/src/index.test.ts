@@ -80,8 +80,28 @@ describe("runtime-inspector babel plugin", () => {
     `);
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      'const opacity = useSharedValue(0); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",'
+      'const opacity = useSharedValue(0); const _riInspect = useRiInspect("opacity"); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",'
     );
+    expect(normalized).toMatch(/__riInspect\(opacity, "opacity", \{[^]*\}, _riInspect\);/);
+    expect(normalized).toContain(
+      'import { useRiInspect, __riInspect, __riModuleCallsites } from "@runtime-inspector/react-native"'
+    );
+  });
+
+  it("does not tie a declaration nested in a block to an instance (no hook outside the body)", () => {
+    const code = transform(`
+      import { useSharedValue } from "react-native-reanimated";
+      export const Card = () => {
+        {
+          // @inspect min=0 max=1
+          const opacity = useSharedValue(0);
+        }
+        return null;
+      };
+    `);
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain('__riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",');
+    expect(normalized).not.toContain("useRiInspect(");
   });
 
   it("keeps source order for annotated declarators of one declaration", () => {
@@ -1278,7 +1298,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     `);
 
     expect(normalized).toContain(
-      'const opacity = useSharedValue(0); const _riProbe = useRiProbe("opacity", { component: "Card", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, opacity); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } });'
+      'const opacity = useSharedValue(0); const _riProbe = useRiProbe("opacity", { component: "Card", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, opacity); const _riInspect = useRiInspect("opacity"); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } }, _riInspect);'
     );
     expect(normalized).toContain('schemaId: "auto"');
   });
