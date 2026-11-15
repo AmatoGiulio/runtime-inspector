@@ -16,6 +16,7 @@ import {
   MOTION_HELPER_NAME,
   type DiscoveredAnimation
 } from "./motion";
+import { runsOnJsThread } from "./thread";
 
 const HELPER_NAME = "__riInspect";
 const ANIMATION_OBSERVER_HELPER_NAME = "__riObserveAnimation";
@@ -121,9 +122,11 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
           stateBag._riAutoValueNames = new Set();
           stateBag._riCallsiteIds = new Set();
           stateBag._riReanimatedModule = programHasReanimatedImport(programPath.node);
-          stateBag._riSkipAnimationInstrumentation = shouldSkipAnimationInstrumentation(
-            state.filename ?? state.file.opts.filename ?? undefined
-          );
+          // Dependencies are skipped entirely: Apply to code cannot write into them, and their
+          // animations are not the app's to tune (issue #8).
+          const filename = state.filename ?? state.file.opts.filename ?? undefined;
+          stateBag._riSkipAnimationInstrumentation =
+            shouldSkipAnimationInstrumentation(filename) || isDependencyFile(filename);
 
           // RFC 0008: automatic motions and probes, decided on the untouched program so the
           // callsite ids match the ones the AssignmentExpression visitor emits afterwards.
@@ -236,111 +239,120 @@ export default function runtimeInspectorBabelPlugin(api: BabelAPI): PluginObj {
       ensureHelperImport(path, state, api);
     },
     AssignmentExpression(path: NodePath<AssignmentExpression>, state: PluginPass) {
-      if (isProduction) return;
-      if (programState(path)._riSkipAnimationInstrumentation) return;
-
-      const found = discoverAnimation(path, state);
-      if (!found) return;
-      const { target, shape } = found;
-      const right = path.node.right as CallExpression;
-
-      const t = api.types;
-      const { animationKind, delayed } = shape;
-      const built = buildAnimationMeta(
-        path,
-        state,
-        target,
-        animationKind,
-        innerAnimationCall(right, delayed),
-        api
-      );
-      if (!built) return;
-      const { meta, callsiteId, literalBase } = built;
-      programState(path)._riCallsiteIds?.add(callsiteId);
-
-      // Preserve the application's original Reanimated call exactly. Runtime
-      // Inspector observes the animation object *after* Reanimated constructs it
-      // and returns that same object unchanged.
-      const transformed = t.cloneNode(right, true);
-      const animationCall = innerAnimationCall(transformed, delayed);
-
-      // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
-      // slider control. Only the config argument is wrapped; the application still
-      // makes its own `withTiming` / `withSpring` call.
-      // Bindings come from the original call so each literal's source text is known.
-      const bindings = literalParameterBindings(
-        animationKind,
-        innerAnimationCall(right, delayed).arguments[1],
-        state.file.code
-      );
-      if (bindings.length > 0) {
-        animationCall.arguments[1] = t.callExpression(
-          t.identifier(ANIMATION_CONFIG_HELPER_NAME),
-          [
-            animationCall.arguments[1],
-            t.arrayExpression(
-              bindings.map((binding) =>
-                parameterBindingExpression(t, callsiteId, target.target, binding, literalBase)
-              )
-            )
-          ]
-        );
-        meta.properties.push(parameterControlsProperty(t, callsiteId, bindings));
-      }
-
-      // RFC 0005 §3c: the start is movable through a delay control. A delayed
-      // call gets its delay argument wrapped; a bare call is wrapped whole, and
-      // only when the module already imports Reanimated.
-      let observed: BabelTypesNamespace.Expression = transformed;
-      let startHelperName: string | undefined;
-      if (delayed) {
-        const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
-        const delayInit = sourceText(right.arguments[0], state.file.code);
-        transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
-          transformed.arguments[0],
-          startBindingExpression(
-            t,
-            callsiteId,
-            target.target,
-            declaredDelay,
-            literalBase && delayInit !== undefined
-              ? { ...literalBase, parameter: "delay", init: delayInit }
-              : undefined
-          )
-        ]);
-        if (declaredDelay !== undefined) {
-          meta.properties.push(startControlProperty(t, callsiteId));
-        }
-        startHelperName = ANIMATION_DELAY_HELPER_NAME;
-      } else if (hasReanimatedImport(path)) {
-        observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
-          transformed,
-          startBindingExpression(
-            t,
-            callsiteId,
-            target.target,
-            0,
-            literalBase && { ...literalBase, parameter: "delay", init: null }
-          ),
-          t.identifier(WITH_DELAY_LOCAL_NAME)
-        ]);
-        meta.properties.push(startControlProperty(t, callsiteId));
-        startHelperName = ANIMATION_START_HELPER_NAME;
-        ensureWithDelayImport(path, api);
-      }
-
-      path.get("right").replaceWith(
-        t.callExpression(t.identifier(ANIMATION_OBSERVER_HELPER_NAME), [observed, meta])
-      );
-      ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
-      if (bindings.length > 0) {
-        ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
-      }
-      if (startHelperName) {
-        ensureRuntimeHelperImport(path, startHelperName, api);
-      }
+      instrumentAnimationWrite(path, state);
+    },
+    // Reanimated 4 / React Compiler style: `x.set(withSpring(...))` (issue #8).
+    CallExpression(path: NodePath<CallExpression>, state: PluginPass) {
+      instrumentAnimationWrite(path, state);
     }
   };
+
+  function instrumentAnimationWrite(path: AnimationWritePath, state: PluginPass): void {
+    if (isProduction) return;
+    if (programState(path)._riSkipAnimationInstrumentation) return;
+
+    const found = discoverAnimation(path, state);
+    if (!found) return;
+    const { target, shape, write } = found;
+    const right = write.animation;
+
+    const t = api.types;
+    const { animationKind, delayed } = shape;
+    const built = buildAnimationMeta(
+      path,
+      write,
+      state,
+      target,
+      animationKind,
+      innerAnimationCall(right, delayed),
+      api
+    );
+    if (!built) return;
+    const { meta, callsiteId, literalBase } = built;
+    programState(path)._riCallsiteIds?.add(callsiteId);
+
+    // Preserve the application's original Reanimated call exactly. Runtime
+    // Inspector observes the animation object *after* Reanimated constructs it
+    // and returns that same object unchanged.
+    const transformed = t.cloneNode(right, true);
+    const animationCall = innerAnimationCall(transformed, delayed);
+
+    // RFC 0005 §3b/§3c: each eligible literal parameter is backed by an ordinary
+    // slider control. Only the config argument is wrapped; the application still
+    // makes its own `withTiming` / `withSpring` call.
+    // Bindings come from the original call so each literal's source text is known.
+    const bindings = literalParameterBindings(
+      animationKind,
+      innerAnimationCall(right, delayed).arguments[1],
+      state.file.code
+    );
+    if (bindings.length > 0) {
+      animationCall.arguments[1] = t.callExpression(
+        t.identifier(ANIMATION_CONFIG_HELPER_NAME),
+        [
+          animationCall.arguments[1],
+          t.arrayExpression(
+            bindings.map((binding) =>
+              parameterBindingExpression(t, callsiteId, target.target, binding, literalBase)
+            )
+          )
+        ]
+      );
+      meta.properties.push(parameterControlsProperty(t, callsiteId, bindings));
+    }
+
+    // RFC 0005 §3c: the start is movable through a delay control. A delayed
+    // call gets its delay argument wrapped; a bare call is wrapped whole, and
+    // only when the module already imports Reanimated.
+    let observed: BabelTypesNamespace.Expression = transformed;
+    let startHelperName: string | undefined;
+    if (delayed) {
+      const declaredDelay = eligibleDelayLiteral(transformed.arguments[0]);
+      const delayInit = sourceText(right.arguments[0], state.file.code);
+      transformed.arguments[0] = t.callExpression(t.identifier(ANIMATION_DELAY_HELPER_NAME), [
+        transformed.arguments[0],
+        startBindingExpression(
+          t,
+          callsiteId,
+          target.target,
+          declaredDelay,
+          literalBase && delayInit !== undefined
+            ? { ...literalBase, parameter: "delay", init: delayInit }
+            : undefined
+        )
+      ]);
+      if (declaredDelay !== undefined) {
+        meta.properties.push(startControlProperty(t, callsiteId));
+      }
+      startHelperName = ANIMATION_DELAY_HELPER_NAME;
+    } else if (hasReanimatedImport(path)) {
+      observed = t.callExpression(t.identifier(ANIMATION_START_HELPER_NAME), [
+        transformed,
+        startBindingExpression(
+          t,
+          callsiteId,
+          target.target,
+          0,
+          literalBase && { ...literalBase, parameter: "delay", init: null }
+        ),
+        t.identifier(WITH_DELAY_LOCAL_NAME)
+      ]);
+      meta.properties.push(startControlProperty(t, callsiteId));
+      startHelperName = ANIMATION_START_HELPER_NAME;
+      ensureWithDelayImport(path, api);
+    }
+
+    write.animationPath.replaceWith(
+      t.callExpression(t.identifier(ANIMATION_OBSERVER_HELPER_NAME), [observed, meta])
+    );
+    ensureRuntimeHelperImport(path, ANIMATION_OBSERVER_HELPER_NAME, api);
+    if (bindings.length > 0) {
+      ensureRuntimeHelperImport(path, ANIMATION_CONFIG_HELPER_NAME, api);
+    }
+    if (startHelperName) {
+      ensureRuntimeHelperImport(path, startHelperName, api);
+    }
+  }
 
   return plugin;
 }
@@ -426,19 +438,64 @@ function innerAnimationCall(right: CallExpression, delayed: boolean): CallExpres
   return delayed ? (right.arguments[1] as CallExpression) : right;
 }
 
-function animationAssignmentTarget(
-  left: AssignmentExpression["left"],
+/** A discovered animation write: `<target>.value = <animation>` or `<target>.set(<animation>)`. */
+type AnimationWritePath = NodePath<AssignmentExpression> | NodePath<CallExpression>;
+
+interface AnimationWrite {
+  /** The written side: the assignment's left-hand side, or the `.set` callee (`x.set`). */
+  written: Node;
+  /** `value` for an assignment, `set` for a call. */
+  member: "value" | "set";
+  /** The animation side: the assignment's right-hand side, or `.set`'s single argument. */
+  animation: CallExpression;
+  animationPath: NodePath;
+}
+
+/**
+ * The two write forms. `.set` must be a non-computed member call with exactly one argument,
+ * and that argument an animation call, so `map.set(key, value)` and the like never match.
+ */
+function animationWrite(path: AnimationWritePath): AnimationWrite | undefined {
+  if (path.isAssignmentExpression()) {
+    const { node } = path;
+    if (node.operator !== "=" || node.right.type !== "CallExpression") return undefined;
+    return {
+      written: node.left,
+      member: "value",
+      animation: node.right,
+      animationPath: path.get("right")
+    };
+  }
+  if (!path.isCallExpression()) return undefined;
+  const { callee, arguments: args } = path.node;
+  if (callee.type !== "MemberExpression" || callee.computed) return undefined;
+  if (callee.property.type !== "Identifier" || callee.property.name !== "set") return undefined;
+  if (args.length !== 1 || args[0].type !== "CallExpression") return undefined;
+  return {
+    written: callee,
+    member: "set",
+    animation: args[0],
+    animationPath: path.get("arguments.0") as NodePath
+  };
+}
+
+/**
+ * `{ target, root }` of the written side: `titleY.value` / `titleY.set` give target `titleY`
+ * (`card.moveX.value` gives `card.moveX`) and root `titleY` (`card`).
+ */
+function animationWriteTarget(
+  { written, member }: AnimationWrite,
   state: PluginPass
 ): { target: string; root: string } | undefined {
-  if (left.type !== "MemberExpression" || left.computed) return undefined;
-  if (left.property.type !== "Identifier" || left.property.name !== "value") return undefined;
-  if (left.start == null || left.end == null) return undefined;
+  if (written.type !== "MemberExpression" || written.computed) return undefined;
+  if (written.property.type !== "Identifier" || written.property.name !== member) return undefined;
+  if (written.start == null || written.end == null) return undefined;
 
-  const source = state.file.code.slice(left.start, left.end);
-  const target = source.replace(/\.value\s*$/, "");
+  const source = state.file.code.slice(written.start, written.end);
+  const target = source.replace(member === "value" ? /\.value\s*$/ : /\.set\s*$/, "");
   if (!target || target === source) return undefined;
 
-  let object: Node = left.object;
+  let object: Node = written.object;
   while (object.type === "MemberExpression" && !object.computed) {
     object = object.object;
   }
@@ -448,32 +505,31 @@ function animationAssignmentTarget(
 }
 
 /**
- * The eligibility rules of the AssignmentExpression visitor: a `<target>.value = <animation>`
- * assignment of an accepted shape, outside known worklet contexts, with a callsite id.
- * Shared with the RFC 0008 motion pass so both use the same ids.
+ * The eligibility rules of the animation write visitors: a `<target>.value = <animation>`
+ * assignment or `<target>.set(<animation>)` call of an accepted shape, on the JS thread, with
+ * a callsite id. Shared with the RFC 0008 motion pass so both use the same ids.
  */
 function discoverAnimation(
-  path: NodePath<AssignmentExpression>,
+  path: AnimationWritePath,
   state: PluginPass
 ):
   | {
       target: { target: string; root: string };
       shape: { animationKind: AnimationKind; delayed: boolean };
+      write: AnimationWrite;
       discovered: DiscoveredAnimation;
     }
   | undefined {
-  if (path.node.operator !== "=") return undefined;
+  const write = animationWrite(path);
+  if (!write) return undefined;
 
-  const target = animationAssignmentTarget(path.node.left, state);
+  const target = animationWriteTarget(write, state);
   if (!target) return undefined;
 
-  const right = path.node.right;
-  if (right.type !== "CallExpression") return undefined;
-
-  const shape = animationAssignmentShape(right);
+  const shape = animationAssignmentShape(write.animation);
   if (!shape) return undefined;
 
-  if (isInsideKnownWorkletContext(path)) return undefined;
+  if (!runsOnJsThread(path)) return undefined;
 
   const site = animationCallsite(path, state, target, shape.animationKind);
   if (!site) return undefined;
@@ -481,6 +537,7 @@ function discoverAnimation(
   return {
     target,
     shape,
+    write,
     discovered: { callsiteId: site.callsiteId, target: target.target, root: target.root }
   };
 }
@@ -494,7 +551,7 @@ function relativeSourceFile(state: PluginPass): string | undefined {
 }
 
 function animationCallsite(
-  path: NodePath<AssignmentExpression>,
+  path: AnimationWritePath,
   state: PluginPass,
   target: { target: string; root: string },
   animationKind: AnimationKind
@@ -507,7 +564,8 @@ function animationCallsite(
 }
 
 function buildAnimationMeta(
-  path: NodePath<AssignmentExpression>,
+  path: AnimationWritePath,
+  write: AnimationWrite,
   state: PluginPass,
   target: { target: string; root: string },
   animationKind: AnimationKind,
@@ -522,10 +580,7 @@ function buildAnimationMeta(
     stateBag._riInspectorSchemas?.get(target.root) ??
     (stateBag._riAutoValueNames?.has(target.root) ? "auto" : undefined);
 
-  const expression =
-    path.node.right.start != null && path.node.right.end != null
-      ? state.file.code.slice(path.node.right.start, path.node.right.end)
-      : "";
+  const expression = sourceText(write.animation, state.file.code) ?? "";
 
   const t = api.types;
   const enclosure = collectEnclosure(path);
@@ -588,7 +643,7 @@ function buildAnimationMeta(
     );
   }
 
-  const left = path.node.left;
+  const left = write.written;
   const literalBase: LiteralAnchorBase | undefined =
     left.start != null && left.end != null
       ? {
@@ -902,72 +957,6 @@ function memberExpressionParts(node: Node): string[] | undefined {
 
   const objectParts = memberExpressionParts(node.object);
   return objectParts ? [...objectParts, node.property.name] : undefined;
-}
-
-const knownAutoWorkletCalls = new Set([
-  "useAnimatedStyle",
-  "useAnimatedProps",
-  "useDerivedValue",
-  "useAnimatedReaction",
-  "useAnimatedScrollHandler",
-  "useFrameCallback"
-]);
-
-const knownGestureWorkletMethods = new Set([
-  "onBegin",
-  "onStart",
-  "onUpdate",
-  "onChange",
-  "onEnd",
-  "onFinalize",
-  "onTouchesDown",
-  "onTouchesMove",
-  "onTouchesUp",
-  "onTouchesCancelled"
-]);
-
-function isInsideKnownWorkletContext(path: NodePath): boolean {
-  let current: NodePath | null = path.parentPath;
-
-  while (current) {
-    if (
-      current.isFunctionExpression() ||
-      current.isArrowFunctionExpression() ||
-      current.isFunctionDeclaration()
-    ) {
-      if (
-        current.node.body.type === "BlockStatement" &&
-        (current.node.body.directives ?? []).some(
-          (directive) => directive.value.value === "worklet"
-        )
-      ) {
-        return true;
-      }
-
-      const parent = current.parentPath;
-      if (parent?.isCallExpression()) {
-        const callee = parent.node.callee;
-        if (
-          callee.type === "Identifier" &&
-          knownAutoWorkletCalls.has(callee.name)
-        ) {
-          return true;
-        }
-        if (
-          callee.type === "MemberExpression" &&
-          !callee.computed &&
-          callee.property.type === "Identifier" &&
-          knownGestureWorkletMethods.has(callee.property.name)
-        ) {
-          return true;
-        }
-      }
-    }
-
-    current = current.parentPath;
-  }
-
-  return false;
 }
 
 /** Per-file plugin state, stored on the Program path. */

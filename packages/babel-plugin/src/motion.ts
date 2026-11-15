@@ -69,7 +69,8 @@ export interface MotionPassOptions {
   types: typeof BabelTypesNamespace;
   /** File path relative to the Babel root, as used in callsite ids. */
   file: string;
-  discover(path: NodePath<AssignmentExpression>): DiscoveredAnimation | undefined;
+  /** An animation write: an `x.value = ...` assignment or an `x.set(...)` call. */
+  discover(path: NodePath<AssignmentExpression> | NodePath<CallExpression>): DiscoveredAnimation | undefined;
   ensureImport(path: NodePath, helperName: string): void;
 }
 
@@ -131,8 +132,38 @@ function instrumentComponent(component: Component, options: MotionPassOptions): 
   const animatedDeclarators = new Set<Node>();
   const componentFn = component.fn.node;
 
+  const recordAnimation = (path: NodePath<AssignmentExpression> | NodePath<CallExpression>) => {
+    const animation = options.discover(path);
+    if (!animation) return;
+
+    // Nearest enclosing motion-function candidate; the walk stops at the component.
+    let current: NodePath | null = path.parentPath;
+    while (current && current.node !== componentFn) {
+      if (current.isFunction()) {
+        const candidate = byFunction.get(current.node);
+        if (candidate) {
+          candidate.callsites.push(animation.callsiteId);
+          break;
+        }
+      }
+      current = current.parentPath;
+    }
+
+    // RFC 0008 §5: a top-level shared value written directly by this animation.
+    if (animation.target !== animation.root) return;
+    const binding = path.scope.getBinding(animation.root);
+    const declarator = binding?.path;
+    if (
+      declarator?.isVariableDeclarator() &&
+      declarator.parentPath?.parentPath?.node === body.node
+    ) {
+      animatedDeclarators.add(declarator.node);
+    }
+  };
+
   component.fn.traverse({
     CallExpression(path) {
+      recordAnimation(path);
       const name = calleeName(path.node.callee);
       if (!name || !EXPLICIT_SCENE_HOOKS.has(name)) return;
       for (const argument of path.get("arguments")) {
@@ -143,32 +174,7 @@ function instrumentComponent(component: Component, options: MotionPassOptions): 
       }
     },
     AssignmentExpression(path) {
-      const animation = options.discover(path);
-      if (!animation) return;
-
-      // Nearest enclosing motion-function candidate; the walk stops at the component.
-      let current: NodePath | null = path.parentPath;
-      while (current && current.node !== componentFn) {
-        if (current.isFunction()) {
-          const candidate = byFunction.get(current.node);
-          if (candidate) {
-            candidate.callsites.push(animation.callsiteId);
-            break;
-          }
-        }
-        current = current.parentPath;
-      }
-
-      // RFC 0008 §5: a top-level shared value assigned directly by this animation.
-      if (animation.target !== animation.root) return;
-      const binding = path.scope.getBinding(animation.root);
-      const declarator = binding?.path;
-      if (
-        declarator?.isVariableDeclarator() &&
-        declarator.parentPath?.parentPath?.node === body.node
-      ) {
-        animatedDeclarators.add(declarator.node);
-      }
+      recordAnimation(path);
     }
   });
 
@@ -331,8 +337,9 @@ function motionInitializerFunction(
 }
 
 /**
- * RFC 0008 §1.3: every statement of the effect is an assignment to a `.value` member or a
- * call to a motion function of the same component.
+ * RFC 0008 §1.3: every statement of the effect is an assignment to a `.value` member, a
+ * one-argument `.set(...)` call (issue #8), or a call to a motion function of the same
+ * component.
  */
 function isPureMotionEffect(fn: NodePath<FunctionNode>, motionBindings: Set<Node | undefined>): boolean {
   const body = fn.node.body;
@@ -356,12 +363,32 @@ function isPureMotionEffect(fn: NodePath<FunctionNode>, motionBindings: Set<Node
         expression.left.property.name === "value"
       );
     }
+    if (
+      expression.type === "CallExpression" &&
+      expression.callee.type === "MemberExpression" &&
+      !expression.callee.computed &&
+      expression.callee.property.type === "Identifier" &&
+      expression.callee.property.name === "set"
+    ) {
+      // Only a shared value's `.set`: `map.set(...)` or `store.set(...)` is a side effect a
+      // replay must not repeat.
+      return expression.arguments.length === 1 && isSharedValueBinding(fn, expression.callee.object);
+    }
     if (expression.type === "CallExpression" && expression.callee.type === "Identifier") {
       const bindingNode = fn.scope.getBinding(expression.callee.name)?.path.node;
       return bindingNode !== undefined && motionBindings.has(bindingNode);
     }
     return false;
   });
+}
+
+/** Whether `node` is an identifier declared as `const x = useSharedValue(...)`. */
+function isSharedValueBinding(fn: NodePath<FunctionNode>, node: Node): boolean {
+  if (node.type !== "Identifier") return false;
+  const declarator = fn.scope.getBinding(node.name)?.path;
+  if (!declarator?.isVariableDeclarator()) return false;
+  const init = declarator.node.init;
+  return init?.type === "CallExpression" && calleeName(init.callee) === "useSharedValue";
 }
 
 /**
