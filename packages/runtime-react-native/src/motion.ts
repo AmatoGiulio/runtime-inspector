@@ -43,9 +43,9 @@ export function __riMotion<T extends Function>(id: string, fn: T, meta: MotionMe
   return fn;
 }
 
-/** One mounted component instance's motion: the function its latest render recorded. */
+/** One mounted component instance's motion: reads the function its latest render recorded. */
 interface MotionInstance {
-  fn?: () => unknown;
+  get?: () => (() => unknown) | undefined;
 }
 
 /** Instance token -> instance, for `__riMotionFn`. Entries live while the instance is mounted. */
@@ -75,7 +75,7 @@ export function useRiScene(id: string, meta: MotionMeta): string {
     }
     // Set again: StrictMode runs the cleanup below and then this effect without a render.
     motionInstances.set(token, instance);
-    const handle = bindMotion(id, () => instance.fn?.(), meta);
+    const handle = bindMotion(id, () => instance.get?.()?.(), meta);
     return () => {
       handle.dispose();
       motionInstances.delete(token);
@@ -96,9 +96,24 @@ export function useRiScene(id: string, meta: MotionMeta): string {
 export function __riMotionFn<T extends Function>(token: string, fn: T): T {
   const instance = motionInstances.get(token);
   if (instance) {
-    instance.fn = fn as unknown as () => unknown;
+    instance.get = () => fn as unknown as () => unknown;
   }
   return fn;
+}
+
+/**
+ * Injected with `useRiScene` (RFC 0008, amended 2026-11-15) after a motion function, in place
+ * of `__riMotionFn`: records a getter for the function, `() => play`, as the motion of the
+ * instance `token`. Handing the React Compiler the getter instead of the function keeps it
+ * from treating the call as one that may run the function during render, which it refuses
+ * when the function reads a ref ("Cannot access refs during render"). Not a hook.
+ */
+// eslint-disable-next-line @typescript-eslint/ban-types
+export function __riMotionGetter(token: string, get: () => Function): void {
+  const instance = motionInstances.get(token);
+  if (instance) {
+    instance.get = get as unknown as () => () => unknown;
+  }
 }
 
 /**

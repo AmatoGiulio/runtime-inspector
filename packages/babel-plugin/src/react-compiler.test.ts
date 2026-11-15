@@ -91,7 +91,7 @@ describe("with the React Compiler", () => {
     const { output } = compile(ANIMATED_CARD);
     // The compiler may hoist the static meta objects into its cache; the calls stay put.
     expect(output).toMatch(/const _riScene = useRiScene\("src\/Demo\.tsx:Card\.show", /);
-    expect(output).toContain("__riMotionFn(_riScene, () =>");
+    expect(output).toContain("__riMotionGetter(_riScene, () => show)");
     expect(output).toMatch(/const _riProbe = useRiProbe\("opacity", /);
     expect(output).toContain("__riProbeValue(_riProbe, opacity)");
 
@@ -122,6 +122,24 @@ describe("with the React Compiler", () => {
        return <View onPress={show} />;`
     ],
     [
+      "a function that reads a ref",
+      `const last = useRef(0);
+       const show = () => { if (last.current > 0) return; last.current = 1; opacity.value = withTiming(size, { duration: 200 }); };
+       return <View onPress={show} />;`
+    ],
+    [
+      "a function declaration that reads a ref",
+      `const last = useRef(0);
+       function show() { if (last.current > 0) return; opacity.value = withTiming(size, { duration: 200 }); }
+       return <View onPress={show} />;`
+    ],
+    [
+      "a pure-motion effect that reads a ref",
+      `const last = useRef(0);
+       useEffect(() => { opacity.value = withTiming(last.current, { duration: 200 }); }, [size]);
+       return <View />;`
+    ],
+    [
       "a pure-motion effect",
       `useEffect(() => { opacity.value = withTiming(size, { duration: 200 }); }, [size]);
        return <View />;`
@@ -133,7 +151,7 @@ describe("with the React Compiler", () => {
     ]
   ])("reports the same compiler outcome for %s as without Runtime Inspector", (_label, body) => {
     const code = `
-      import { useCallback, useEffect } from "react";
+      import { useCallback, useEffect, useRef } from "react";
       import { useSharedValue, withTiming } from "react-native-reanimated";
       export function Card({ size }) {
         // @inspect min=0 max=1
