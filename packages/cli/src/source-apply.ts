@@ -194,24 +194,28 @@ interface LiteralCandidate {
 }
 
 /**
- * Collects every `=` assignment whose left-hand text equals the anchor's
+ * Collects every animation write whose written-side text equals the anchor's
  * target (whitespace-insensitive), inside the anchor's enclosure chain, whose
- * right side is `callee(...)` or `withDelay(<arg>, callee(...))`.
+ * animation side is `callee(...)` or `withDelay(<arg>, callee(...))`. A write is
+ * an `=` assignment (`x.value = ...`, target `x.value`) or a one-argument `.set`
+ * call (`x.set(...)`, target `x.set`; RFC 0007 amendment, issue #8).
  */
 function findLiteralCandidates(ast: unknown, code: string, literal: LiteralAnchor): LiteralCandidate[] {
   const candidates: LiteralCandidate[] = [];
   const target = literal.target.replace(/\s+/g, "");
+  const setForm = /\.set$/.test(target);
 
   walkWithEnclosure(ast, (node, enclosure) => {
-    if (node.type !== "AssignmentExpression" || node.operator !== "=") return;
+    const write = animationWrite(node);
+    if (!write || write.set !== setForm) return;
 
-    const left = node.left;
+    const left = write.written;
     if (!isNode(left) || left.start == null || left.end == null) return;
     if (code.slice(left.start, left.end).replace(/\s+/g, "") !== target) return;
 
     if (!arraysEqual([...enclosure], literal.enclosure)) return;
 
-    const right = node.right;
+    const right = write.animation;
     if (!isNode(right) || right.type !== "CallExpression") return;
     if (right.start == null || right.end == null) return;
 
@@ -241,6 +245,30 @@ function findLiteralCandidates(ast: unknown, code: string, literal: LiteralAncho
   });
 
   return candidates;
+}
+
+/** The written side and animation side of `x.value = <animation>` or `x.set(<animation>)`. */
+function animationWrite(
+  node: AnyNode
+): { written: unknown; animation: unknown; set: boolean } | undefined {
+  if (node.type === "AssignmentExpression" && node.operator === "=") {
+    return { written: node.left, animation: node.right, set: false };
+  }
+  if (node.type !== "CallExpression") return undefined;
+  const callee = node.callee;
+  const args = callArguments(node);
+  if (
+    isNode(callee) &&
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    isNode(callee.property) &&
+    callee.property.type === "Identifier" &&
+    callee.property.name === "set" &&
+    args.length === 1
+  ) {
+    return { written: callee, animation: args[0], set: true };
+  }
+  return undefined;
 }
 
 function isNumericLiteral(node: unknown): node is AnyNode & { start: number; end: number } {

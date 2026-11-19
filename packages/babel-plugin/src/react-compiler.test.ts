@@ -87,6 +87,22 @@ describe("with the React Compiler", () => {
     expect(output).toContain('callsiteId: "src/Demo.tsx:7:6:timing:opacity"');
   });
 
+  it("discovers a `.set(...)` animation in a component callback (issue #8)", () => {
+    const { output, events } = compile(`
+      import { useSharedValue, withTiming } from "react-native-reanimated";
+      export function Card({ size }) {
+        const opacity = useSharedValue(0);
+        const show = () => {
+          opacity.set(withTiming(size, { duration: 200 }));
+        };
+        return <View onPress={show} />;
+      }
+    `);
+    expect(events).toEqual(["CompileSuccess"]);
+    expect(output).toContain("opacity.set(__riObserveAnimation(");
+    expect(output).toContain('target: "opacity.set"');
+  });
+
   it("calls the scene and probe hooks with static arguments, outside every memoization branch", () => {
     const { output } = compile(ANIMATED_CARD);
     // The compiler may hoist the static meta objects into its cache; the calls stay put.
@@ -145,9 +161,14 @@ describe("with the React Compiler", () => {
        return <View />;`
     ],
     [
-      "an inspected value animated with .set (not discovered)",
-      `const show = () => { opacity.set(withTiming(size)); };
+      "an inspected value animated with .set",
+      `const show = () => { opacity.set(withTiming(size, { duration: 200 })); };
        return <View onPress={show} />;`
+    ],
+    [
+      "a .set in a pure-motion effect",
+      `useEffect(() => { opacity.set(withTiming(size, { duration: 200 })); }, [size]);
+       return <View />;`
     ]
   ])("reports the same compiler outcome for %s as without Runtime Inspector", (_label, body) => {
     const code = `
