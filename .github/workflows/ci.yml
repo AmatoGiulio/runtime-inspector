@@ -28,3 +28,27 @@ jobs:
       - run: pnpm verify
         env:
           CI: true
+
+  shell-studio-metro-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: node packages/workbench/scripts/write-shell-app-fixture.mjs
+      - name: Install actual generated Expo app
+        working-directory: ${{ runner.temp }}/ri-shell-studio-smoke
+        run: pnpm install --no-frozen-lockfile
+      - name: Bundle generated iOS app through Metro
+        working-directory: ${{ runner.temp }}/ri-shell-studio-smoke
+        env:
+          CI: "true"
+          EXPO_NO_TELEMETRY: "1"
+        run: pnpm exec expo export --platform ios --output-dir dist
