@@ -4,7 +4,7 @@ Runtime Inspector is split into small workspace packages.
 
 ## Packages
 
-Published to npm (`0.1.0-alpha.1`):
+Published to npm (`0.1.0-alpha.2`):
 
 - `packages/protocol`: shared RIP types, Zod schemas and value validation, conformance fixtures.
 - `packages/runtime-react-native`: runtime SDK used by a React Native app (hooks, bindings, broker discovery, scenes) plus the `metro` helper.
