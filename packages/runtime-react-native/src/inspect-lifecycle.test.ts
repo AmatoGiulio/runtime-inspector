@@ -209,4 +209,124 @@ describe("useRiInspect (// @inspect disposal on unmount, issue #8)", () => {
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
     expect(definePanel).not.toHaveBeenCalled();
   });
+
+  it("keeps the last-rendered owner when two instances commit together", async () => {
+    const { core, render, commit, published } = await load();
+    const a = react.create();
+    const b = react.create();
+    const va = { value: 0 };
+    const vb = { value: 0 };
+    render(a, va);
+    render(b, vb);
+    commit(a);
+    commit(b);
+    await published();
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress", value: 0.5 });
+    expect(vb.value).toBe(0.5);
+    expect(va.value).toBe(0);
+  });
+
+  it("preserves both suffixed instances after the first rerenders", async () => {
+    const { auto, core, render, commit, published } = await load();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    auto.registerRuntimeValue({ kind: "value", name: "progress", sharedValue: { value: 0 }, meta: META, target: 0 });
+    const a = react.create();
+    const b = react.create();
+    const va = { value: 0 };
+    const vb = { value: 0 };
+    render(a, va);
+    commit(a);
+    render(b, vb);
+    commit(b);
+    expect(controlIds(await published())).toEqual(["progress", "progress2", "progress3"]);
+    warn.mockClear();
+    const rerenderedA = { value: 0 };
+    render(a, rerenderedA);
+    expect(controlIds(await published())).toEqual(["progress", "progress2", "progress3"]);
+    expect(warn).not.toHaveBeenCalled();
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress3", value: 0.5 });
+    expect(vb.value).toBe(0.5);
+    expect(va.value).toBe(0);
+    expect(rerenderedA.value).toBe(0);
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress2", value: 0.25 });
+    expect(rerenderedA.value).toBe(0.25);
+    expect(va.value).toBe(0);
+    expect(vb.value).toBe(0.5);
+  });
+
+  it("does not reuse a live suffix after an earlier instance unmounts", async () => {
+    const { auto, core, render, commit, unmount, published } = await load();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    auto.registerRuntimeValue({ kind: "value", name: "progress", sharedValue: { value: 0 }, meta: META, target: 0 });
+    const a = react.create();
+    const b = react.create();
+    const c = react.create();
+    const va = { value: 0 };
+    const vb = { value: 0 };
+    const vc = { value: 0 };
+    render(a, va);
+    commit(a);
+    render(b, vb);
+    commit(b);
+    unmount(a);
+    render(c, vc);
+    commit(c);
+
+    expect(controlIds(await published())).toEqual(["progress", "progress3", "progress4"]);
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress3", value: 0.5 });
+    expect(vb.value).toBe(0.5);
+    expect(va.value).toBe(0);
+    expect(vc.value).toBe(0);
+    unmount(b);
+    expect(controlIds(await published())).toEqual(["progress", "progress4"]);
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress4", value: 0.75 });
+    expect(vc.value).toBe(0.75);
+    expect(vb.value).toBe(0.5);
+    unmount(c);
+    expect(controlIds(await published())).toEqual(["progress"]);
+  });
+
+  it("restores a suffixed instance after StrictMode cleanup without replacing its neighbor", async () => {
+    const { auto, core, render, commit, unmount, published } = await load();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const claimed = { value: 0 };
+    auto.registerRuntimeValue({ kind: "value", name: "progress", sharedValue: claimed, meta: META, target: 0 });
+    const screen = react.create();
+    const inspected = { value: 0 };
+    render(screen, inspected);
+    const effects = [...screen.pending];
+    commit(screen);
+    unmount(screen);
+    screen.pending.push(...effects);
+    commit(screen);
+    expect(controlIds(await published())).toEqual(["progress", "progress2"]);
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress2", value: 0.5 });
+    expect(inspected.value).toBe(0.5);
+    expect(claimed.value).toBe(0);
+  });
+
+  it("preserves the newest mounted owner through another instance's StrictMode restart", async () => {
+    const { core, render, commit, unmount, published } = await load();
+    const a = react.create();
+    const b = react.create();
+    const va = { value: 0 };
+    const vb = { value: 0 };
+    render(a, va);
+    render(b, vb);
+    const effectsA = [...a.pending];
+    commit(a);
+    commit(b);
+    unmount(a);
+    a.pending.push(...effectsA);
+    commit(a);
+    await published();
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress", value: 0.5 });
+    expect(vb.value).toBe(0.5);
+    expect(va.value).toBe(0);
+    unmount(b);
+    await published();
+    core.applyControlPatch({ type: "control.patch", schemaId: "auto", controlId: "progress", value: 0.75 });
+    expect(va.value).toBe(0.75);
+    expect(vb.value).toBe(0.5);
+  });
 });

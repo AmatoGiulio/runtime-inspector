@@ -61,6 +61,8 @@ __riInspect(moveX, "moveX", { min: -120, max: 120, step: 1, unit: "px", label: "
 
 - `useRiInspect(name)` takes only static data (the RFC 0008 amendment's React Compiler rule) and returns an instance token; `__riInspect` records its registration under that token.
 - On unmount the instance's control is removed, unless a newer instance rendered in the meantime (a navigation renders the new screen before the old one's cleanup) and owns it. Several mounted instances (list rows) still share one control: the latest render owns it, and when the owner unmounts the control moves to the newest instance still mounted.
+- Re-rendering an instance keeps its existing control id, including a collision suffix. New registrations skip ids still held by another live entry, even when disposal leaves gaps between suffixes.
+- An initial effect must not replace the newer rendered owner, including when sibling instances commit together.
 - A remount without a render (StrictMode, a kept-alive screen) registers again with the value the instance last recorded. A screen opened again gets the bare name back, never a suffix.
 - Without a token (a hand-written call, or a declaration outside a function body, which is still wrapped in place) nothing changes: the registration is never disposed.
 - The plugin and `@runtime-inspector/react-native` must be upgraded together, as for the RFC 0008 amendment.

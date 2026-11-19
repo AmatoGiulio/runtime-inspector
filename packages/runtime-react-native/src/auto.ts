@@ -129,12 +129,16 @@ function registerInspected(
   meta: InspectMeta,
   owner: string | undefined
 ): void {
-  // A live claim on the same name (a `useRuntimeValue`) suffixed this instance's control
-  // (`name2`): drop it before registering again, or every render would claim one more suffix.
+  // Keep the instance's existing id, including a suffix claimed beside useRuntimeValue.
+  // Releasing and reclaiming it can allocate an id another mounted instance still owns.
   const previous = owner !== undefined ? ownedControlId(owner) : undefined;
-  if (previous !== undefined && previous !== name) {
-    registry.delete(previous);
-    releaseControlId(name);
+  if (previous !== undefined) {
+    registry.set(previous, {
+      kind: "value", name: previous, sharedValue, meta, target: sharedValue.value,
+      mode: "replace", owner
+    });
+    schedulePublish();
+    return;
   }
   registerRuntimeValue(
     { kind: "value", name, sharedValue, meta, target: sharedValue.value, owner },
@@ -197,12 +201,13 @@ export function useRiInspect(name: string): string {
     tokens.push(token);
     mountedInspectTokens.set(name, tokens);
 
-    // Remounted without a render (StrictMode, a kept-alive screen): take the control back if
-    // no mounted instance holds it.
+    // Recover a registration removed by StrictMode's cleanup. A different replace-mode
+    // owner may have rendered but not committed yet; its registration must stay intact.
     const entry = registry.get(name);
-    const ownerMounted =
-      entry?.kind === "value" && entry.owner !== undefined && tokens.includes(entry.owner);
-    if (instance.sharedValue && !ownerMounted && (!entry || entry.kind === "value")) {
+    if (
+      instance.sharedValue && ownedControlId(token) === undefined &&
+      (!entry || entry.mode === "claim")
+    ) {
       registerInspected(name, instance.sharedValue, instance.meta ?? {}, token);
     }
 
@@ -329,11 +334,14 @@ function claimControlId(name: string): string {
   const count = liveClaims.get(name) ?? 0;
   liveClaims.set(name, count + 1);
 
-  if (count === 0) {
+  if (count === 0 && !registry.has(name)) {
     return name;
   }
 
-  const suffixed = `${name}${count + 1}`;
+  // A disposal can leave holes below live suffixes; the claim count is not an unused id.
+  let suffix = Math.max(2, count + 1);
+  while (registry.has(`${name}${suffix}`)) suffix += 1;
+  const suffixed = `${name}${suffix}`;
   warnDev(
     `Auto-inspected value "${name}" collides with a previously registered control of the same name - ` +
       `registering it as "${suffixed}" instead. Give the useSharedValue a unique variable name to avoid this.`
