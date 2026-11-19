@@ -26,6 +26,13 @@ import { parseSceneComment, type SceneDirective } from "./scene-directive";
 export const SCENE_HOOK_NAME = "useRiScene";
 /** Plain: records the motion function of an instance; returns it unchanged. */
 export const MOTION_HELPER_NAME = "__riMotionFn";
+export const MOTION_GETTER_HELPER_NAME = "__riMotionGetter";
+
+/**
+ * Effect callbacks the motion pass moved into a `const` of their own. Enclosure chains skip
+ * that generated name, so literal anchors still match the source (RFC 0007).
+ */
+export const hoistedEffectCallbacks = new WeakSet<Node>();
 /** Hook: registers the probe while this instance is mounted; returns its instance token. */
 export const PROBE_HOOK_NAME = "useRiProbe";
 /** Plain: records the shared value of an instance; returns it unchanged. */
@@ -104,7 +111,7 @@ const EXPLICIT_SCENE_HOOKS = new Set(["useScene", "useAction"]);
 
 /**
  * RFC 0008 §1, §2, §4, §5: turns the motion functions of every module-level component
- * into scenes (`__riMotionFn(...)` + `useRiScene(...)`) and follows animated top-level
+ * into scenes (`useRiScene(...)` + `__riMotionGetter(...)`) and follows animated top-level
  * `useSharedValue(<literal>)` declarations with probes (`__riProbeValue(...)` +
  * `useRiProbe(...)`). Runs on the untouched program, before the animation call sites are
  * instrumented, so it must use the same callsite ids as the later pass.
@@ -419,25 +426,39 @@ function injectMotion(component: Component, candidate: Candidate, options: Motio
       t.callExpression(t.identifier(SCENE_HOOK_NAME), [t.stringLiteral(sceneId), meta])
     )
   ]);
-  if (candidate.kind === "declaration") {
-    registerDeclarations(candidate.statement.insertAfter([
-      sceneHook,
-      t.expressionStatement(
-        t.callExpression(t.identifier(MOTION_HELPER_NAME), [
-          t.cloneNode(token),
-          t.identifier(candidate.idName)
-        ])
-      )
-    ]));
-  } else {
-    const target = candidate.wrapTarget!;
-    target.replaceWith(
-      t.callExpression(t.identifier(MOTION_HELPER_NAME), [t.cloneNode(token), target.node])
+  // The function is handed over through a getter, `() => play`, never as an argument: the
+  // React Compiler refuses to pass a function that reads a ref to a call during render.
+  const getter = (name: string) =>
+    t.expressionStatement(
+      t.callExpression(t.identifier(MOTION_GETTER_HELPER_NAME), [
+        t.cloneNode(token),
+        t.arrowFunctionExpression([], t.identifier(name))
+      ])
     );
+
+  if (candidate.kind === "declaration") {
+    registerDeclarations(candidate.statement.insertAfter([sceneHook, getter(candidate.idName)]));
+  } else if (candidate.kind === "initializer") {
     registerDeclarations(candidate.statement.insertBefore(sceneHook));
+    insertAfterDeclaration(candidate.statement, [getter(candidate.idName)]);
+  } else {
+    // A pure-motion effect has no name to read: its callback moves into a `const` before the
+    // effect, which then receives that `const`. Same function, same dependencies.
+    const callback = candidate.wrapTarget!;
+    const effectFn = component.fn.scope.generateUidIdentifier("riEffect");
+    const callbackNode = callback.node;
+    hoistedEffectCallbacks.add(callbackNode);
+    callback.replaceWith(t.cloneNode(effectFn));
+    registerDeclarations(
+      candidate.statement.insertBefore([
+        sceneHook,
+        t.variableDeclaration("const", [t.variableDeclarator(effectFn, callbackNode)]),
+        getter(effectFn.name)
+      ])
+    );
   }
 
-  options.ensureImport(candidate.statement, MOTION_HELPER_NAME);
+  options.ensureImport(candidate.statement, MOTION_GETTER_HELPER_NAME);
   options.ensureImport(candidate.statement, SCENE_HOOK_NAME);
 }
 

@@ -14,6 +14,7 @@ import {
   insertAfterDeclaration,
   instrumentMotions,
   MOTION_HELPER_NAME,
+  hoistedEffectCallbacks,
   type DiscoveredAnimation
 } from "./motion";
 
@@ -1112,7 +1113,12 @@ function collectEnclosure(path: NodePath): string[] {
       ) {
         parent = parent.parentPath;
       }
-      if (parent && parent.isVariableDeclarator() && parent.node.id.type === "Identifier") {
+      if (
+        parent &&
+        parent.isVariableDeclarator() &&
+        parent.node.id.type === "Identifier" &&
+        !hoistedEffectCallbacks.has(current.node)
+      ) {
         names.push(parent.node.id.name);
       }
     }

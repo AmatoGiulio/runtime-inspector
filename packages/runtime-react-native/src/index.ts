@@ -51,7 +51,7 @@ export type { InspectMeta } from "./auto";
 
 export { defineScene, defineScenes, configureScenes, useScene } from "./scenes";
 export type { SceneDeclaration, UseSceneOptions, ConfigureScenesOptions } from "./scenes";
-export { __riMotion, __riMotionFn, useRiScene } from "./motion";
+export { __riMotion, __riMotionFn, __riMotionGetter, useRiScene } from "./motion";
 export type { MotionMeta } from "./motion";
 export { __riProbe, __riProbeValue, useRiProbe } from "./probe-auto";
 export type { AutoProbeMeta } from "./probe-auto";

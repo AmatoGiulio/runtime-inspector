@@ -282,6 +282,41 @@ describe("useRiScene + __riMotionFn (what the Babel plugin emits)", () => {
   });
 });
 
+describe("useRiScene + __riMotionGetter (what the Babel plugin emits since 2026-11-15)", () => {
+  function card(motion: Awaited<ReturnType<typeof load>>["motion"], play: () => void) {
+    const token = motion.useRiScene(SCENE_ID, META);
+    motion.__riMotionGetter(token, () => play);
+  }
+
+  it("opening the scene plays the function the latest render's getter returns", async () => {
+    const { motion } = await load();
+    const first = vi.fn();
+    const latest = vi.fn();
+    hooks.render(() => card(motion, first));
+    hooks.state.mounted = true;
+    hooks.render(() => card(motion, latest));
+
+    const socket = await connectScenes();
+    socket.onmessage?.({
+      data: JSON.stringify({ type: "control.trigger", schemaId: "scenes", controlId: SCENE_ID, source: "panel" })
+    });
+
+    expect(first).not.toHaveBeenCalled();
+    expect(latest).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call the getter during render", async () => {
+    const { motion } = await load();
+    const get = vi.fn(() => () => {});
+    hooks.render(() => {
+      const token = motion.useRiScene(SCENE_ID, META);
+      motion.__riMotionGetter(token, get);
+    });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS);
+    expect(get).not.toHaveBeenCalled();
+  });
+});
+
 describe("automatic scene already ran (callsites)", () => {
   it("does not play again when one of its callsites started after the binding became active", async () => {
     const { scenes, motion, observer } = await load();
