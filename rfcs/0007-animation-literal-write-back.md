@@ -92,6 +92,22 @@ Numbers are written with `String(value)` (`380`, `14.5`); clients send values al
 - **Workbench**: the Inspector of a selected animation shows **Apply to code** when any of its parameters differs from the source; the timeline toolbar shows **Apply N changes** for the whole timeline. Results appear as a notice; `EXPRESSION_MISMATCH` says the file changed and asks to reload the app.
 - After a successful write, Fast Refresh re-evaluates the module and the controls re-register with the new literals as their defaults, so the change count returns to zero by itself.
 
+## Amendment (2026-11-15, issue #8): `.set(...)` writes
+
+Reanimated 4 recommends `x.set(...)` / `x.get()` over `x.value` for React Compiler compatibility, and apps written that way had no discovered animation at all. Discovery (RFC 0005 §3, RFC 0008) and this RFC now accept a second write form:
+
+```ts
+titleY.value = withDelay(140, withTiming(0, { duration: 380 })); // target "titleY.value"
+titleY.set(withDelay(140, withTiming(0, { duration: 380 })));    // target "titleY.set"
+```
+
+- **Shape.** A non-computed `.set` member call with exactly one argument, that argument an accepted animation shape (`withTiming` / `withSpring`, or `withDelay(<n>, …)` around one, same argument guards). `map.set(key, value)`, `x.set(1)`, `x.set((v) => …)` and `x["set"](…)` never match.
+- **Anchor.** `target` is the source text of the `.set` callee (`"titleY.set"`); line/column are those of the call. No protocol change: the field stays free text, and the suffix tells the workspace which form to look for. Callsite ids, labels and control ids use the target without the suffix (`…:spring:titleY`, `"titleY damping"`), as for an assignment.
+- **Workspace (§3, step 2).** Candidates are `=` assignments whose left-hand text equals `target`, or one-argument `.set` calls whose callee text equals `target`; the rest of the procedure is unchanged, including wrapping a bare call to write a delay. A `.value` anchor never matches a `.set` write, or the other way round (`DECLARATION_MISSING`), so converting a write between the two forms since the app was built is reported, not guessed.
+- **Thread rule.** The runtime helpers are JS-only, so a write of either form is instrumented only when no enclosing function is a worklet, decided with the `react-native-worklets` plugin's own rules: a `"worklet"` directive (function or file), or a function passed, inline or by a same-file reference, where that plugin workletizes it (`useAnimatedStyle` / `useDerivedValue` / `useAnimatedReaction` & co., `runOnUI` / `scheduleOnUI` / `runOnRuntime` & co., animation callbacks, `useAnimatedScrollHandler` and the Gesture Handler 3 hook objects). Any `.onBegin` … `.onTouchesCancelled` builder call and `.withCallback` count as worklets whatever their receiver. Everything else is plain JavaScript, which cannot run on the UI thread. For `.value =` this replaces the earlier, shorter list of worklet contexts; the only change is that writes inside `scheduleOnUI`, `runOnUI` and similar callbacks are no longer instrumented.
+- **Dependencies.** Files under `node_modules` are no longer instrumented at all: their literals cannot be applied to code, and they are not the app's animations to tune.
+- **Motions (RFC 0008).** A `.set` write makes its function a motion like an assignment does, a pure-motion effect may contain `.set(...)` statements, and a top-level shared value written with `.set` gets a probe.
+
 ## Out of scope
 
 - Literals that are not numeric literals (`{ duration: DURATION }`), easing, `toValue`, and spring configs coming from a `spring` control (those already have RFC 0004 anchors when declared with `// @inspect`).

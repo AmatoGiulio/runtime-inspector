@@ -407,6 +407,94 @@ describe("applySourceRequests with literal anchors (RFC 0007)", () => {
     expect(output).toBe(demo(IMPORT, 'titleY . value = withTiming(0, { "duration": 400 });', LOGO));
   });
 
+  // RFC 0007 amendment (issue #8): the same procedure for `x.set(<animation>)`, target `x.set`.
+  describe.each([
+    {
+      form: "assignment",
+      member: "value",
+      title: (call: string) => `titleY.value = ${call};`,
+      logo: (call: string) => `logo.value = ${call};`
+    },
+    {
+      form: ".set",
+      member: "set",
+      title: (call: string) => `titleY.set(${call});`,
+      logo: (call: string) => `logo.set(${call});`
+    }
+  ])("$form writes", ({ member, title, logo }) => {
+    const source = demo(
+      IMPORT,
+      title("withDelay(140, withTiming(0, { duration: 380 }))"),
+      logo("withSpring(1, { damping: 14, stiffness: 160, mass: 0.5 })")
+    );
+    const titleLiteral = (overrides: Partial<LiteralAnchor> = {}) =>
+      makeLiteral({ target: `titleY.${member}`, ...overrides });
+    const springLiteral = (overrides: Partial<LiteralAnchor> = {}) =>
+      logoLiteral({ target: `logo.${member}`, ...overrides });
+
+    it("replaces a timing duration and a delay", async () => {
+      const { results, output } = await run(source, [
+        literalRequest(titleLiteral(), 420),
+        literalRequest(titleLiteral({ parameter: "delay", init: "140" }), 180)
+      ]);
+
+      expect(results.map((result) => result.ok)).toEqual([true, true]);
+      expect(output).toBe(
+        demo(
+          IMPORT,
+          title("withDelay(180, withTiming(0, { duration: 420 }))"),
+          logo("withSpring(1, { damping: 14, stiffness: 160, mass: 0.5 })")
+        )
+      );
+    });
+
+    it("replaces a spring literal", async () => {
+      const { results, output } = await run(source, [
+        literalRequest(springLiteral({ parameter: "damping", init: "14" }), 20)
+      ]);
+
+      expect(results[0]).toMatchObject({ ok: true, written: "20", previous: "14" });
+      expect(output).toBe(
+        demo(
+          IMPORT,
+          title("withDelay(140, withTiming(0, { duration: 380 }))"),
+          logo("withSpring(1, { damping: 20, stiffness: 160, mass: 0.5 })")
+        )
+      );
+    });
+
+    it("wraps a bare call to write a delay", async () => {
+      const { results, output } = await run(source, [
+        literalRequest(springLiteral({ parameter: "delay", init: null }), 120)
+      ]);
+
+      expect(results[0]).toMatchObject({ ok: true, written: "120" });
+      expect(output).toBe(
+        demo(
+          IMPORT,
+          title("withDelay(140, withTiming(0, { duration: 380 }))"),
+          logo("withDelay(120, withSpring(1, { damping: 14, stiffness: 160, mass: 0.5 }))")
+        )
+      );
+    });
+
+    it("does not match the other form", async () => {
+      const other = member === "set" ? "value" : "set";
+      const { results, writes } = await run(source, [
+        literalRequest(titleLiteral({ target: `titleY.${other}` }), 420)
+      ]);
+
+      expect(results[0]).toMatchObject({ ok: false, code: "DECLARATION_MISSING" });
+      expect(writes).toBe(0);
+    });
+  });
+
+  it("ignores a `.set` call with more than one argument", async () => {
+    const source = demo(IMPORT, "titleY.set(withTiming(0, { duration: 380 }), extra);", LOGO);
+    const { results } = await run(source, [literalRequest(makeLiteral({ target: "titleY.set" }), 420)]);
+    expect(results[0]).toMatchObject({ ok: false, code: "DECLARATION_MISSING" });
+  });
+
   describe("delay on a bare call", () => {
     const bareLiteral = logoLiteral({ parameter: "delay", init: null });
 

@@ -119,19 +119,22 @@ Each motion and probe is therefore a hook that takes only static data and return
 ```ts
 function play() { … }
 const _riScene = useRiScene("src/ProductRevealDemo.tsx:ProductRevealDemo.play", meta);
-__riMotionFn(_riScene, play);
+__riMotionGetter(_riScene, () => play);
 
 const _riScene2 = useRiScene(id, meta);
-const play = __riMotionFn(_riScene2, () => { … });       // wraps an initializer
+const play = () => { … };                                // an initializer stays as written
+__riMotionGetter(_riScene2, () => play);
 const _riScene3 = useRiScene(id, meta);
-useEffect(__riMotionFn(_riScene3, () => { … }), []);     // wraps a pure-motion effect
+const _riEffect = () => { … };                           // a pure-motion effect's callback
+__riMotionGetter(_riScene3, () => _riEffect);
+useEffect(_riEffect, []);
 
 const titleY = useSharedValue(24);
 const _riProbe = useRiProbe("titleY", { component: "ProductRevealDemo", file });
 __riProbeValue(_riProbe, titleY);
 ```
 
-`useRiScene` binds the scene while its component instance is mounted and plays the function that instance last recorded through `__riMotionFn`; several mounted instances of a component (list rows) each keep their own. `useRiProbe` / `__riProbeValue` do the same for probes. If the compiler memoizes a plain call, it only skips recording an unchanged value. `__riMotion` and `__riProbe` stay exported, unchanged, for code transformed by earlier plugin versions; the plugin and `@runtime-inspector/react-native` must be upgraded together.
+`useRiScene` binds the scene while its component instance is mounted and plays the function that instance last recorded through `__riMotionGetter`; several mounted instances of a component (list rows) each keep their own. `useRiProbe` / `__riProbeValue` do the same for probes. If the compiler memoizes a plain call, it only skips recording an unchanged value. The function is handed over as a getter, never as an argument (amended 2026-11-15): the compiler rejects a call that receives a function reading a ref during render ("Cannot access refs during render"), and skips the whole component, while `() => play` only reads a binding. For the same reason a pure-motion effect's callback moves into a `const` of its own (enclosure chains skip that generated name, so RFC 0007 anchors still match the source). `__riMotion`, `__riMotionFn` and `__riProbe` stay exported, unchanged, for code transformed by earlier plugin versions; the plugin and `@runtime-inspector/react-native` must be upgraded together.
 
 The plugin also runs the `// @inspect` rewrite and the animation-assignment discovery from its `Program.enter`, on the untouched program: the compiler rewrites component bodies from its own `Program.enter`, after which the directive comments and the source locations callsite ids are built from are gone. This relies on the plugin being listed in the app's `plugins` (Babel runs plugins before presets), which is what `runtime-inspector init` writes.
 

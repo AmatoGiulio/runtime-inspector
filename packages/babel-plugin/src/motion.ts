@@ -26,6 +26,13 @@ import { parseSceneComment, type SceneDirective } from "./scene-directive";
 export const SCENE_HOOK_NAME = "useRiScene";
 /** Plain: records the motion function of an instance; returns it unchanged. */
 export const MOTION_HELPER_NAME = "__riMotionFn";
+export const MOTION_GETTER_HELPER_NAME = "__riMotionGetter";
+
+/**
+ * Effect callbacks the motion pass moved into a `const` of their own. Enclosure chains skip
+ * that generated name, so literal anchors still match the source (RFC 0007).
+ */
+export const hoistedEffectCallbacks = new WeakSet<Node>();
 /** Hook: registers the probe while this instance is mounted; returns its instance token. */
 export const PROBE_HOOK_NAME = "useRiProbe";
 /** Plain: records the shared value of an instance; returns it unchanged. */
@@ -69,7 +76,8 @@ export interface MotionPassOptions {
   types: typeof BabelTypesNamespace;
   /** File path relative to the Babel root, as used in callsite ids. */
   file: string;
-  discover(path: NodePath<AssignmentExpression>): DiscoveredAnimation | undefined;
+  /** An animation write: an `x.value = ...` assignment or an `x.set(...)` call. */
+  discover(path: NodePath<AssignmentExpression> | NodePath<CallExpression>): DiscoveredAnimation | undefined;
   ensureImport(path: NodePath, helperName: string): void;
 }
 
@@ -104,7 +112,7 @@ const EXPLICIT_SCENE_HOOKS = new Set(["useScene", "useAction"]);
 
 /**
  * RFC 0008 §1, §2, §4, §5: turns the motion functions of every module-level component
- * into scenes (`__riMotionFn(...)` + `useRiScene(...)`) and follows animated top-level
+ * into scenes (`useRiScene(...)` + `__riMotionGetter(...)`) and follows animated top-level
  * `useSharedValue(<literal>)` declarations with probes (`__riProbeValue(...)` +
  * `useRiProbe(...)`). Runs on the untouched program, before the animation call sites are
  * instrumented, so it must use the same callsite ids as the later pass.
@@ -131,8 +139,38 @@ function instrumentComponent(component: Component, options: MotionPassOptions): 
   const animatedDeclarators = new Set<Node>();
   const componentFn = component.fn.node;
 
+  const recordAnimation = (path: NodePath<AssignmentExpression> | NodePath<CallExpression>) => {
+    const animation = options.discover(path);
+    if (!animation) return;
+
+    // Nearest enclosing motion-function candidate; the walk stops at the component.
+    let current: NodePath | null = path.parentPath;
+    while (current && current.node !== componentFn) {
+      if (current.isFunction()) {
+        const candidate = byFunction.get(current.node);
+        if (candidate) {
+          candidate.callsites.push(animation.callsiteId);
+          break;
+        }
+      }
+      current = current.parentPath;
+    }
+
+    // RFC 0008 §5: a top-level shared value written directly by this animation.
+    if (animation.target !== animation.root) return;
+    const binding = path.scope.getBinding(animation.root);
+    const declarator = binding?.path;
+    if (
+      declarator?.isVariableDeclarator() &&
+      declarator.parentPath?.parentPath?.node === body.node
+    ) {
+      animatedDeclarators.add(declarator.node);
+    }
+  };
+
   component.fn.traverse({
     CallExpression(path) {
+      recordAnimation(path);
       const name = calleeName(path.node.callee);
       if (!name || !EXPLICIT_SCENE_HOOKS.has(name)) return;
       for (const argument of path.get("arguments")) {
@@ -143,32 +181,7 @@ function instrumentComponent(component: Component, options: MotionPassOptions): 
       }
     },
     AssignmentExpression(path) {
-      const animation = options.discover(path);
-      if (!animation) return;
-
-      // Nearest enclosing motion-function candidate; the walk stops at the component.
-      let current: NodePath | null = path.parentPath;
-      while (current && current.node !== componentFn) {
-        if (current.isFunction()) {
-          const candidate = byFunction.get(current.node);
-          if (candidate) {
-            candidate.callsites.push(animation.callsiteId);
-            break;
-          }
-        }
-        current = current.parentPath;
-      }
-
-      // RFC 0008 §5: a top-level shared value assigned directly by this animation.
-      if (animation.target !== animation.root) return;
-      const binding = path.scope.getBinding(animation.root);
-      const declarator = binding?.path;
-      if (
-        declarator?.isVariableDeclarator() &&
-        declarator.parentPath?.parentPath?.node === body.node
-      ) {
-        animatedDeclarators.add(declarator.node);
-      }
+      recordAnimation(path);
     }
   });
 
@@ -331,8 +344,9 @@ function motionInitializerFunction(
 }
 
 /**
- * RFC 0008 §1.3: every statement of the effect is an assignment to a `.value` member or a
- * call to a motion function of the same component.
+ * RFC 0008 §1.3: every statement of the effect is an assignment to a `.value` member, a
+ * one-argument `.set(...)` call (issue #8), or a call to a motion function of the same
+ * component.
  */
 function isPureMotionEffect(fn: NodePath<FunctionNode>, motionBindings: Set<Node | undefined>): boolean {
   const body = fn.node.body;
@@ -356,12 +370,32 @@ function isPureMotionEffect(fn: NodePath<FunctionNode>, motionBindings: Set<Node
         expression.left.property.name === "value"
       );
     }
+    if (
+      expression.type === "CallExpression" &&
+      expression.callee.type === "MemberExpression" &&
+      !expression.callee.computed &&
+      expression.callee.property.type === "Identifier" &&
+      expression.callee.property.name === "set"
+    ) {
+      // Only a shared value's `.set`: `map.set(...)` or `store.set(...)` is a side effect a
+      // replay must not repeat.
+      return expression.arguments.length === 1 && isSharedValueBinding(fn, expression.callee.object);
+    }
     if (expression.type === "CallExpression" && expression.callee.type === "Identifier") {
       const bindingNode = fn.scope.getBinding(expression.callee.name)?.path.node;
       return bindingNode !== undefined && motionBindings.has(bindingNode);
     }
     return false;
   });
+}
+
+/** Whether `node` is an identifier declared as `const x = useSharedValue(...)`. */
+function isSharedValueBinding(fn: NodePath<FunctionNode>, node: Node): boolean {
+  if (node.type !== "Identifier") return false;
+  const declarator = fn.scope.getBinding(node.name)?.path;
+  if (!declarator?.isVariableDeclarator()) return false;
+  const init = declarator.node.init;
+  return init?.type === "CallExpression" && calleeName(init.callee) === "useSharedValue";
 }
 
 /**
@@ -419,25 +453,39 @@ function injectMotion(component: Component, candidate: Candidate, options: Motio
       t.callExpression(t.identifier(SCENE_HOOK_NAME), [t.stringLiteral(sceneId), meta])
     )
   ]);
-  if (candidate.kind === "declaration") {
-    registerDeclarations(candidate.statement.insertAfter([
-      sceneHook,
-      t.expressionStatement(
-        t.callExpression(t.identifier(MOTION_HELPER_NAME), [
-          t.cloneNode(token),
-          t.identifier(candidate.idName)
-        ])
-      )
-    ]));
-  } else {
-    const target = candidate.wrapTarget!;
-    target.replaceWith(
-      t.callExpression(t.identifier(MOTION_HELPER_NAME), [t.cloneNode(token), target.node])
+  // The function is handed over through a getter, `() => play`, never as an argument: the
+  // React Compiler refuses to pass a function that reads a ref to a call during render.
+  const getter = (name: string) =>
+    t.expressionStatement(
+      t.callExpression(t.identifier(MOTION_GETTER_HELPER_NAME), [
+        t.cloneNode(token),
+        t.arrowFunctionExpression([], t.identifier(name))
+      ])
     );
+
+  if (candidate.kind === "declaration") {
+    registerDeclarations(candidate.statement.insertAfter([sceneHook, getter(candidate.idName)]));
+  } else if (candidate.kind === "initializer") {
     registerDeclarations(candidate.statement.insertBefore(sceneHook));
+    insertAfterDeclaration(candidate.statement, [getter(candidate.idName)]);
+  } else {
+    // A pure-motion effect has no name to read: its callback moves into a `const` before the
+    // effect, which then receives that `const`. Same function, same dependencies.
+    const callback = candidate.wrapTarget!;
+    const effectFn = component.fn.scope.generateUidIdentifier("riEffect");
+    const callbackNode = callback.node;
+    hoistedEffectCallbacks.add(callbackNode);
+    callback.replaceWith(t.cloneNode(effectFn));
+    registerDeclarations(
+      candidate.statement.insertBefore([
+        sceneHook,
+        t.variableDeclaration("const", [t.variableDeclarator(effectFn, callbackNode)]),
+        getter(effectFn.name)
+      ])
+    );
   }
 
-  options.ensureImport(candidate.statement, MOTION_HELPER_NAME);
+  options.ensureImport(candidate.statement, MOTION_GETTER_HELPER_NAME);
   options.ensureImport(candidate.statement, SCENE_HOOK_NAME);
 }
 

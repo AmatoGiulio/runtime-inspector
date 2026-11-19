@@ -80,8 +80,28 @@ describe("runtime-inspector babel plugin", () => {
     `);
     const normalized = code.replace(/\s+/g, " ");
     expect(normalized).toContain(
-      'const opacity = useSharedValue(0); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",'
+      'const opacity = useSharedValue(0); const _riInspect = useRiInspect("opacity"); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",'
     );
+    expect(normalized).toMatch(/__riInspect\(opacity, "opacity", \{[^]*\}, _riInspect\);/);
+    expect(normalized).toContain(
+      'import { useRiInspect, __riInspect, __riModuleCallsites } from "@runtime-inspector/react-native"'
+    );
+  });
+
+  it("does not tie a declaration nested in a block to an instance (no hook outside the body)", () => {
+    const code = transform(`
+      import { useSharedValue } from "react-native-reanimated";
+      export const Card = () => {
+        {
+          // @inspect min=0 max=1
+          const opacity = useSharedValue(0);
+        }
+        return null;
+      };
+    `);
+    const normalized = code.replace(/\s+/g, " ");
+    expect(normalized).toContain('__riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity",');
+    expect(normalized).not.toContain("useRiInspect(");
   });
 
   it("keeps source order for annotated declarators of one declaration", () => {
@@ -906,7 +926,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     );
     expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:ProductRevealDemo.play"]);
     expect(normalized).toMatch(
-      /\} const _riScene = useRiScene\("src\/Demo\.tsx:ProductRevealDemo\.play", \{ component: "ProductRevealDemo", name: "play", file: "src\/Demo\.tsx", line: 9, callsites: \[[^\]]*\] \}\); __riMotionFn\(_riScene, play\);/
+      /\} const _riScene = useRiScene\("src\/Demo\.tsx:ProductRevealDemo\.play", \{ component: "ProductRevealDemo", name: "play", file: "src\/Demo\.tsx", line: 9, callsites: \[[^\]]*\] \}\); __riMotionGetter\(_riScene, \(\) => play\);/
     );
     const callsites = motionCallsites(normalized, "src/Demo.tsx:ProductRevealDemo.play");
     expect(callsites).toEqual([
@@ -916,16 +936,16 @@ describe("automatic motions and probes (RFC 0008)", () => {
     expect(callsites).toEqual(observedCallsites(normalized));
     const runtimeImports = normalized.match(/import \{[^}]*\} from "@runtime-inspector\/react-native"/g);
     expect(runtimeImports).toHaveLength(1);
-    for (const helper of ["__riMotionFn", "useRiScene", "__riProbeValue", "useRiProbe"]) {
+    for (const helper of ["__riMotionGetter", "useRiScene", "__riProbeValue", "useRiProbe"]) {
       expect(runtimeImports![0].match(new RegExp(`\\b${helper}\\b`, "g"))).toHaveLength(1);
     }
   });
 
   it.each([
-    ["an arrow", "const play = () => { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotionFn("],
-    ["a function expression", "const play = function () { opacity.value = withTiming(1, { duration: 200 }); };", "const play = __riMotionFn("],
-    ["useCallback", "const play = useCallback(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);", "); const play = __riMotionFn(_riScene, useCallback(() =>"]
-  ])("wraps the initializer of %s", (_label, declaration, expected) => {
+    ["an arrow", "const play = () => { opacity.value = withTiming(1, { duration: 200 }); };", "); const play = () => {"],
+    ["a function expression", "const play = function () { opacity.value = withTiming(1, { duration: 200 }); };", "); const play = function () {"],
+    ["useCallback", "const play = useCallback(() => { opacity.value = withTiming(1, { duration: 200 }); }, []);", "); const play = useCallback(() =>"]
+  ])("records the initializer of %s through a getter, leaving it as written", (_label, declaration, expected) => {
     const normalized = motion(`
       function Card() {
         const opacity = useSharedValue(0);
@@ -935,6 +955,8 @@ describe("automatic motions and probes (RFC 0008)", () => {
     `);
 
     expect(normalized).toContain(expected);
+    expect(normalized).toContain("__riMotionGetter(_riScene, () => play);");
+    expect(normalized).not.toContain("__riMotionFn");
     expect(motionCalls(normalized)).toEqual(["src/Demo.tsx:Card.play"]);
     expect(normalized).toContain('{ component: "Card", name: "play", file: "src/Demo.tsx", line: 8, callsites: [');
     expect(motionCallsites(normalized, "src/Demo.tsx:Card.play")).toEqual(observedCallsites(normalized));
@@ -972,7 +994,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     ]);
   });
 
-  it("wraps a pure-motion effect and names it by its line", () => {
+  it("moves a pure-motion effect's callback into a const and names it by its line", () => {
     const normalized = motion(`
       function Card() {
         const opacity = useSharedValue(0);
@@ -987,15 +1009,19 @@ describe("automatic motions and probes (RFC 0008)", () => {
     `);
 
     expect(normalized).toContain(
-      'const _riScene2 = useRiScene("src/Demo.tsx:Card.effect@9", { component: "Card", name: "effect", file: "src/Demo.tsx", line: 9, callsites: ["src/Demo.tsx:11:10:spring:opacity"] }); useEffect(__riMotionFn(_riScene2, () => {'
+      'const _riScene2 = useRiScene("src/Demo.tsx:Card.effect@9", { component: "Card", name: "effect", file: "src/Demo.tsx", line: 9, callsites: ["src/Demo.tsx:11:10:spring:opacity"] }); const _riEffect = () => {'
     );
+    expect(normalized).toContain("__riMotionGetter(_riScene2, () => _riEffect); useEffect(_riEffect, []);");
+    // The moved callback keeps its source enclosure: anonymous, so just the component.
+    expect(normalized).toContain('enclosure: ["Card"]');
+    expect(normalized).not.toContain('"_riEffect"');
     expect(motionCalls(normalized)).toEqual([
       "src/Demo.tsx:Card.play",
       "src/Demo.tsx:Card.effect@9"
     ]);
   });
 
-  it("wraps a pure useLayoutEffect", () => {
+  it("moves a pure useLayoutEffect's callback into a const", () => {
     const normalized = motion(`
       function Card() {
         const opacity = useSharedValue(0);
@@ -1004,7 +1030,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
       }
     `);
 
-    expect(normalized).toContain('useLayoutEffect(__riMotionFn(_riScene, () =>');
+    expect(normalized).toContain("__riMotionGetter(_riScene, () => _riEffect); useLayoutEffect(_riEffect, []);");
   });
 
   it.each([
@@ -1278,7 +1304,7 @@ describe("automatic motions and probes (RFC 0008)", () => {
     `);
 
     expect(normalized).toContain(
-      'const opacity = useSharedValue(0); const _riProbe = useRiProbe("opacity", { component: "Card", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, opacity); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } });'
+      'const opacity = useSharedValue(0); const _riProbe = useRiProbe("opacity", { component: "Card", file: "src/Demo.tsx" }); __riProbeValue(_riProbe, opacity); const _riInspect = useRiInspect("opacity"); __riInspect(opacity, "opacity", { min: 0, max: 1, label: "opacity", source: { file: "src/Demo.tsx", line: 8, column: 14, enclosure: ["Card"], name: "opacity", init: "0" } }, _riInspect);'
     );
     expect(normalized).toContain('schemaId: "auto"');
   });
@@ -1358,10 +1384,10 @@ describe("automatic motions and probes (RFC 0008)", () => {
     const code = result?.code ?? "";
 
     expect(code).toContain('useRiScene("src/Demo.tsx:Demo.play",');
-    expect(code).toContain("__riMotionFn(_riScene, play)");
+    expect(code).toContain("__riMotionGetter(_riScene, () => play)");
     expect(code).toContain('useRiScene("src/Demo.tsx:Demo.replay",');
-    expect(code).toMatch(/__riMotionFn\(_riScene\d+, useCallback\(/);
-    expect(code).toMatch(/useEffect\(__riMotionFn\(_riScene\d+, /);
+    expect(code).toMatch(/__riMotionGetter\(_riScene\d+, \(\) => replay\)/);
+    expect(code).toMatch(/useEffect\(_riEffect, /);
     expect(code).toContain("__riProbeValue(_riProbe, ");
     // Reanimated still workletizes the style callback, and the output parses.
     expect(code).toContain("__workletHash");
@@ -1414,7 +1440,7 @@ describe("animation literal anchors (RFC 0007)", () => {
       }
     `);
 
-    expect(normalized).toContain("const play = __riMotionFn(");
+    expect(normalized).toContain("__riMotionGetter(_riScene, () => play);");
     const base = {
       file: "src/Demo.tsx",
       line: 7,

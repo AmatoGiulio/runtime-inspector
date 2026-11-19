@@ -81,17 +81,42 @@ describe("with the React Compiler", () => {
     expect(output).toContain('__riInspect(opacity, "opacity"');
   });
 
+  it("ties // @inspect to the mounted instance with a static-argument hook, outside every memoization branch", () => {
+    const { output, events } = compile(ANIMATED_CARD);
+    expect(events).toEqual(["CompileSuccess"]);
+    expect(output).toContain('const _riInspect = useRiInspect("opacity")');
+    for (const branch of memoizationBranches(output)) {
+      expect(branch).not.toMatch(/useRiInspect\(/);
+    }
+  });
+
   it("discovers a `.value =` animation in a component callback", () => {
     const { output } = compile(ANIMATED_CARD);
     expect(output).toContain("__riObserveAnimation(");
     expect(output).toContain('callsiteId: "src/Demo.tsx:7:6:timing:opacity"');
   });
 
+  it("discovers a `.set(...)` animation in a component callback (issue #8)", () => {
+    const { output, events } = compile(`
+      import { useSharedValue, withTiming } from "react-native-reanimated";
+      export function Card({ size }) {
+        const opacity = useSharedValue(0);
+        const show = () => {
+          opacity.set(withTiming(size, { duration: 200 }));
+        };
+        return <View onPress={show} />;
+      }
+    `);
+    expect(events).toEqual(["CompileSuccess"]);
+    expect(output).toContain("opacity.set(__riObserveAnimation(");
+    expect(output).toContain('target: "opacity.set"');
+  });
+
   it("calls the scene and probe hooks with static arguments, outside every memoization branch", () => {
     const { output } = compile(ANIMATED_CARD);
     // The compiler may hoist the static meta objects into its cache; the calls stay put.
     expect(output).toMatch(/const _riScene = useRiScene\("src\/Demo\.tsx:Card\.show", /);
-    expect(output).toContain("__riMotionFn(_riScene, () =>");
+    expect(output).toContain("__riMotionGetter(_riScene, () => show)");
     expect(output).toMatch(/const _riProbe = useRiProbe\("opacity", /);
     expect(output).toContain("__riProbeValue(_riProbe, opacity)");
 
@@ -122,18 +147,41 @@ describe("with the React Compiler", () => {
        return <View onPress={show} />;`
     ],
     [
+      "a function that reads a ref",
+      `const last = useRef(0);
+       const show = () => { if (last.current > 0) return; last.current = 1; opacity.value = withTiming(size, { duration: 200 }); };
+       return <View onPress={show} />;`
+    ],
+    [
+      "a function declaration that reads a ref",
+      `const last = useRef(0);
+       function show() { if (last.current > 0) return; opacity.value = withTiming(size, { duration: 200 }); }
+       return <View onPress={show} />;`
+    ],
+    [
+      "a pure-motion effect that reads a ref",
+      `const last = useRef(0);
+       useEffect(() => { opacity.value = withTiming(last.current, { duration: 200 }); }, [size]);
+       return <View />;`
+    ],
+    [
       "a pure-motion effect",
       `useEffect(() => { opacity.value = withTiming(size, { duration: 200 }); }, [size]);
        return <View />;`
     ],
     [
-      "an inspected value animated with .set (not discovered)",
-      `const show = () => { opacity.set(withTiming(size)); };
+      "an inspected value animated with .set",
+      `const show = () => { opacity.set(withTiming(size, { duration: 200 })); };
        return <View onPress={show} />;`
+    ],
+    [
+      "a .set in a pure-motion effect",
+      `useEffect(() => { opacity.set(withTiming(size, { duration: 200 })); }, [size]);
+       return <View />;`
     ]
   ])("reports the same compiler outcome for %s as without Runtime Inspector", (_label, body) => {
     const code = `
-      import { useCallback, useEffect } from "react";
+      import { useCallback, useEffect, useRef } from "react";
       import { useSharedValue, withTiming } from "react-native-reanimated";
       export function Card({ size }) {
         // @inspect min=0 max=1
