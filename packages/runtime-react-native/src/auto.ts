@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type {
   BezierControl,
   ColorControl,
@@ -64,6 +65,8 @@ interface ValueEntry {
   onChange?: (value: unknown) => void;
   target: unknown;
   mode: RegistrationMode;
+  /** The `useRiInspect` instance token that registered it, for disposal on unmount. */
+  owner?: string;
 }
 
 interface TriggerEntry {
@@ -95,29 +98,142 @@ let panelHandle: { connect: () => void; disconnect: () => void } | undefined;
  * evaluated back-to-back (e.g. on initial render, or after a hot reload)
  * coalesce into one publish.
  *
- * `__riInspect` never disposes its registration - unchanged from RFC 0002.
+ * With an `instance` token from `useRiInspect` (what the plugin emits inside a component),
+ * the registration belongs to that mounted instance and is disposed when it unmounts. Without
+ * one (a hand-written call, or a declaration the plugin had to wrap in place) it is never
+ * disposed, as in RFC 0002.
  */
 export function __riInspect<T>(
   sharedValue: SharedValueLike<T>,
   name: string,
-  meta: InspectMeta = {}
+  meta: InspectMeta = {},
+  instance?: string
 ): SharedValueLike<T> {
   if (!isDev()) {
     return sharedValue;
   }
 
-  registerRuntimeValue(
-    {
-      kind: "value",
-      name,
-      sharedValue: sharedValue as SharedValueLike<unknown>,
-      meta,
-      target: sharedValue.value
-    },
-    "replace"
-  );
+  const owner = instance !== undefined ? inspectInstances.get(instance) : undefined;
+  if (owner) {
+    owner.sharedValue = sharedValue as SharedValueLike<unknown>;
+    owner.meta = meta;
+  }
+  registerInspected(name, sharedValue as SharedValueLike<unknown>, meta, owner ? instance : undefined);
 
   return sharedValue;
+}
+
+function registerInspected(
+  name: string,
+  sharedValue: SharedValueLike<unknown>,
+  meta: InspectMeta,
+  owner: string | undefined
+): void {
+  // A live claim on the same name (a `useRuntimeValue`) suffixed this instance's control
+  // (`name2`): drop it before registering again, or every render would claim one more suffix.
+  const previous = owner !== undefined ? ownedControlId(owner) : undefined;
+  if (previous !== undefined && previous !== name) {
+    registry.delete(previous);
+    releaseControlId(name);
+  }
+  registerRuntimeValue(
+    { kind: "value", name, sharedValue, meta, target: sharedValue.value, owner },
+    "replace"
+  );
+}
+
+/** The control id the instance `token` currently owns, if any. */
+function ownedControlId(token: string): string | undefined {
+  for (const [id, entry] of registry) {
+    if (entry.kind === "value" && entry.owner === token) return id;
+  }
+  return undefined;
+}
+
+/** One mounted component instance of a `// @inspect` declaration. */
+interface InspectInstance {
+  name: string;
+  /** The shared value and meta its latest `__riInspect` call recorded. */
+  sharedValue?: SharedValueLike<unknown>;
+  meta?: InspectMeta;
+}
+
+/** Instance token -> instance, while the instance is rendered or mounted. */
+const inspectInstances = new Map<string, InspectInstance>();
+/** Name -> tokens of the mounted instances, oldest first. */
+const mountedInspectTokens = new Map<string, string[]>();
+let nextInspectInstance = 0;
+
+/**
+ * Injected by `@runtime-inspector/babel-plugin` before the `__riInspect` call of a
+ * `// @inspect` declaration inside a component (issue #8). Returns an instance token that
+ * `__riInspect` records its registration under, and disposes that registration when the
+ * component unmounts, so a screen you navigated away from no longer leaves a slider driving a
+ * value nothing renders.
+ *
+ * Several mounted instances share one control, as before: the latest render owns it. When the
+ * owner unmounts, the control moves to the newest instance still mounted, and is removed only
+ * with the last one. A newer mount that rendered before an older one's cleanup ran (a
+ * navigation) keeps its control. Takes only static data, so the React Compiler neither
+ * memoizes the hook nor freezes the shared value.
+ */
+export function useRiInspect(name: string): string {
+  const ref = useRef<{ token: string; instance: InspectInstance } | undefined>(undefined);
+  if (ref.current === undefined) {
+    ref.current = { token: `${name}#${++nextInspectInstance}`, instance: { name } };
+  }
+  const { token, instance } = ref.current;
+  if (isDev()) {
+    inspectInstances.set(token, instance);
+  }
+
+  useEffect(() => {
+    if (!isDev()) {
+      return undefined;
+    }
+    // Set again: StrictMode runs the cleanup below and then this effect without a render.
+    inspectInstances.set(token, instance);
+    const tokens = mountedInspectTokens.get(name) ?? [];
+    tokens.push(token);
+    mountedInspectTokens.set(name, tokens);
+
+    // Remounted without a render (StrictMode, a kept-alive screen): take the control back if
+    // no mounted instance holds it.
+    const entry = registry.get(name);
+    const ownerMounted =
+      entry?.kind === "value" && entry.owner !== undefined && tokens.includes(entry.owner);
+    if (instance.sharedValue && !ownerMounted && (!entry || entry.kind === "value")) {
+      registerInspected(name, instance.sharedValue, instance.meta ?? {}, token);
+    }
+
+    return () => {
+      const remaining = (mountedInspectTokens.get(name) ?? []).filter(
+        (candidate) => candidate !== token
+      );
+      if (remaining.length > 0) {
+        mountedInspectTokens.set(name, remaining);
+      } else {
+        mountedInspectTokens.delete(name);
+      }
+      inspectInstances.delete(token);
+
+      const owned = ownedControlId(token);
+      if (owned === undefined) return;
+      registry.delete(owned);
+      releaseControlId(name);
+
+      for (const heirToken of [...remaining].reverse()) {
+        const heir = inspectInstances.get(heirToken);
+        if (heir?.sharedValue) {
+          registerInspected(name, heir.sharedValue, heir.meta ?? {}, heirToken);
+          return;
+        }
+      }
+      schedulePublish();
+    };
+  }, [name, token, instance]);
+
+  return token;
 }
 
 /** Input to `registerRuntimeValue` - a value entry or a trigger entry. */
@@ -129,6 +245,7 @@ export type RuntimeValueRegistration =
       meta?: InspectMeta;
       onChange?: (value: unknown) => void;
       target: unknown;
+      owner?: string;
     }
   | {
       kind: "trigger";
@@ -162,7 +279,8 @@ export function registerRuntimeValue(
             meta: registration.meta ?? {},
             onChange: registration.onChange,
             target: registration.target,
-            mode
+            mode,
+            ...(registration.owner !== undefined ? { owner: registration.owner } : {})
           };
     registry.set(registration.name, entry);
     schedulePublish();
@@ -189,7 +307,8 @@ export function registerRuntimeValue(
           meta: registration.meta ?? {},
           onChange: registration.onChange,
           target: registration.target,
-          mode
+          mode,
+          ...(registration.owner !== undefined ? { owner: registration.owner } : {})
         };
 
   registry.set(controlId, entry);
@@ -384,6 +503,8 @@ function buildAutoControl(entry: ValueEntry, binding: string): InspectorControl 
 export function __resetAutoRegistryForTests(): void {
   registry.clear();
   liveClaims.clear();
+  inspectInstances.clear();
+  mountedInspectTokens.clear();
   if (publishTimer) {
     clearTimeout(publishTimer);
     publishTimer = undefined;

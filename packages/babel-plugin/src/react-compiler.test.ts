@@ -81,6 +81,15 @@ describe("with the React Compiler", () => {
     expect(output).toContain('__riInspect(opacity, "opacity"');
   });
 
+  it("ties // @inspect to the mounted instance with a static-argument hook, outside every memoization branch", () => {
+    const { output, events } = compile(ANIMATED_CARD);
+    expect(events).toEqual(["CompileSuccess"]);
+    expect(output).toContain('const _riInspect = useRiInspect("opacity")');
+    for (const branch of memoizationBranches(output)) {
+      expect(branch).not.toMatch(/useRiInspect\(/);
+    }
+  });
+
   it("discovers a `.value =` animation in a component callback", () => {
     const { output } = compile(ANIMATED_CARD);
     expect(output).toContain("__riObserveAnimation(");
